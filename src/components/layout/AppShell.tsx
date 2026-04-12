@@ -3,10 +3,11 @@ import { NavLink, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard, Camera, Wrench, BarChart3,
   MessageSquare, ClipboardList, Settings, ChevronDown,
-  Building2, TreePine, X,
+  Building2, TreePine,
 } from 'lucide-react'
 import { cn } from '../../utils/cn'
 import { PROPERTIES } from '../../data/mockData'
+import { useAppStore } from '../../store/AppStoreContext'
 
 const NAV_ITEMS = [
   { to: '/',           icon: LayoutDashboard, label: 'Dashboard'   },
@@ -21,8 +22,8 @@ const PROPERTY_ICONS = { residence: Building2, camp: TreePine, land: Building2 }
 
 function PropertySwitcher() {
   const [open, setOpen] = useState(false)
-  const [activeId, setActiveId] = useState('tannerville')
-  const active = PROPERTIES.find(p => p.id === activeId)!
+  const { activePropertyId, setActivePropertyId } = useAppStore()
+  const active = PROPERTIES.find(p => p.id === activePropertyId) ?? PROPERTIES[0]
   const Icon = PROPERTY_ICONS[active.type]
 
   return (
@@ -46,10 +47,10 @@ function PropertySwitcher() {
             return (
               <button
                 key={p.id}
-                onClick={() => { setActiveId(p.id); setOpen(false) }}
+                onClick={() => { setActivePropertyId(p.id); setOpen(false) }}
                 className={cn(
                   'flex items-center gap-3 w-full px-3 py-2.5 text-left hover:bg-slate-700 transition-colors',
-                  p.id === activeId && 'bg-slate-700',
+                  p.id === activePropertyId && 'bg-slate-700',
                 )}
               >
                 <PIcon className="w-4 h-4 text-sky-400 shrink-0" />
@@ -73,8 +74,8 @@ function PropertySwitcher() {
 
 function MobilePropertySwitcher() {
   const [open, setOpen] = useState(false)
-  const [activeId, setActiveId] = useState('tannerville')
-  const active = PROPERTIES.find(p => p.id === activeId)!
+  const { activePropertyId, setActivePropertyId } = useAppStore()
+  const active = PROPERTIES.find(p => p.id === activePropertyId) ?? PROPERTIES[0]
   const Icon = PROPERTY_ICONS[active.type]
 
   return (
@@ -97,10 +98,10 @@ function MobilePropertySwitcher() {
               return (
                 <button
                   key={p.id}
-                  onClick={() => { setActiveId(p.id); setOpen(false) }}
+                  onClick={() => { setActivePropertyId(p.id); setOpen(false) }}
                   className={cn(
                     'flex items-center gap-3 w-full px-4 py-3 text-left hover:bg-slate-50',
-                    p.id === activeId && 'bg-sky-50',
+                    p.id === activePropertyId && 'bg-sky-50',
                   )}
                 >
                   <PIcon className="w-4 h-4 text-sky-600" />
@@ -124,7 +125,6 @@ interface AppShellProps {
 
 export function AppShell({ children }: AppShellProps) {
   const location = useLocation()
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   const currentNav = NAV_ITEMS.find(n =>
     n.to === '/' ? location.pathname === '/' : location.pathname.startsWith(n.to)
