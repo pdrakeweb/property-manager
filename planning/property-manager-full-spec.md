@@ -30,6 +30,21 @@
 
 ---
 
+## Architectural Decisions — April 11 2026
+
+1. AI extraction → OpenRouter structured JSON (`response_format: json_schema`), model: `google/gemini-flash-1.5`
+2. Validation → Zod schemas (`src/schemas/index.ts`), `z.infer<>` for TS types, `zod-to-json-schema` for OpenRouter
+3. Image capture → `<input type="file" capture="environment">`, FileReader → base64
+4. State → Zustand (`usePropertyStore`)
+5. HTTP → `src/lib/apiClient.ts` with `openRouterClient` + `driveClient`
+6. Drive scope → `drive` (full), not `drive.file`
+7. Native app phase → Expo, not Capacitor
+8. Missing Drive folders → auto-create via Drive API on first use
+9. Multi-user (Kelly) → still open: Cloudflare Worker proxy option
+
+
+---
+
 ## 1. Vision & Scope
 
 ### The Problem
