@@ -6,7 +6,7 @@ import {
 import { cn } from '../utils/cn'
 
 const MODELS_BY_TASK = [
-  { task: 'Nameplate Extraction',       default: 'anthropic/claude-opus-4-5'   },
+  { task: 'Nameplate Extraction',       default: 'anthropic/claude-sonnet-4-6' },
   { task: 'Document Parsing',           default: 'anthropic/claude-sonnet-4-6' },
   { task: 'Maintenance Recommendations',default: 'anthropic/claude-opus-4-6'   },
   { task: 'Budget Analysis',            default: 'anthropic/claude-opus-4-6'   },
