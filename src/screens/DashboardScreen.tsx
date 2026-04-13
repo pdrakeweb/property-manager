@@ -5,8 +5,9 @@ import {
 } from 'lucide-react'
 import { cn } from '../utils/cn'
 import {
-  MAINTENANCE_TASKS, CAPITAL_ITEMS, HA_STATUS, CATEGORIES,
+  MAINTENANCE_TASKS, CAPITAL_ITEMS, HA_STATUS, CATEGORIES, PROPERTIES,
 } from '../data/mockData'
+import { useAppStore } from '../store/AppStoreContext'
 import type { Priority, HAStatus } from '../types'
 
 // ── Helpers ──────────────────────────────────────────────────────────────
@@ -78,13 +79,19 @@ function Card({ children, className }: { children: React.ReactNode; className?: 
 
 export function DashboardScreen() {
   const navigate = useNavigate()
+  const { activePropertyId } = useAppStore()
+  const activeProperty = PROPERTIES.find(p => p.id === activePropertyId) ?? PROPERTIES[0]
 
-  const overdueTasks = MAINTENANCE_TASKS.filter(t => t.status === 'overdue')
-  const dueTasks     = MAINTENANCE_TASKS.filter(t => t.status === 'due' || t.status === 'overdue')
-  const topCapital   = CAPITAL_ITEMS.filter(c => c.priority === 'critical' || c.priority === 'high')
+  const tasks = MAINTENANCE_TASKS.filter(t => t.propertyId === activePropertyId)
+  const items = CAPITAL_ITEMS.filter(i => i.propertyId === activePropertyId)
+  const cats  = CATEGORIES.filter(c => c.propertyTypes.includes(activeProperty.type))
 
-  const documented = CATEGORIES.reduce((n, c) => n + (c.recordCount && c.recordCount > 0 ? 1 : 0), 0)
-  const total      = CATEGORIES.length
+  const overdueTasks = tasks.filter(t => t.status === 'overdue')
+  const dueTasks     = tasks.filter(t => t.status === 'due' || t.status === 'overdue')
+  const topCapital   = items.filter(c => c.priority === 'critical' || c.priority === 'high')
+
+  const documented = cats.reduce((n, c) => n + (c.recordCount && c.recordCount > 0 ? 1 : 0), 0)
+  const total      = cats.length
 
   const currentHour = new Date().getHours()
   const greeting = currentHour < 12 ? 'Good morning' : currentHour < 17 ? 'Good afternoon' : 'Good evening'
@@ -145,7 +152,7 @@ export function DashboardScreen() {
           <div className="px-5 pt-5 pb-4">
             <SectionHeader title="Maintenance Due" action="View all" onAction={() => navigate('/maintenance')} />
             <div className="space-y-3">
-              {MAINTENANCE_TASKS.filter(t => t.status !== 'completed').slice(0, 4).map(task => (
+              {tasks.filter(t => t.status !== 'completed').slice(0, 4).map(task => (
                 <div key={task.id} className="flex items-start gap-3">
                   <div className={cn('w-2 h-2 rounded-full mt-1.5 shrink-0', priorityDot(task.priority))} />
                   <div className="flex-1 min-w-0">
@@ -245,7 +252,7 @@ export function DashboardScreen() {
 
             {/* Category status rows */}
             <div className="space-y-2">
-              {CATEGORIES.slice(0, 6).map(cat => (
+              {cats.slice(0, 6).map(cat => (
                 <div key={cat.id} className="flex items-center gap-2.5">
                   {cat.recordCount && cat.recordCount > 0
                     ? <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />

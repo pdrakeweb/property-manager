@@ -8,6 +8,7 @@ import {
 import { cn } from '../../utils/cn'
 import { PROPERTIES } from '../../data/mockData'
 import { useAppStore } from '../../store/AppStoreContext'
+import { useAuth } from '../../auth/AuthContext'
 
 const NAV_ITEMS = [
   { to: '/',           icon: LayoutDashboard, label: 'Dashboard'   },
@@ -125,15 +126,17 @@ interface AppShellProps {
 
 export function AppShell({ children }: AppShellProps) {
   const location = useLocation()
+  const { userEmail } = useAuth()
 
   const currentNav = NAV_ITEMS.find(n =>
     n.to === '/' ? location.pathname === '/' : location.pathname.startsWith(n.to)
   )
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    // P0 fix: h-screen flex col so main can flex-1 and scroll internally
+    <div className="h-screen flex flex-col overflow-hidden bg-slate-50">
 
-      {/* ── Desktop Sidebar ────────────────────────────────────────────── */}
+      {/* ── Desktop Sidebar (fixed, outside flex flow) ─────────────────── */}
       <aside className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-64 lg:flex-col bg-slate-900 z-30">
 
         {/* Logo */}
@@ -192,8 +195,8 @@ export function AppShell({ children }: AppShellProps) {
         </div>
       </aside>
 
-      {/* ── Mobile Header ─────────────────────────────────────────────── */}
-      <header className="lg:hidden sticky top-0 z-30 bg-white border-b border-slate-200">
+      {/* ── Mobile Header (shrink-0 so it doesn't compress) ───────────── */}
+      <header className="lg:hidden sticky top-0 z-30 bg-white border-b border-slate-200 shrink-0">
         <div className="flex items-center justify-between px-4 h-14">
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 bg-sky-600 rounded-md flex items-center justify-center">
@@ -207,14 +210,14 @@ export function AppShell({ children }: AppShellProps) {
         </div>
       </header>
 
-      {/* ── Main Content ──────────────────────────────────────────────── */}
-      <main className="lg:pl-64">
+      {/* ── Main Content (flex-1 min-h-0 = fills remaining height and scrolls) */}
+      <main className="flex-1 min-h-0 overflow-y-auto lg:pl-64">
         <div className="px-4 py-5 sm:px-6 lg:px-8 pb-28 lg:pb-8 max-w-5xl">
           {children}
         </div>
       </main>
 
-      {/* ── Mobile Bottom Nav ─────────────────────────────────────────── */}
+      {/* ── Mobile Bottom Nav (fixed, outside flex flow) ───────────────── */}
       <nav className="lg:hidden fixed bottom-0 inset-x-0 bg-white border-t border-slate-200 z-30 safe-bottom">
         <div className="flex items-center">
           {NAV_ITEMS.filter(n => n.to !== '/inventory').map(({ to, icon: Icon, label }) => (

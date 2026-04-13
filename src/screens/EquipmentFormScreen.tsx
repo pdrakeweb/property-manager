@@ -202,6 +202,23 @@ const MOCK_EXTRACTED: Record<string, Record<string, string>> = {
     brand: 'Rheem', model: 'PROG50-38N RH67', serial_number: '0908M4J12345',
     fuel_type: 'Propane', tank_gallons: '50', btu_input: '38000',
   },
+  water_treatment: {
+    system_type: 'Water Softener', brand: 'Fleck', model: '5600SXT',
+    serial_number: 'FLK-2023-0042', install_date: '2023-03-15',
+    location: 'Utility room',
+  },
+  propane: {
+    supplier: 'Ferrellgas', tank_gallons: '500', ownership: 'Rented/Leased',
+    tank_age_year: '2008', location: 'South yard',
+  },
+  appliance: {
+    appliance_type: 'Refrigerator', brand: 'Whirlpool', model: 'WRF535SWHZ',
+    serial_number: 'HR4302344', install_date: '2021-06-10', location: 'Kitchen',
+  },
+  service_record: {
+    system: 'Generator', date: new Date().toISOString().split('T')[0],
+    work_done: 'Annual service — oil change, filter replacement, load test',
+  },
 }
 
 // ── Photo capture state ──────────────────────────────────────────────────────
@@ -240,7 +257,7 @@ export function EquipmentFormScreen() {
 
   // ── Photo handlers ─────────────────────────────────────────────────────────
 
-  const handleFilesChosen = useCallback((files: FileList | null, isCamera: boolean) => {
+  const handleFilesChosen = useCallback((files: FileList | null, _isCamera: boolean) => {
     if (!files || files.length === 0) return
     const newPhotos: CapturedPhoto[] = []
     for (const file of Array.from(files)) {
@@ -252,8 +269,8 @@ export function EquipmentFormScreen() {
     }
     setPhotos(prev => [...prev, ...newPhotos])
 
-    // Trigger AI extraction on camera capture if category supports it
-    if (isCamera && category?.hasAIExtraction) {
+    // Trigger AI extraction if category supports it (camera or upload)
+    if (category?.hasAIExtraction) {
       setAiState('extracting')
       setTimeout(() => {
         const extracted = MOCK_EXTRACTED[categoryId] ?? {}

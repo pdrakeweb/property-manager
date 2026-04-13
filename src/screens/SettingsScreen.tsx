@@ -7,14 +7,18 @@ import { cn } from '../utils/cn'
 import { getUserEmail, getUserName, signOut, getValidToken } from '../auth/oauth'
 import { getQueueCount, retryAll } from '../lib/offlineQueue'
 import { PROPERTIES } from '../data/mockData'
+import {
+  hasDevModelOverride, getDevModelOverride,
+  getModelForTask, setModelForTask,
+} from '../store/settings'
 
 const MODELS_BY_TASK = [
-  { task: 'Nameplate Extraction',        default: 'anthropic/claude-sonnet-4-6'  },
-  { task: 'Document Parsing',            default: 'anthropic/claude-sonnet-4-6'  },
-  { task: 'Maintenance Recommendations', default: 'anthropic/claude-opus-4-6'    },
-  { task: 'Budget Analysis',             default: 'anthropic/claude-opus-4-6'    },
-  { task: 'General Q&A',                default: 'google/gemini-flash-1.5'       },
-  { task: 'Advisory',                    default: 'anthropic/claude-opus-4-6'    },
+  { key: 'nameplate',    task: 'Nameplate Extraction',        default: 'anthropic/claude-sonnet-4-6'  },
+  { key: 'doc_parsing',  task: 'Document Parsing',            default: 'anthropic/claude-sonnet-4-6'  },
+  { key: 'maintenance',  task: 'Maintenance Recommendations', default: 'anthropic/claude-opus-4-6'    },
+  { key: 'budget',       task: 'Budget Analysis',             default: 'anthropic/claude-opus-4-6'    },
+  { key: 'qa',           task: 'General Q&A',                 default: 'google/gemini-flash-1.5'      },
+  { key: 'advisory',     task: 'Advisory',                    default: 'anthropic/claude-opus-4-6'    },
 ]
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {

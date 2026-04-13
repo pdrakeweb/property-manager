@@ -226,7 +226,7 @@ function OAuthCallbackHandler({ onDone }: { onDone: (ok: boolean) => void }) {
 function MainApp() {
   return (
     <ErrorBoundary>
-      <HashRouter>
+      <HashRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <AppShell>
           <Routes>
             <Route path="/"                    element={<ErrorBoundary fallbackTitle="Dashboard error"><DashboardScreen /></ErrorBoundary>}     />
