@@ -1,6 +1,6 @@
 import type {
   Property, EquipmentRecord, MaintenanceTask, CapitalItem,
-  ServiceRecord, HAStatus, AIMessage, Category,
+  ServiceRecord, HAStatus, AIMessage,
 } from '../types'
 
 // ── Properties ──────────────────────────────────────────────────────────────
@@ -24,27 +24,6 @@ export const PROPERTIES: Property[] = [
     driveRootFolderId: '',
     stats: { documented: 3, total: 10 },
   },
-]
-
-// ── Categories ───────────────────────────────────────────────────────────────
-
-export const CATEGORIES: Category[] = [
-  { id: 'generator',      label: 'Generator',         icon: '⚡', description: 'Standby generator & transfer switch',    propertyTypes: ['residence', 'camp'], allowMultiple: false, hasAIExtraction: true,  recordCount: 1 },
-  { id: 'hvac',           label: 'HVAC',              icon: '🌡', description: 'Furnace, A/C, heat pump units',          propertyTypes: ['residence'],          allowMultiple: true,  hasAIExtraction: true,  recordCount: 2 },
-  { id: 'water_heater',   label: 'Water Heater',      icon: '🚿', description: 'Tank or tankless water heaters',         propertyTypes: ['residence', 'camp'], allowMultiple: false, hasAIExtraction: true,  recordCount: 1 },
-  { id: 'water_treatment',label: 'Water Treatment',   icon: '💧', description: 'Softener, iron filter, UV system',       propertyTypes: ['residence', 'camp'], allowMultiple: true,  hasAIExtraction: true,  recordCount: 3 },
-  { id: 'well',           label: 'Well System',       icon: '🔋', description: 'Well pump, pressure tank, controls',     propertyTypes: ['residence', 'camp'], allowMultiple: false, hasAIExtraction: false, recordCount: 0 },
-  { id: 'propane',        label: 'Propane',           icon: '⛽', description: 'Tank, supplier, regulator info',         propertyTypes: ['residence', 'camp'], allowMultiple: false, hasAIExtraction: true,  recordCount: 1 },
-  { id: 'septic',         label: 'Septic System',     icon: '🧹', description: 'Tank, drainfield, pump history',         propertyTypes: ['residence', 'camp'], allowMultiple: false, hasAIExtraction: false, recordCount: 0 },
-  { id: 'electrical',     label: 'Electrical Panel',  icon: '🔌', description: 'Main & sub panels, circuit directory',   propertyTypes: ['residence', 'camp'], allowMultiple: true,  hasAIExtraction: false, recordCount: 1 },
-  { id: 'sump_pump',      label: 'Sump Pump',         icon: '🌊', description: 'Primary & backup sump pumps',            propertyTypes: ['residence'],          allowMultiple: true,  hasAIExtraction: true,  recordCount: 0 },
-  { id: 'radon',          label: 'Radon Mitigation',  icon: '🏠', description: 'Mitigation system & test results',       propertyTypes: ['residence'],          allowMultiple: false, hasAIExtraction: false, recordCount: 0 },
-  { id: 'appliance',      label: 'Appliance',         icon: '🍳', description: 'Kitchen, laundry & other appliances',    propertyTypes: ['residence', 'camp'], allowMultiple: true,  hasAIExtraction: true,  recordCount: 4 },
-  { id: 'roof',           label: 'Roof',              icon: '🏗', description: 'Roofing material, warranty, sections',   propertyTypes: ['residence', 'camp'], allowMultiple: true,  hasAIExtraction: false, recordCount: 1 },
-  { id: 'barn',           label: 'Barn',              icon: '🏚', description: 'Structure, electrical, condition',       propertyTypes: ['residence'],          allowMultiple: false, hasAIExtraction: false, recordCount: 1 },
-  { id: 'surveillance',   label: 'Surveillance',      icon: '📹', description: 'IP cameras, NVR, PoE switch',           propertyTypes: ['residence'],          allowMultiple: true,  hasAIExtraction: false, recordCount: 5 },
-  { id: 'forestry_cauv',  label: 'Forestry / CAUV',   icon: '🌲', description: 'CAUV renewals, forestry activity log',  propertyTypes: ['residence'],          allowMultiple: true,  hasAIExtraction: false, recordCount: 2 },
-  { id: 'service_record', label: 'Service Record',    icon: '🛠', description: 'Contractor visits, invoices, repairs',  propertyTypes: ['residence', 'camp'], allowMultiple: true,  hasAIExtraction: true,  recordCount: 8 },
 ]
 
 // ── Equipment Records ─────────────────────────────────────────────────────

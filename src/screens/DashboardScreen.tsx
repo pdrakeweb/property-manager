@@ -5,8 +5,9 @@ import {
 } from 'lucide-react'
 import { cn } from '../utils/cn'
 import {
-  MAINTENANCE_TASKS, CAPITAL_ITEMS, HA_STATUS, CATEGORIES, PROPERTIES,
+  MAINTENANCE_TASKS, CAPITAL_ITEMS, HA_STATUS, PROPERTIES,
 } from '../data/mockData'
+import { CATEGORIES } from '../data/categories'
 import { useAppStore } from '../store/AppStoreContext'
 import type { Priority, HAStatus } from '../types'
 

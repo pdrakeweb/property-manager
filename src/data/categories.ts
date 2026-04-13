@@ -1,10 +1,10 @@
 /**
- * All 15 capture categories with fully-specified field schemas.
+ * All 16 capture categories with fully-specified field schemas.
+ * Single source of truth for category metadata, field definitions, and AI extraction flags.
  * Field definitions sourced from property-capture-tool-spec.md §6.
  */
 
-// FolderMap was removed — driveFolderId is populated at runtime by DriveClient.resolveFolderId
-const DRIVE_FOLDER_MAP: Record<string, string> = {}
+import type { PropertyType } from '../types'
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -25,8 +25,11 @@ export interface CaptureCategory {
   id: string
   label: string
   icon: string
-  driveFolderId: string
+  description: string
+  propertyTypes: PropertyType[]
+  hasAIExtraction: boolean
   allowMultiple: boolean
+  recordCount?: number
   nameplatePrompt?: string
   fields: Field[]
 }
@@ -37,7 +40,9 @@ const generator: CaptureCategory = {
   id: 'generator',
   label: 'Generator',
   icon: '⚡',
-  driveFolderId: DRIVE_FOLDER_MAP.generator,
+  description: 'Standby generator & transfer switch',
+  propertyTypes: ['residence', 'camp'],
+  hasAIExtraction: true,
   allowMultiple: false,
   nameplatePrompt:
     'Extract generator nameplate data. Key fields: brand, model, model_number, serial_number, rated_kw, rated_kva, voltage_output, frequency_hz, fuel_type, rpm, manufacture_date.',
@@ -66,7 +71,9 @@ const hvac: CaptureCategory = {
   id: 'hvac',
   label: 'HVAC',
   icon: '❄️',
-  driveFolderId: DRIVE_FOLDER_MAP.hvac,
+  description: 'Furnace, A/C, heat pump units',
+  propertyTypes: ['residence'],
+  hasAIExtraction: true,
   allowMultiple: true,
   nameplatePrompt:
     'Extract HVAC equipment nameplate data. Key fields: brand, model, serial_number, btu_input, btu_output, afue_percent, tonnage, seer, refrigerant_type, voltage, amperage, manufacture_date.',
@@ -98,7 +105,9 @@ const waterHeater: CaptureCategory = {
   id: 'water_heater',
   label: 'Water Heater',
   icon: '🌡️',
-  driveFolderId: DRIVE_FOLDER_MAP.water_heater,
+  description: 'Tank or tankless water heaters',
+  propertyTypes: ['residence', 'camp'],
+  hasAIExtraction: true,
   allowMultiple: false,
   nameplatePrompt:
     'Extract water heater nameplate data. Key fields: brand, model, serial_number, tank_gallons, btu_input, first_hour_rating, fuel_type, voltage, manufacture_date.',
@@ -121,7 +130,9 @@ const waterTreatment: CaptureCategory = {
   id: 'water_treatment',
   label: 'Water Treatment',
   icon: '💧',
-  driveFolderId: DRIVE_FOLDER_MAP.water_treatment,
+  description: 'Softener, iron filter, UV system',
+  propertyTypes: ['residence', 'camp'],
+  hasAIExtraction: true,
   allowMultiple: true,
   nameplatePrompt:
     'Extract water treatment equipment nameplate data. Key fields: brand, model, serial_number, equipment_type, tank_size, flow_rate, voltage, manufacture_date.',
@@ -145,7 +156,9 @@ const wellSystem: CaptureCategory = {
   id: 'well',
   label: 'Well System',
   icon: '🪣',
-  driveFolderId: DRIVE_FOLDER_MAP.well,
+  description: 'Well pump, pressure tank, controls',
+  propertyTypes: ['residence', 'camp'],
+  hasAIExtraction: false,
   allowMultiple: false,
   nameplatePrompt:
     'Extract well pump and pressure tank nameplate data. Key fields: pump_brand, pump_model, pump_hp, pump_gpm, pressure_tank_brand, pressure_tank_model, pressure_tank_gallons, cut_in_psi, cut_out_psi.',
@@ -171,7 +184,9 @@ const propane: CaptureCategory = {
   id: 'propane',
   label: 'Propane Tank',
   icon: '🔥',
-  driveFolderId: DRIVE_FOLDER_MAP.propane,
+  description: 'Tank, supplier, regulator info',
+  propertyTypes: ['residence', 'camp'],
+  hasAIExtraction: true,
   allowMultiple: false,
   nameplatePrompt:
     'Extract propane tank nameplate data. Key fields: tank_capacity_gallons, manufacturer, serial_number, manufacture_date, wc_gallons, tare_weight.',
@@ -194,7 +209,9 @@ const septic: CaptureCategory = {
   id: 'septic',
   label: 'Septic System',
   icon: '♻️',
-  driveFolderId: DRIVE_FOLDER_MAP.septic,
+  description: 'Tank, drainfield, pump history',
+  propertyTypes: ['residence', 'camp'],
+  hasAIExtraction: false,
   allowMultiple: false,
   fields: [
     { id: 'tank_size_gal',        label: 'Tank Size (gal)',              type: 'number', unit: 'gal' },
@@ -214,7 +231,9 @@ const electricalPanel: CaptureCategory = {
   id: 'electrical',
   label: 'Electrical Panel',
   icon: '🔌',
-  driveFolderId: DRIVE_FOLDER_MAP.electrical,
+  description: 'Main & sub panels, circuit directory',
+  propertyTypes: ['residence', 'camp'],
+  hasAIExtraction: false,
   allowMultiple: true,
   fields: [
     { id: 'panel_label',          label: 'Panel Label',             type: 'text', placeholder: 'e.g. Main House, Barn' },
@@ -229,116 +248,13 @@ const electricalPanel: CaptureCategory = {
   ],
 }
 
-const appliance: CaptureCategory = {
-  id: 'appliance',
-  label: 'Appliance',
-  icon: '🍳',
-  driveFolderId: DRIVE_FOLDER_MAP.appliance,
-  allowMultiple: true,
-  nameplatePrompt:
-    'Extract appliance nameplate data. Key fields: brand, model, serial_number, appliance_type, voltage, amperage, wattage, fuel_type, capacity, manufacture_date.',
-  fields: [
-    { id: 'appliance_type',  label: 'Appliance Type',         type: 'select', options: ['Refrigerator', 'Range/Oven', 'Dishwasher', 'Microwave', 'Range Hood', 'Washer', 'Dryer', 'Freezer', 'Humidifier', 'Garage Door Opener', 'Other'] },
-    { id: 'location',        label: 'Location',               type: 'text', placeholder: 'e.g. Kitchen, Laundry Room, Garage' },
-    { id: 'brand',           label: 'Brand',                  type: 'text' },
-    { id: 'model',           label: 'Model Number',           type: 'text' },
-    { id: 'serial_number',   label: 'Serial Number',          type: 'text' },
-    { id: 'fuel_type',       label: 'Fuel / Power Type',      type: 'select', options: ['Electric (120V)', 'Electric (240V)', 'Propane', 'Natural Gas', 'N/A'] },
-    { id: 'purchase_date',   label: 'Purchase Date',          type: 'date' },
-    { id: 'filter_part',     label: 'Filter Part # (if applicable)', type: 'text' },
-    { id: 'notes',           label: 'Notes',                  type: 'textarea' },
-  ],
-}
-
-const roof: CaptureCategory = {
-  id: 'roof',
-  label: 'Roof',
-  icon: '🏠',
-  driveFolderId: DRIVE_FOLDER_MAP.roof,
-  allowMultiple: true,
-  fields: [
-    { id: 'section_label',        label: 'Section Label',               type: 'text', placeholder: 'e.g. Main House Shingle, Barn Standing Seam' },
-    { id: 'contractor',           label: 'Contractor',                  type: 'text' },
-    { id: 'install_date',         label: 'Install Date',                type: 'date' },
-    { id: 'material_type',        label: 'Material Type',               type: 'select', options: ['Asphalt Shingle', 'Standing Seam Metal', 'Corrugated Metal', 'TPO', 'EPDM', 'Wood Shake'] },
-    { id: 'manufacturer',         label: 'Manufacturer',                type: 'text' },
-    { id: 'product_line',         label: 'Product Line / Series',       type: 'text' },
-    { id: 'color',                label: 'Color',                       type: 'text' },
-    { id: 'shingle_class',        label: 'Shingle Class (impact)',       type: 'select', options: ['Class 1', 'Class 2', 'Class 3', 'Class 4', 'N/A'] },
-    { id: 'metal_gauge',          label: 'Metal Gauge',                 type: 'text', placeholder: 'e.g. 26 gauge' },
-    { id: 'metal_finish',         label: 'Metal Finish',                type: 'text', placeholder: 'e.g. Kynar 500, SMP' },
-    { id: 'square_footage',       label: 'Square Footage',              type: 'number', unit: 'sq ft' },
-    { id: 'mfr_warranty_years',   label: 'Manufacturer Warranty (yrs)', type: 'number', unit: 'years' },
-    { id: 'workmanship_warranty', label: 'Workmanship Warranty (yrs)',  type: 'number', unit: 'years' },
-    { id: 'notes',                label: 'Notes',                       type: 'textarea' },
-  ],
-}
-
-const surveillance: CaptureCategory = {
-  id: 'surveillance',
-  label: 'Surveillance / Camera',
-  icon: '📷',
-  driveFolderId: DRIVE_FOLDER_MAP.surveillance,
-  allowMultiple: true,
-  fields: [
-    { id: 'device_type',      label: 'Device Type',          type: 'select', options: ['IP Camera', 'NVR/DVR', 'PoE Switch', 'Doorbell Camera'] },
-    { id: 'location_label',   label: 'Location Label',        type: 'text', placeholder: 'e.g. Driveway Entrance, Barn East' },
-    { id: 'brand',            label: 'Brand',                 type: 'text' },
-    { id: 'model',            label: 'Model Number',          type: 'text' },
-    { id: 'serial_number',    label: 'Serial Number',         type: 'text' },
-    { id: 'mac_address',      label: 'MAC Address',           type: 'text' },
-    { id: 'ip_address',       label: 'IP Address',            type: 'text' },
-    { id: 'resolution',       label: 'Resolution',            type: 'text', placeholder: 'e.g. 4MP, 4K' },
-    { id: 'storage_tb',       label: 'NVR Storage (TB)',      type: 'number', unit: 'TB' },
-    { id: 'retention_days',   label: 'Retention (days)',      type: 'number', unit: 'days' },
-    { id: 'network_segment',  label: 'Network / VLAN',        type: 'text' },
-    { id: 'notes',            label: 'Notes',                 type: 'textarea' },
-  ],
-}
-
-const barn: CaptureCategory = {
-  id: 'barn',
-  label: 'Barn',
-  icon: '🌾',
-  driveFolderId: DRIVE_FOLDER_MAP.barn,
-  allowMultiple: false,
-  fields: [
-    { id: 'dimensions',          label: 'Dimensions (L×W×H)',     type: 'text', placeholder: 'e.g. 40x60x14 eave' },
-    { id: 'construction_type',   label: 'Construction Type',       type: 'select', options: ['Post-Frame', 'Timber Frame', 'Stud Frame', 'Pole Barn'] },
-    { id: 'electrical_panel',    label: 'Electrical Panel Amps',   type: 'number', unit: 'A' },
-    { id: 'electrical_notes',    label: 'Electrical Notes',        type: 'textarea', placeholder: 'Circuit count, outlet locations, lighting type' },
-    { id: 'water_supply',        label: 'Water Supply',            type: 'boolean' },
-    { id: 'water_notes',         label: 'Water Notes',             type: 'text', placeholder: 'e.g. Frost-free hydrant, connected to house well' },
-    { id: 'heating',             label: 'Heating / Ventilation',   type: 'textarea' },
-    { id: 'current_use',         label: 'Current Use',             type: 'text' },
-    { id: 'condition_notes',     label: 'Condition Notes',         type: 'textarea' },
-    { id: 'stain_last_applied',  label: 'Stain Last Applied',      type: 'date' },
-    { id: 'notes',               label: 'Notes',                   type: 'textarea' },
-  ],
-}
-
-const forestryLog: CaptureCategory = {
-  id: 'forestry_cauv',
-  label: 'Forestry / CAUV Log',
-  icon: '🌲',
-  driveFolderId: DRIVE_FOLDER_MAP.cauv,
-  allowMultiple: true,
-  fields: [
-    { id: 'activity_type',   label: 'Activity Type',          type: 'select', options: ['CAUV Renewal', 'Privet Treatment', 'Tree Removal', 'Timber Harvest', 'Planting', 'Invasive Treatment', 'Forestry Inspection', 'Other'] },
-    { id: 'activity_date',   label: 'Activity Date',          type: 'date' },
-    { id: 'contractor',      label: 'Contractor / Contact',   type: 'text' },
-    { id: 'cost',            label: 'Cost ($)',               type: 'number', unit: '$' },
-    { id: 'area_affected',   label: 'Area / Location',        type: 'text' },
-    { id: 'chemical_used',   label: 'Chemical / Product',     type: 'text' },
-    { id: 'notes',           label: 'Notes',                  type: 'textarea' },
-  ],
-}
-
 const sumpPump: CaptureCategory = {
   id: 'sump_pump',
   label: 'Sump Pump',
   icon: '🚿',
-  driveFolderId: DRIVE_FOLDER_MAP.sump_pump,
+  description: 'Primary & backup sump pumps',
+  propertyTypes: ['residence'],
+  hasAIExtraction: true,
   allowMultiple: true,
   nameplatePrompt:
     'Extract sump pump nameplate data. Key fields: brand, model, serial_number, horsepower, voltage, amperage, max_head_ft, flow_gph.',
@@ -364,7 +280,9 @@ const radonMitigation: CaptureCategory = {
   id: 'radon',
   label: 'Radon Mitigation',
   icon: '☢️',
-  driveFolderId: DRIVE_FOLDER_MAP.radon,
+  description: 'Mitigation system & test results',
+  propertyTypes: ['residence'],
+  hasAIExtraction: false,
   allowMultiple: false,
   fields: [
     { id: 'system_type',          label: 'System Type',                   type: 'select', options: ['Sub-Slab Depressurization', 'Sub-Membrane Depressurization', 'Drain Tile Depressurization', 'Block Wall Depressurization'] },
@@ -382,6 +300,140 @@ const radonMitigation: CaptureCategory = {
   ],
 }
 
+const appliance: CaptureCategory = {
+  id: 'appliance',
+  label: 'Appliance',
+  icon: '🍳',
+  description: 'Kitchen, laundry & other appliances',
+  propertyTypes: ['residence', 'camp'],
+  hasAIExtraction: true,
+  allowMultiple: true,
+  nameplatePrompt:
+    'Extract appliance nameplate data. Key fields: brand, model, serial_number, appliance_type, voltage, amperage, wattage, fuel_type, capacity, manufacture_date.',
+  fields: [
+    { id: 'appliance_type',  label: 'Appliance Type',         type: 'select', options: ['Refrigerator', 'Range/Oven', 'Dishwasher', 'Microwave', 'Range Hood', 'Washer', 'Dryer', 'Freezer', 'Humidifier', 'Garage Door Opener', 'Other'] },
+    { id: 'location',        label: 'Location',               type: 'text', placeholder: 'e.g. Kitchen, Laundry Room, Garage' },
+    { id: 'brand',           label: 'Brand',                  type: 'text' },
+    { id: 'model',           label: 'Model Number',           type: 'text' },
+    { id: 'serial_number',   label: 'Serial Number',          type: 'text' },
+    { id: 'fuel_type',       label: 'Fuel / Power Type',      type: 'select', options: ['Electric (120V)', 'Electric (240V)', 'Propane', 'Natural Gas', 'N/A'] },
+    { id: 'purchase_date',   label: 'Purchase Date',          type: 'date' },
+    { id: 'filter_part',     label: 'Filter Part # (if applicable)', type: 'text' },
+    { id: 'notes',           label: 'Notes',                  type: 'textarea' },
+  ],
+}
+
+const roof: CaptureCategory = {
+  id: 'roof',
+  label: 'Roof',
+  icon: '🏠',
+  description: 'Roofing material, warranty, sections',
+  propertyTypes: ['residence', 'camp'],
+  hasAIExtraction: false,
+  allowMultiple: true,
+  fields: [
+    { id: 'section_label',        label: 'Section Label',               type: 'text', placeholder: 'e.g. Main House Shingle, Barn Standing Seam' },
+    { id: 'contractor',           label: 'Contractor',                  type: 'text' },
+    { id: 'install_date',         label: 'Install Date',                type: 'date' },
+    { id: 'material_type',        label: 'Material Type',               type: 'select', options: ['Asphalt Shingle', 'Standing Seam Metal', 'Corrugated Metal', 'TPO', 'EPDM', 'Wood Shake'] },
+    { id: 'manufacturer',         label: 'Manufacturer',                type: 'text' },
+    { id: 'product_line',         label: 'Product Line / Series',       type: 'text' },
+    { id: 'color',                label: 'Color',                       type: 'text' },
+    { id: 'shingle_class',        label: 'Shingle Class (impact)',       type: 'select', options: ['Class 1', 'Class 2', 'Class 3', 'Class 4', 'N/A'] },
+    { id: 'metal_gauge',          label: 'Metal Gauge',                 type: 'text', placeholder: 'e.g. 26 gauge' },
+    { id: 'metal_finish',         label: 'Metal Finish',                type: 'text', placeholder: 'e.g. Kynar 500, SMP' },
+    { id: 'square_footage',       label: 'Square Footage',              type: 'number', unit: 'sq ft' },
+    { id: 'mfr_warranty_years',   label: 'Manufacturer Warranty (yrs)', type: 'number', unit: 'years' },
+    { id: 'workmanship_warranty', label: 'Workmanship Warranty (yrs)',  type: 'number', unit: 'years' },
+    { id: 'notes',                label: 'Notes',                       type: 'textarea' },
+  ],
+}
+
+const barn: CaptureCategory = {
+  id: 'barn',
+  label: 'Barn',
+  icon: '🌾',
+  description: 'Structure, electrical, condition',
+  propertyTypes: ['residence'],
+  hasAIExtraction: false,
+  allowMultiple: false,
+  fields: [
+    { id: 'dimensions',          label: 'Dimensions (L×W×H)',     type: 'text', placeholder: 'e.g. 40x60x14 eave' },
+    { id: 'construction_type',   label: 'Construction Type',       type: 'select', options: ['Post-Frame', 'Timber Frame', 'Stud Frame', 'Pole Barn'] },
+    { id: 'electrical_panel',    label: 'Electrical Panel Amps',   type: 'number', unit: 'A' },
+    { id: 'electrical_notes',    label: 'Electrical Notes',        type: 'textarea', placeholder: 'Circuit count, outlet locations, lighting type' },
+    { id: 'water_supply',        label: 'Water Supply',            type: 'boolean' },
+    { id: 'water_notes',         label: 'Water Notes',             type: 'text', placeholder: 'e.g. Frost-free hydrant, connected to house well' },
+    { id: 'heating',             label: 'Heating / Ventilation',   type: 'textarea' },
+    { id: 'current_use',         label: 'Current Use',             type: 'text' },
+    { id: 'condition_notes',     label: 'Condition Notes',         type: 'textarea' },
+    { id: 'stain_last_applied',  label: 'Stain Last Applied',      type: 'date' },
+    { id: 'notes',               label: 'Notes',                   type: 'textarea' },
+  ],
+}
+
+const surveillance: CaptureCategory = {
+  id: 'surveillance',
+  label: 'Surveillance / Camera',
+  icon: '📷',
+  description: 'IP cameras, NVR, PoE switch',
+  propertyTypes: ['residence'],
+  hasAIExtraction: false,
+  allowMultiple: true,
+  fields: [
+    { id: 'device_type',      label: 'Device Type',          type: 'select', options: ['IP Camera', 'NVR/DVR', 'PoE Switch', 'Doorbell Camera'] },
+    { id: 'location_label',   label: 'Location Label',        type: 'text', placeholder: 'e.g. Driveway Entrance, Barn East' },
+    { id: 'brand',            label: 'Brand',                 type: 'text' },
+    { id: 'model',            label: 'Model Number',          type: 'text' },
+    { id: 'serial_number',    label: 'Serial Number',         type: 'text' },
+    { id: 'mac_address',      label: 'MAC Address',           type: 'text' },
+    { id: 'ip_address',       label: 'IP Address',            type: 'text' },
+    { id: 'resolution',       label: 'Resolution',            type: 'text', placeholder: 'e.g. 4MP, 4K' },
+    { id: 'storage_tb',       label: 'NVR Storage (TB)',      type: 'number', unit: 'TB' },
+    { id: 'retention_days',   label: 'Retention (days)',      type: 'number', unit: 'days' },
+    { id: 'network_segment',  label: 'Network / VLAN',        type: 'text' },
+    { id: 'notes',            label: 'Notes',                 type: 'textarea' },
+  ],
+}
+
+const forestryLog: CaptureCategory = {
+  id: 'forestry_cauv',
+  label: 'Forestry / CAUV Log',
+  icon: '🌲',
+  description: 'CAUV renewals, forestry activity log',
+  propertyTypes: ['residence'],
+  hasAIExtraction: false,
+  allowMultiple: true,
+  fields: [
+    { id: 'activity_type',   label: 'Activity Type',          type: 'select', options: ['CAUV Renewal', 'Privet Treatment', 'Tree Removal', 'Timber Harvest', 'Planting', 'Invasive Treatment', 'Forestry Inspection', 'Other'] },
+    { id: 'activity_date',   label: 'Activity Date',          type: 'date' },
+    { id: 'contractor',      label: 'Contractor / Contact',   type: 'text' },
+    { id: 'cost',            label: 'Cost ($)',               type: 'number', unit: '$' },
+    { id: 'area_affected',   label: 'Area / Location',        type: 'text' },
+    { id: 'chemical_used',   label: 'Chemical / Product',     type: 'text' },
+    { id: 'notes',           label: 'Notes',                  type: 'textarea' },
+  ],
+}
+
+const serviceRecord: CaptureCategory = {
+  id: 'service_record',
+  label: 'Service Record',
+  icon: '🛠️',
+  description: 'Contractor visits, invoices, repairs',
+  propertyTypes: ['residence', 'camp'],
+  hasAIExtraction: true,
+  allowMultiple: true,
+  fields: [
+    { id: 'system',       label: 'System / Area',    type: 'text',     placeholder: 'e.g. Generator, HVAC, Well' },
+    { id: 'date',         label: 'Service Date',     type: 'date'   },
+    { id: 'contractor',   label: 'Contractor',       type: 'text'   },
+    { id: 'work_done',    label: 'Work Performed',   type: 'textarea', placeholder: 'Describe what was done' },
+    { id: 'cost',         label: 'Total Cost',       type: 'number',   unit: '$' },
+    { id: 'invoice_ref',  label: 'Invoice Reference', type: 'text'  },
+    { id: 'notes',        label: 'Notes',            type: 'textarea' },
+  ],
+}
+
 // ─── Exports ───────────────────────────────────────────────────────────────────
 
 export const CATEGORIES: CaptureCategory[] = [
@@ -393,13 +445,14 @@ export const CATEGORIES: CaptureCategory[] = [
   propane,
   septic,
   electricalPanel,
-  appliance,
-  roof,
-  surveillance,
-  barn,
-  forestryLog,
   sumpPump,
   radonMitigation,
+  appliance,
+  roof,
+  barn,
+  surveillance,
+  forestryLog,
+  serviceRecord,
 ]
 
 export const CATEGORY_MAP: Record<string, CaptureCategory> = Object.fromEntries(

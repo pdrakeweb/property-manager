@@ -1,11 +1,40 @@
 import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { CheckCircle2, ChevronRight, Sparkles, Loader2 } from 'lucide-react'
-import { CATEGORIES, PROPERTIES } from '../data/mockData'
+import { CATEGORIES } from '../data/categories'
+import { PROPERTIES } from '../data/mockData'
 import { useAppStore } from '../store/AppStoreContext'
 import { getValidToken } from '../auth/oauth'
 import { DriveClient } from '../lib/driveClient'
-import type { Category } from '../types'
+
+// ── Drive counts cache (5-minute TTL) ────────────────────────────────────────
+
+const COUNTS_CACHE_KEY = 'drive_counts_cache'
+const COUNTS_CACHE_TTL = 5 * 60 * 1000
+
+interface DriveCountsCache {
+  counts: Record<string, number>
+  propertyId: string
+  savedAt: number
+}
+
+function loadCountsCache(propertyId: string): Record<string, number> | null {
+  try {
+    const raw = localStorage.getItem(COUNTS_CACHE_KEY)
+    if (!raw) return null
+    const c = JSON.parse(raw) as DriveCountsCache
+    if (c.propertyId !== propertyId) return null
+    if (Date.now() - c.savedAt > COUNTS_CACHE_TTL) return null
+    return c.counts
+  } catch { return null }
+}
+
+function saveCountsCache(propertyId: string, counts: Record<string, number>): void {
+  const c: DriveCountsCache = { counts, propertyId, savedAt: Date.now() }
+  localStorage.setItem(COUNTS_CACHE_KEY, JSON.stringify(c))
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
 
 export function CaptureSelectScreen() {
   const navigate = useNavigate()
@@ -19,33 +48,47 @@ export function CaptureSelectScreen() {
     if (!rootFolderId) return
 
     async function loadCounts() {
+      // Check cache first
+      const cached = loadCountsCache(rootFolderId)
+      if (cached) {
+        for (const [catId, count] of Object.entries(cached)) {
+          setDriveFileCount(catId, count)
+        }
+        return
+      }
+
       const token = await getValidToken()
       if (!token) return
 
+      const freshCounts: Record<string, number> = {}
       for (const cat of CATEGORIES) {
-        if (driveCountsLoaded[cat.id]) continue
-
+        if (driveCountsLoaded[cat.id]) {
+          freshCounts[cat.id] = driveFileCounts[cat.id] ?? 0
+          continue
+        }
         try {
           const folderId = await DriveClient.resolveFolderId(token, cat.id, rootFolderId)
           const files    = await DriveClient.listFiles(token, folderId)
+          freshCounts[cat.id] = files.length
           setDriveFileCount(cat.id, files.length)
         } catch {
-          // Non-fatal: fall back to 0 count for this category
+          freshCounts[cat.id] = 0
           setDriveFileCount(cat.id, 0)
         }
       }
+      saveCountsCache(rootFolderId, freshCounts)
     }
 
     loadCounts()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activePropertyId])
 
-  function getCount(cat: Category): number {
+  function getCount(cat: typeof CATEGORIES[number]): number {
     if (driveCountsLoaded[cat.id]) return driveFileCounts[cat.id] ?? 0
     return cat.recordCount ?? 0
   }
 
-  function isLoading(cat: Category): boolean {
+  function isLoading(cat: typeof CATEGORIES[number]): boolean {
     return !driveCountsLoaded[cat.id]
   }
 

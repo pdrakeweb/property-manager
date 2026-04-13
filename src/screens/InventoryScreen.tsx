@@ -5,7 +5,8 @@ import {
   Camera, Wrench, AlertTriangle, Trash2,
 } from 'lucide-react'
 import { cn } from '../utils/cn'
-import { CATEGORIES, EQUIPMENT, PROPERTIES } from '../data/mockData'
+import { EQUIPMENT, PROPERTIES } from '../data/mockData'
+import { CATEGORIES } from '../data/categories'
 import { useAppStore } from '../store/AppStoreContext'
 
 type FilterMode = 'all' | 'documented' | 'missing'
