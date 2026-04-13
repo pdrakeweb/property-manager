@@ -3,7 +3,8 @@
  * Field definitions sourced from property-capture-tool-spec.md §6.
  */
 
-import { DRIVE_FOLDER_MAP } from '../drive/FolderMap'
+// FolderMap was removed — driveFolderId is populated at runtime by DriveClient.resolveFolderId
+const DRIVE_FOLDER_MAP: Record<string, string> = {}
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -97,7 +98,7 @@ const waterHeater: CaptureCategory = {
   id: 'water_heater',
   label: 'Water Heater',
   icon: '🌡️',
-  driveFolderId: DRIVE_FOLDER_MAP.waterTreatment,
+  driveFolderId: DRIVE_FOLDER_MAP.water_heater,
   allowMultiple: false,
   nameplatePrompt:
     'Extract water heater nameplate data. Key fields: brand, model, serial_number, tank_gallons, btu_input, first_hour_rating, fuel_type, voltage, manufacture_date.',
@@ -120,7 +121,7 @@ const waterTreatment: CaptureCategory = {
   id: 'water_treatment',
   label: 'Water Treatment',
   icon: '💧',
-  driveFolderId: DRIVE_FOLDER_MAP.waterTreatment,
+  driveFolderId: DRIVE_FOLDER_MAP.water_treatment,
   allowMultiple: true,
   nameplatePrompt:
     'Extract water treatment equipment nameplate data. Key fields: brand, model, serial_number, equipment_type, tank_size, flow_rate, voltage, manufacture_date.',
@@ -144,7 +145,7 @@ const wellSystem: CaptureCategory = {
   id: 'well',
   label: 'Well System',
   icon: '🪣',
-  driveFolderId: DRIVE_FOLDER_MAP.waterTreatment,
+  driveFolderId: DRIVE_FOLDER_MAP.well,
   allowMultiple: false,
   nameplatePrompt:
     'Extract well pump and pressure tank nameplate data. Key fields: pump_brand, pump_model, pump_hp, pump_gpm, pressure_tank_brand, pressure_tank_model, pressure_tank_gallons, cut_in_psi, cut_out_psi.',
@@ -193,7 +194,7 @@ const septic: CaptureCategory = {
   id: 'septic',
   label: 'Septic System',
   icon: '♻️',
-  driveFolderId: DRIVE_FOLDER_MAP.root,
+  driveFolderId: DRIVE_FOLDER_MAP.septic,
   allowMultiple: false,
   fields: [
     { id: 'tank_size_gal',        label: 'Tank Size (gal)',              type: 'number', unit: 'gal' },
@@ -213,7 +214,7 @@ const electricalPanel: CaptureCategory = {
   id: 'electrical',
   label: 'Electrical Panel',
   icon: '🔌',
-  driveFolderId: DRIVE_FOLDER_MAP.projects,
+  driveFolderId: DRIVE_FOLDER_MAP.electrical,
   allowMultiple: true,
   fields: [
     { id: 'panel_label',          label: 'Panel Label',             type: 'text', placeholder: 'e.g. Main House, Barn' },
@@ -232,7 +233,7 @@ const appliance: CaptureCategory = {
   id: 'appliance',
   label: 'Appliance',
   icon: '🍳',
-  driveFolderId: DRIVE_FOLDER_MAP.kitchen,
+  driveFolderId: DRIVE_FOLDER_MAP.appliance,
   allowMultiple: true,
   nameplatePrompt:
     'Extract appliance nameplate data. Key fields: brand, model, serial_number, appliance_type, voltage, amperage, wattage, fuel_type, capacity, manufacture_date.',
@@ -299,7 +300,7 @@ const barn: CaptureCategory = {
   id: 'barn',
   label: 'Barn',
   icon: '🌾',
-  driveFolderId: DRIVE_FOLDER_MAP.root,
+  driveFolderId: DRIVE_FOLDER_MAP.barn,
   allowMultiple: false,
   fields: [
     { id: 'dimensions',          label: 'Dimensions (L×W×H)',     type: 'text', placeholder: 'e.g. 40x60x14 eave' },
@@ -317,7 +318,7 @@ const barn: CaptureCategory = {
 }
 
 const forestryLog: CaptureCategory = {
-  id: 'forestry_log',
+  id: 'forestry_cauv',
   label: 'Forestry / CAUV Log',
   icon: '🌲',
   driveFolderId: DRIVE_FOLDER_MAP.cauv,
@@ -337,7 +338,7 @@ const sumpPump: CaptureCategory = {
   id: 'sump_pump',
   label: 'Sump Pump',
   icon: '🚿',
-  driveFolderId: DRIVE_FOLDER_MAP.basement,
+  driveFolderId: DRIVE_FOLDER_MAP.sump_pump,
   allowMultiple: true,
   nameplatePrompt:
     'Extract sump pump nameplate data. Key fields: brand, model, serial_number, horsepower, voltage, amperage, max_head_ft, flow_gph.',
@@ -363,7 +364,7 @@ const radonMitigation: CaptureCategory = {
   id: 'radon',
   label: 'Radon Mitigation',
   icon: '☢️',
-  driveFolderId: DRIVE_FOLDER_MAP.basement,
+  driveFolderId: DRIVE_FOLDER_MAP.radon,
   allowMultiple: false,
   fields: [
     { id: 'system_type',          label: 'System Type',                   type: 'select', options: ['Sub-Slab Depressurization', 'Sub-Membrane Depressurization', 'Drain Tile Depressurization', 'Block Wall Depressurization'] },
