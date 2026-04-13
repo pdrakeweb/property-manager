@@ -8,7 +8,7 @@ import {
 import { cn } from '../../utils/cn'
 import { PROPERTIES } from '../../data/mockData'
 import { useAppStore } from '../../store/AppStoreContext'
-import { useAuth } from '../../auth/AuthContext'
+import { getUserEmail } from '../../auth/oauth'
 
 const NAV_ITEMS = [
   { to: '/',           icon: LayoutDashboard, label: 'Dashboard'   },
@@ -126,7 +126,7 @@ interface AppShellProps {
 
 export function AppShell({ children }: AppShellProps) {
   const location = useLocation()
-  const { userEmail } = useAuth()
+  const userEmail = getUserEmail()
 
   const currentNav = NAV_ITEMS.find(n =>
     n.to === '/' ? location.pathname === '/' : location.pathname.startsWith(n.to)
