@@ -9,7 +9,7 @@ import { getQueueCount, retryAll } from '../lib/offlineQueue'
 import { PROPERTIES } from '../data/mockData'
 
 const MODELS_BY_TASK = [
-  { task: 'Nameplate Extraction',        default: 'anthropic/claude-opus-4-5'    },
+  { task: 'Nameplate Extraction',        default: 'anthropic/claude-sonnet-4-6'  },
   { task: 'Document Parsing',            default: 'anthropic/claude-sonnet-4-6'  },
   { task: 'Maintenance Recommendations', default: 'anthropic/claude-opus-4-6'    },
   { task: 'Budget Analysis',             default: 'anthropic/claude-opus-4-6'    },
