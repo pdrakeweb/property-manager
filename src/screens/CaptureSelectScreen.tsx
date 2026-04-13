@@ -1,6 +1,5 @@
 import { useNavigate } from 'react-router-dom'
 import { CheckCircle2, ChevronRight, Sparkles } from 'lucide-react'
-import { cn } from '../utils/cn'
 import { CATEGORIES } from '../data/mockData'
 
 export function CaptureSelectScreen() {

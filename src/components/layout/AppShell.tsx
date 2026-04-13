@@ -3,10 +3,11 @@ import { NavLink, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard, Camera, Wrench, BarChart3,
   MessageSquare, ClipboardList, Settings, ChevronDown,
-  Building2, TreePine, X,
+  Building2, TreePine,
 } from 'lucide-react'
 import { cn } from '../../utils/cn'
 import { PROPERTIES } from '../../data/mockData'
+import { useAuth } from '../../auth/AuthContext'
 
 const NAV_ITEMS = [
   { to: '/',           icon: LayoutDashboard, label: 'Dashboard'   },
@@ -124,7 +125,7 @@ interface AppShellProps {
 
 export function AppShell({ children }: AppShellProps) {
   const location = useLocation()
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const { userEmail } = useAuth()
 
   const currentNav = NAV_ITEMS.find(n =>
     n.to === '/' ? location.pathname === '/' : location.pathname.startsWith(n.to)
@@ -172,8 +173,13 @@ export function AppShell({ children }: AppShellProps) {
           ))}
         </nav>
 
-        {/* Settings at bottom */}
-        <div className="px-3 pb-6 border-t border-slate-700 pt-4">
+        {/* User + Settings at bottom */}
+        <div className="px-3 pb-6 border-t border-slate-700 pt-4 space-y-2">
+          {userEmail && (
+            <div className="px-3 py-1">
+              <p className="text-xs text-slate-500 truncate">{userEmail}</p>
+            </div>
+          )}
           <NavLink
             to="/settings"
             className={({ isActive }) => cn(

@@ -4,8 +4,9 @@
  */
 
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string
+const CLIENT_SECRET = import.meta.env.VITE_GOOGLE_CLIENT_SECRET as string
 const REDIRECT_URI = window.location.origin + window.location.pathname
-const SCOPES = 'https://www.googleapis.com/auth/drive openid email'
+const SCOPES = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/photoslibrary.readonly openid email'
 
 const STORAGE_KEYS = {
   accessToken: 'gauth_access_token',
@@ -68,6 +69,7 @@ export async function handleCallback(code: string): Promise<void> {
 
   const body = new URLSearchParams({
     client_id: CLIENT_ID,
+    client_secret: CLIENT_SECRET,
     code,
     redirect_uri: REDIRECT_URI,
     code_verifier: verifier,
@@ -100,6 +102,7 @@ export async function refreshAccessToken(): Promise<void> {
 
   const body = new URLSearchParams({
     client_id: CLIENT_ID,
+    client_secret: CLIENT_SECRET,
     refresh_token: refreshToken,
     grant_type: 'refresh_token',
   })

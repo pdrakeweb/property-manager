@@ -1,5 +1,7 @@
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AppShell } from './components/layout/AppShell'
+import { useAuth } from './auth/AuthContext'
+import { SignInScreen } from './screens/SignInScreen'
 import { DashboardScreen }      from './screens/DashboardScreen'
 import { CaptureSelectScreen }  from './screens/CaptureSelectScreen'
 import { EquipmentFormScreen }  from './screens/EquipmentFormScreen'
@@ -10,6 +12,12 @@ import { InventoryScreen }      from './screens/InventoryScreen'
 import { SettingsScreen }       from './screens/SettingsScreen'
 
 export default function App() {
+  const { isAuthenticated } = useAuth()
+
+  if (!isAuthenticated) {
+    return <SignInScreen />
+  }
+
   return (
     <HashRouter>
       <AppShell>

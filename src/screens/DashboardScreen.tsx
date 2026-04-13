@@ -1,8 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import {
   Camera, Wrench, BarChart3, MessageSquare, AlertTriangle,
-  CheckCircle2, Circle, ChevronRight, Wifi, WifiOff, Zap,
-  TrendingUp, ClipboardList,
+  CheckCircle2, Circle, ChevronRight, Zap,
 } from 'lucide-react'
 import { cn } from '../utils/cn'
 import {

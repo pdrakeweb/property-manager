@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  CheckCircle2, Circle, ChevronRight, Filter, Search,
+  CheckCircle2, Circle, ChevronRight, Search,
   Camera, Wrench, AlertTriangle,
 } from 'lucide-react'
 import { cn } from '../utils/cn'
