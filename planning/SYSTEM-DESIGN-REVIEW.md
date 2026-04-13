@@ -163,6 +163,78 @@ class ExpoAuthProvider implements AuthProvider { /* future Expo implementation *
 
 This costs you an hour in Phase 1 and saves you a painful refactor in Phase 7.
 
+### iOS Safari ITP: Silent Storage Eviction Is the Auth Failure You Won't Expect
+
+Safari's Intelligent Tracking Prevention (ITP) treats any site with cross-domain redirect activity — including OAuth flows — as a potential tracker. The implications for this app are non-obvious and will produce hard-to-diagnose symptoms.
+
+**The 7-day storage eviction rule.** ITP caps the lifetime of site-origin storage (localStorage, IndexedDB, service worker caches, and HTTP cookies set via `document.cookie`) to 7 days of script-inactivity for classified sites. This isn't about inactivity in general — it's about script-level inactivity: the user must visit the page and have script execute. Opening a tab but leaving it in the background doesn't reset the clock.
+
+The consequences for this app:
+
+- **Refresh token eviction**: If you don't open the app for 7 days, Safari purges localStorage. The refresh token is gone. Silent re-auth fails with a 400 from Google's token endpoint. The app either breaks silently or shows an error that looks like a Drive API failure, not an auth failure. For a *seasonal* workflow (October winterization, April spring startup), a 7-day gap is the norm, not the exception.
+
+- **IndexedDB queue eviction**: Same rule applies. Any offline-queued records that haven't synced yet (e.g., you captured records while offline and never opened the app again for a week) will be silently deleted before sync happens.
+
+- **Service worker cache eviction**: Your stale-while-revalidate Drive cache is also subject to this. Less critical, but background-fetch registration can also be cleared.
+
+**The home screen exception is the real mitigation.** PWAs installed to the iOS home screen via "Add to Home Screen" are granted first-party storage status and are explicitly exempt from ITP's 7-day eviction. This is Apple's stated policy. The distinction matters:
+
+| Installation method | ITP eviction | Storage limit |
+|---|---|---|
+| Safari bookmark / in-browser | Yes, 7-day rule | ITP-limited |
+| Added to Home Screen | No | Full first-party |
+
+**Implication**: the app needs to aggressively push the "Add to Home Screen" prompt, framed as a prerequisite for reliable offline and persistent login — not just a "nice to have." Treat it like a permission gate:
+
+```typescript
+// On auth success, check if running in standalone mode
+const isStandalone = window.matchMedia('(display-mode: standalone)').matches 
+  || (window.navigator as any).standalone === true;
+
+if (!isStandalone && /iPhone|iPad/.test(navigator.userAgent)) {
+  // Show a hard-to-dismiss install prompt before continuing
+  showIOSInstallPrompt();
+}
+```
+
+**Graceful recovery when refresh token is gone.** The token refresh call should distinguish between "network failure" (retry) and "invalid_grant" (re-auth required). Google's token endpoint returns `{"error": "invalid_grant"}` in the body with HTTP 400 when the refresh token is expired or revoked:
+
+```typescript
+const refreshAccessToken = async (refreshToken: string): Promise<string | null> => {
+  const response = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'refresh_token',
+      refresh_token: refreshToken,
+      client_id: CLIENT_ID,
+    }),
+  });
+
+  if (!response.ok) {
+    const err = await response.json();
+    if (err.error === 'invalid_grant') {
+      // ITP evicted our token, or user revoked access — re-auth required
+      localStorage.removeItem('refresh_token');
+      initiateFullPKCEFlow();  // don't surface as an error; just re-auth
+      return null;
+    }
+    throw new Error(`Token refresh failed: ${err.error}`);  // network/server issue, retry
+  }
+
+  const { access_token } = await response.json();
+  return access_token;
+};
+```
+
+**ITP and the PKCE redirect itself.** ITP v2+ introduced "link decoration" protections that strip query parameters from cross-site navigations if the referring domain is classified as a tracker. Google's `accounts.google.com` is in ITP's "prevalent domain" classification. After the OAuth redirect, Safari may strip the `?code=...&state=...` query params from the redirect URI before your app's JavaScript can read them.
+
+This is the most insidious failure: the PKCE callback runs, `URLSearchParams` shows an empty code param, the exchange fails, and the user is silently dropped at an auth error with no retry. Mitigations:
+
+1. The `state` parameter in your PKCE flow doubles as CSRF protection. Also use it to trigger a short-lived retry check: if the callback receives no `code` param within 30 seconds, surface a "Try again" option rather than a hard error.
+2. Consider using the [Authorization Code Flow via popup](https://developers.google.com/identity/oauth2/web/guides/use-code-model) instead of a redirect for Safari on iOS — popups are less affected by ITP's link decoration rules. The tradeoff is that popup-blockers and PWA standalone mode don't coexist well.
+3. In practice, test this explicitly in Safari on iOS with a fresh profile. ITP behavior varies by Safari version (15, 16, 17, 18 all changed ITP rules), and breakage may only appear in conditions that are hard to reproduce in desktop Safari DevTools.
+
 ### Drive Scope Decision Is Correct
 
 `drive` is the right scope for a personal single-user tool where checklist detection of prior uploads matters. The risk profile (XSS → token exfiltration → Drive access) is minimal for a GitHub Pages static app with no user-generated content. Document this decision and its rationale so it's clear if/when the threat model changes (multi-user, public URL).
