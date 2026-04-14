@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import {
   Camera, Wrench, BarChart3, MessageSquare, AlertTriangle,
-  CheckCircle2, Circle, ChevronRight, Zap, ShieldAlert,
+  CheckCircle2, Circle, ChevronRight, Zap, ShieldAlert, Receipt, Home,
 } from 'lucide-react'
 import { cn } from '../utils/cn'
 import {
@@ -10,6 +10,9 @@ import {
 import { getYTDSpend } from '../lib/costStore'
 import { getUpcomingExpiries } from '../lib/expiryStore'
 import { ExpiryWidget } from '../components/ExpiryWidget'
+import { getNextTaxPayment, getOverdueTaxPayments } from '../lib/taxStore'
+import { getTotalMortgageBalance } from '../lib/mortgageStore'
+import { getAssessmentsForProperty } from '../lib/taxStore'
 import { useAppStore } from '../store/AppStoreContext'
 import type { Priority, HAStatus } from '../types'
 
@@ -97,6 +100,15 @@ export function DashboardScreen() {
   const ytdSpend = getYTDSpend(activePropertyId)
   const expiries = getUpcomingExpiries(activePropertyId, 90)
 
+  // Tax & mortgage
+  const nextTaxPmt      = getNextTaxPayment(activePropertyId)
+  const overdueTaxPmts  = getOverdueTaxPayments(activePropertyId)
+  const totalMtgBalance = getTotalMortgageBalance(activePropertyId)
+  const latestAssess    = getAssessmentsForProperty(activePropertyId)[0]
+  const equity          = latestAssess && totalMtgBalance > 0
+    ? (latestAssess.marketValue ?? latestAssess.totalAssessed) - totalMtgBalance
+    : null
+
   return (
     <div className="space-y-5">
 
@@ -108,7 +120,7 @@ export function DashboardScreen() {
         </p>
       </div>
 
-      {/* ── Alert Banner ────────────────────────────────────────────── */}
+      {/* ── Alert Banners ───────────────────────────────────────────── */}
       {overdueTasks.length > 0 && (
         <div
           onClick={() => navigate('/maintenance')}
@@ -118,6 +130,20 @@ export function DashboardScreen() {
           <span className="text-sm text-red-700 font-medium flex-1">
             {overdueTasks.length} overdue maintenance {overdueTasks.length === 1 ? 'task' : 'tasks'}
             {' — '}{overdueTasks[0].title}
+          </span>
+          <ChevronRight className="w-4 h-4 text-red-400" />
+        </div>
+      )}
+
+      {overdueTaxPmts.length > 0 && (
+        <div
+          onClick={() => navigate('/tax')}
+          className="flex items-center gap-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3 cursor-pointer hover:bg-red-100 transition-colors"
+        >
+          <Receipt className="w-4 h-4 text-red-500 shrink-0" />
+          <span className="text-sm text-red-700 font-medium flex-1">
+            {overdueTaxPmts.length} overdue tax payment{overdueTaxPmts.length > 1 ? 's' : ''}
+            {' — '}${overdueTaxPmts[0].amount.toLocaleString()} due {new Date(overdueTaxPmts[0].dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
           </span>
           <ChevronRight className="w-4 h-4 text-red-400" />
         </div>
@@ -298,6 +324,51 @@ export function DashboardScreen() {
         {/* Expiry Widget */}
         {expiries.length > 0 && (
           <ExpiryWidget propertyId={activePropertyId} />
+        )}
+
+        {/* Next Tax Payment */}
+        {nextTaxPmt && (
+          <Card>
+            <div className="px-5 pt-5 pb-4">
+              <SectionHeader title="Property Tax" action="View all" onAction={() => navigate('/tax')} />
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center shrink-0">
+                  <Receipt className="w-5 h-5 text-amber-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-slate-800">
+                    {nextTaxPmt.year} · Installment {nextTaxPmt.installment}
+                  </p>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Due {new Date(nextTaxPmt.dueDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                  </p>
+                </div>
+                <p className="text-base font-bold text-amber-700 shrink-0">
+                  ${nextTaxPmt.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </p>
+              </div>
+            </div>
+          </Card>
+        )}
+
+        {/* Equity Card */}
+        {equity !== null && (
+          <Card>
+            <div className="px-5 pt-5 pb-4">
+              <SectionHeader title="Home Equity" action="Mortgages" onAction={() => navigate('/mortgage')} />
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center shrink-0">
+                  <Home className="w-5 h-5 text-emerald-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-2xl font-bold text-emerald-700">${equity.toLocaleString()}</p>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Market ${(latestAssess!.marketValue ?? latestAssess!.totalAssessed).toLocaleString()} − Debt ${totalMtgBalance.toLocaleString()}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </Card>
         )}
 
       </div>

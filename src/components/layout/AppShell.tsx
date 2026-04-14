@@ -3,7 +3,7 @@ import { NavLink, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard, Camera, Wrench, BarChart3,
   MessageSquare, ClipboardList, Settings, ChevronDown,
-  Building2, TreePine, Users, Droplets,
+  Building2, TreePine, Users, Droplets, Receipt, Home, Zap,
 } from 'lucide-react'
 import { cn } from '../../utils/cn'
 import { PROPERTIES } from '../../data/mockData'
@@ -18,6 +18,9 @@ const NAV_ITEMS = [
   { to: '/inventory',  icon: ClipboardList,   label: 'Inventory',   mobileShow: false },
   { to: '/vendors',    icon: Users,           label: 'Vendors',     mobileShow: false },
   { to: '/fuel',       icon: Droplets,        label: 'Fuel',        mobileShow: false },
+  { to: '/tax',        icon: Receipt,         label: 'Property Tax',mobileShow: false },
+  { to: '/mortgage',   icon: Home,            label: 'Mortgage',    mobileShow: false },
+  { to: '/utilities',  icon: Zap,             label: 'Utilities',   mobileShow: false },
 ]
 
 const PROPERTY_ICONS = { residence: Building2, camp: TreePine, land: Building2 }

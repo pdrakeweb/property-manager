@@ -105,3 +105,86 @@ export interface FuelDelivery {
   tankId?: string
   notes?: string
 }
+
+// ── Property Tax ─────────────────────────────────────────────────────────────
+
+export interface TaxAssessment {
+  id: string
+  propertyId: string
+  year: number
+  assessedLand: number
+  assessedImprovement: number
+  totalAssessed: number
+  marketValue?: number
+  notes?: string
+}
+
+export interface TaxPayment {
+  id: string
+  propertyId: string
+  year: number
+  installment: 1 | 2
+  dueDate: string
+  paidDate?: string
+  amount: number
+  penalty?: number
+  notes?: string
+}
+
+// ── Mortgage ─────────────────────────────────────────────────────────────────
+
+export interface Mortgage {
+  id: string
+  propertyId: string
+  label: string            // e.g. "Primary", "HELOC"
+  lender: string
+  accountNumber?: string
+  originalBalance: number
+  currentBalance: number
+  interestRate: number     // annual %, e.g. 6.75
+  termMonths: number
+  startDate: string
+  monthlyPayment: number
+  escrowAmount?: number
+  notes?: string
+}
+
+export interface MortgagePayment {
+  id: string
+  mortgageId: string
+  propertyId: string
+  date: string
+  amount: number
+  principal: number
+  interest: number
+  escrow?: number
+  extraPrincipal?: number
+  notes?: string
+}
+
+// ── Utility Bills ────────────────────────────────────────────────────────────
+
+export type UtilityType = 'electric' | 'gas' | 'water' | 'sewer' | 'trash' | 'internet' | 'phone' | 'other'
+
+export interface UtilityAccount {
+  id: string
+  propertyId: string
+  type: UtilityType
+  provider: string
+  accountNumber?: string
+  notes?: string
+}
+
+export interface UtilityBill {
+  id: string
+  accountId: string
+  propertyId: string
+  periodStart: string
+  periodEnd: string
+  consumption?: number
+  unit?: string            // kWh, CCF, gallons, etc.
+  totalCost: number
+  ratePerUnit?: number
+  driveFileId?: string
+  notes?: string
+}
