@@ -22,6 +22,7 @@ import { TaxScreen }            from './screens/TaxScreen'
 import { MortgageScreen }       from './screens/MortgageScreen'
 import { UtilityScreen }        from './screens/UtilityScreen'
 import { CalendarScreen }      from './screens/CalendarScreen'
+import { InsuranceScreen }     from './screens/InsuranceScreen'
 
 import { syncAll, seedTasksForProperty } from './lib/syncEngine'
 import { PROPERTIES } from './data/mockData'
@@ -287,6 +288,7 @@ function MainApp() {
           <Route path="/mortgage"            element={<MortgageScreen />}      />
           <Route path="/utilities"           element={<UtilityScreen />}       />
           <Route path="/calendar"            element={<CalendarScreen />}      />
+          <Route path="/insurance"           element={<InsuranceScreen />}     />
           <Route path="*"                    element={<Navigate to="/" />}     />
         </Routes>
       </AppShell>

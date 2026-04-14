@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Camera, Wrench, BarChart3,
   MessageSquare, ClipboardList, Settings, ChevronDown,
   Building2, TreePine, Users, Droplets, Receipt, Home, Zap, CalendarDays,
-  RefreshCw,
+  RefreshCw, Shield,
 } from 'lucide-react'
 import { cn } from '../../utils/cn'
 import { PROPERTIES } from '../../data/mockData'
@@ -25,6 +25,7 @@ const NAV_ITEMS = [
   { to: '/tax',        icon: Receipt,         label: 'Property Tax',mobileShow: false },
   { to: '/mortgage',   icon: Home,            label: 'Mortgage',    mobileShow: false },
   { to: '/utilities',  icon: Zap,             label: 'Utilities',   mobileShow: false },
+  { to: '/insurance',  icon: Shield,          label: 'Insurance',   mobileShow: false },
 ]
 
 const PROPERTY_ICONS = { residence: Building2, camp: TreePine, land: Building2 }
