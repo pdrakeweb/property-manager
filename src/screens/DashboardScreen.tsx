@@ -18,7 +18,19 @@ import { getTotalMortgageBalance } from '../lib/mortgageStore'
 import { customTaskStore, getActiveTasks } from '../lib/maintenanceStore'
 import { localIndex } from '../lib/localIndex'
 import { useAppStore } from '../store/AppStoreContext'
+import { PropertyHealthCard } from '../components/dashboard/PropertyHealthCard'
 import type { Priority, HAStatus, MaintenanceTask } from '../types'
+
+// ── Dashboard mode ────────────────────────────────────────────────────────────
+
+type DashboardMode = 'all' | 'single'
+
+const DASHBOARD_MODE_KEY = 'pm_dashboard_mode'
+
+function readDashboardMode(): DashboardMode {
+  const stored = localStorage.getItem(DASHBOARD_MODE_KEY)
+  return stored === 'single' ? 'single' : 'all'
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -186,11 +198,22 @@ const PROP_ICONS = { residence: Building2, camp: TreePine, land: Building2 }
 
 export function DashboardScreen() {
   const navigate = useNavigate()
-  const { activePropertyId } = useAppStore()
+  const { activePropertyId, setActivePropertyId } = useAppStore()
 
   const [showQuickAdd,  setShowQuickAdd]  = useState(false)
   const [detailOpen,    setDetailOpen]    = useState(true)
   const [tick,          setTick]          = useState(0)
+  const [dashboardMode, setDashboardMode] = useState<DashboardMode>(readDashboardMode)
+
+  function toggleDashboardMode(mode: DashboardMode) {
+    localStorage.setItem(DASHBOARD_MODE_KEY, mode)
+    setDashboardMode(mode)
+  }
+
+  function handlePropertySelect(propertyId: string) {
+    setActivePropertyId(propertyId)
+    navigate('/maintenance')
+  }
 
   const today       = new Date().toISOString().slice(0, 10)
   const in30Days    = new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10)
@@ -278,6 +301,36 @@ export function DashboardScreen() {
           Add task
         </button>
       </div>
+
+      {/* ── Dashboard Mode Toggle ───────────────────────────────────────── */}
+      <div className="flex gap-1 p-1 bg-slate-100 rounded-xl w-fit">
+        {(['all', 'single'] as DashboardMode[]).map(mode => (
+          <button
+            key={mode}
+            onClick={() => toggleDashboardMode(mode)}
+            className={cn(
+              'px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors',
+              dashboardMode === mode
+                ? 'bg-white text-slate-900 shadow-sm'
+                : 'text-slate-500 hover:text-slate-700',
+            )}
+          >
+            {mode === 'all' ? 'All Properties' : 'This Property'}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Cross-Property Health Cards (All mode only) ──────────────────── */}
+      {dashboardMode === 'all' && (
+        <div>
+          <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Property Health</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {PROPERTIES.map(p => (
+              <PropertyHealthCard key={p.id} property={p} onSelect={handlePropertySelect} />
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ── Property Health Row ──────────────────────────────────────────── */}
       <div>
