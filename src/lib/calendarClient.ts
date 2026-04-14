@@ -1,142 +1,200 @@
-// Google Calendar API v3 — thin wrapper, no Claude dependency.
-// All events are all-day events tagged with extendedProperties for filtering.
+// Adapter router + types for Google Calendar integration.
+// Routes between googleCalendarAdapter (prod) and localCalendarAdapter (dev bypass).
 
-const CALENDAR_API = 'https://www.googleapis.com/calendar/v3/calendars/primary/events'
-const APP_SOURCE   = 'PropertyManager'
+import { isDev } from '../auth/oauth'
+import type { IndexRecord } from './localIndex'
 
-export interface CalendarTaskInput {
-  taskId:         string
-  title:          string
-  propertyName:   string
-  category:       string
-  dueDate:        string   // YYYY-MM-DD
-  estimatedCost?: number
-  notes?:         string
-  appUrl:         string   // link back into the app
-}
+// ── Types ─────────────────────────────────────────────────────────────────────
 
-interface CalendarEventBody {
+export interface CalendarEvent {
+  id:          string
+  calendarId:  string
   summary:     string
   description: string
   start:       { date: string }
   end:         { date: string }
-  source:      { title: string; url: string }
-  extendedProperties: {
-    private: { propertyManagerId: string; taskId: string }
+  reminders:   Array<{ type: 'popup'; minutes: number }>
+  updated:     string
+  etag:        string
+}
+
+export interface ExpectedCalendarEvent {
+  taskId:      string
+  taskTitle:   string
+  date:        string
+  description: string
+  reminders:   Array<{ type: 'popup'; minutes: number }>
+}
+
+export interface DryRunResult {
+  toCreate: Array<{ taskId: string; event: Partial<CalendarEvent> }>
+  toUpdate: Array<{ taskId: string; existing: CalendarEvent; replacement: Partial<CalendarEvent>; reason: string }>
+  toDelete: Array<{ eventId: string; reason: string }>
+  summary:  { willCreate: number; willUpdate: number; willDelete: number }
+}
+
+export interface CalendarSyncResult {
+  created: number
+  updated: number
+  deleted: number
+  errors:  Array<{ op: string; taskId?: string; message: string }>
+}
+
+export interface PropertyCalendarMetadata {
+  propertyId:   string
+  calendarId:   string
+  calendarName: string
+  created:      string
+  verified:     string
+}
+
+export class CalendarError extends Error {
+  constructor(
+    message: string,
+    public code: 'AUTH_REQUIRED' | 'QUOTA_EXCEEDED' | 'NOT_FOUND' | 'CONFLICT' | 'NETWORK' | 'OFFLINE' | 'UNKNOWN',
+  ) {
+    super(message)
+    this.name = 'CalendarError'
   }
 }
 
-function buildDescription(input: CalendarTaskInput): string {
-  const lines: string[] = [
-    `Property: ${input.propertyName}`,
-    `Category: ${input.category}`,
-  ]
-  if (input.estimatedCost !== undefined) {
-    lines.push(`Estimated cost: $${input.estimatedCost.toLocaleString()}`)
-  }
-  if (input.notes) {
-    lines.push(`Notes: ${input.notes}`)
-  }
-  lines.push('', 'Managed by Property Manager — open app to update')
-  return lines.join('\n')
+// ── Adapter interface ─────────────────────────────────────────────────────────
+
+export interface CalendarAdapter {
+  getCalendarList(token: string): Promise<Array<{ id: string; summary: string }>>
+  createCalendar(token: string, name: string): Promise<{ id: string }>
+  listEvents(token: string, calendarId: string): Promise<CalendarEvent[]>
+  createEvent(token: string, calendarId: string, event: Partial<CalendarEvent> & Record<string, unknown>): Promise<CalendarEvent>
+  updateEvent(token: string, calendarId: string, eventId: string, event: Partial<CalendarEvent> & Record<string, unknown>, ifMatchEtag?: string): Promise<CalendarEvent>
+  deleteEvent(token: string, calendarId: string, eventId: string): Promise<void>
 }
 
-function buildBody(input: CalendarTaskInput): CalendarEventBody {
-  return {
-    summary:     `${input.title} — ${input.propertyName}`,
-    description: buildDescription(input),
-    start:       { date: input.dueDate },
-    end:         { date: input.dueDate },
-    source:      { title: APP_SOURCE, url: input.appUrl },
-    extendedProperties: {
-      private: {
-        propertyManagerId: APP_SOURCE,
-        taskId:            input.taskId,
-      },
-    },
+// ── Adapter routing ───────────────────────────────────────────────────────────
+
+async function getAdapter(): Promise<CalendarAdapter> {
+  if (isDev()) {
+    const { localCalendarAdapter } = await import('./adapters/localCalendarAdapter')
+    return localCalendarAdapter
   }
+  const { googleCalendarAdapter } = await import('./adapters/googleCalendarAdapter')
+  return googleCalendarAdapter
 }
 
-function authHeaders(token: string): Record<string, string> {
-  return {
-    Authorization:  `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  }
+// ── Calendar name prefix ──────────────────────────────────────────────────────
+
+const CAL_PREFIX = 'Property Manager — '
+
+function calendarName(propertyName: string): string {
+  return `${CAL_PREFIX}${propertyName}`
 }
 
-export const calendarClient = {
+// ── High-level API ────────────────────────────────────────────────────────────
 
-  /** Create a new all-day event. Returns the created event ID. */
-  async createEvent(token: string, task: CalendarTaskInput): Promise<string> {
-    const resp = await fetch(CALENDAR_API, {
-      method:  'POST',
-      headers: authHeaders(token),
-      body:    JSON.stringify(buildBody(task)),
-    })
-    if (!resp.ok) {
-      const text = await resp.text()
-      throw new Error(`Calendar createEvent failed (${resp.status}): ${text.slice(0, 200)}`)
+import { getCachedCalendarId, setCachedCalendarId } from './calendarStorage'
+
+/**
+ * Get or create the dedicated calendar for a property.
+ * Verifies the cached calendar ID still exists before returning it.
+ */
+export async function getOrCreatePropertyCalendar(
+  token:        string,
+  propertyId:   string,
+  propertyName: string,
+): Promise<PropertyCalendarMetadata> {
+  const adapter = await getAdapter()
+  const name    = calendarName(propertyName)
+  const now     = new Date().toISOString()
+
+  // Try cache first
+  const cachedId = getCachedCalendarId(propertyId)
+  if (cachedId) {
+    try {
+      const list = await adapter.getCalendarList(token)
+      if (list.some(c => c.id === cachedId)) {
+        const meta: PropertyCalendarMetadata = {
+          propertyId, calendarId: cachedId, calendarName: name,
+          created: now, verified: now,
+        }
+        setCachedCalendarId(propertyId, meta)
+        return meta
+      }
+    } catch {
+      // Network error — trust cache
+      return { propertyId, calendarId: cachedId, calendarName: name, created: now, verified: now }
     }
-    const event = await resp.json() as { id: string }
-    return event.id
-  },
+  }
 
-  /** Patch an existing event's title, date, and description. */
-  async updateEvent(token: string, eventId: string, task: CalendarTaskInput): Promise<void> {
-    const resp = await fetch(`${CALENDAR_API}/${eventId}`, {
-      method:  'PATCH',
-      headers: authHeaders(token),
-      body:    JSON.stringify(buildBody(task)),
-    })
-    if (resp.status === 404) return   // deleted externally — ignore
-    if (!resp.ok) {
-      const text = await resp.text()
-      throw new Error(`Calendar updateEvent failed (${resp.status}): ${text.slice(0, 200)}`)
+  // Check if calendar already exists under a different cached key
+  const list = await adapter.getCalendarList(token)
+  const existing = list.find(c => c.summary === name)
+  if (existing) {
+    const meta: PropertyCalendarMetadata = {
+      propertyId, calendarId: existing.id, calendarName: name, created: now, verified: now,
     }
-  },
+    setCachedCalendarId(propertyId, meta)
+    return meta
+  }
 
-  /** Delete an event. 404 is silently ignored (already deleted). */
-  async deleteEvent(token: string, eventId: string): Promise<void> {
-    const resp = await fetch(`${CALENDAR_API}/${eventId}`, {
-      method:  'DELETE',
-      headers: { Authorization: `Bearer ${token}` },
-    })
-    if (resp.status === 404 || resp.status === 204) return
-    if (!resp.ok) {
-      const text = await resp.text()
-      throw new Error(`Calendar deleteEvent failed (${resp.status}): ${text.slice(0, 200)}`)
-    }
-  },
+  // Create new
+  const created = await adapter.createCalendar(token, name)
+  const meta: PropertyCalendarMetadata = {
+    propertyId, calendarId: created.id, calendarName: name, created: now, verified: now,
+  }
+  setCachedCalendarId(propertyId, meta)
+  return meta
+}
 
-  /**
-   * List all events created by this app via extendedProperties filter.
-   * Returns { taskId, eventId } pairs for cross-referencing with localIndex.
-   */
-  async listAppEvents(token: string): Promise<{ taskId: string; eventId: string }[]> {
-    const url = new URL(CALENDAR_API)
-    url.searchParams.set('privateExtendedProperty', `propertyManagerId=${APP_SOURCE}`)
-    url.searchParams.set('fields', 'items(id,extendedProperties)')
-    url.searchParams.set('maxResults', '500')
-    url.searchParams.set('singleEvents', 'true')
+/**
+ * Sync all tasks for a property to their calendar.
+ * Pass dryRun=true to preview the diff without making API calls.
+ */
+export async function syncAllToCalendar(
+  token:        string,
+  propertyId:   string,
+  propertyName: string,
+  dryRun        = false,
+): Promise<CalendarSyncResult | DryRunResult> {
+  const { reconcileCalendar } = await import('./calendarReconciliation')
+  const { localIndex } = await import('./localIndex')
 
-    const resp = await fetch(url.toString(), { headers: authHeaders(token) })
-    if (!resp.ok) {
-      const text = await resp.text()
-      throw new Error(`Calendar listAppEvents failed (${resp.status}): ${text.slice(0, 200)}`)
-    }
+  const meta       = await getOrCreatePropertyCalendar(token, propertyId, propertyName)
+  const tasks      = localIndex.getAll('task', propertyId)
+  return reconcileCalendar(token, meta.calendarId, tasks, propertyName, dryRun)
+}
 
-    const data = await resp.json() as {
-      items?: Array<{
-        id: string
-        extendedProperties?: { private?: { taskId?: string } }
-      }>
-    }
+/**
+ * Add (or update) a single task's calendar event.
+ */
+export async function addTaskToCalendar(
+  token:        string,
+  task:         IndexRecord,
+  propertyName: string,
+): Promise<void> {
+  const { reconcileCalendar } = await import('./calendarReconciliation')
 
-    return (data.items ?? [])
-      .filter(e => e.extendedProperties?.private?.taskId)
-      .map(e => ({
-        taskId:  e.extendedProperties!.private!.taskId!,
-        eventId: e.id,
-      }))
-  },
+  const data      = task.data as Record<string, unknown>
+  const propertyId = task.propertyId
+  const status    = (data['status'] as string | undefined) ?? ''
+  if (status === 'completed') return
+
+  const meta = await getOrCreatePropertyCalendar(token, propertyId, propertyName)
+  await reconcileCalendar(token, meta.calendarId, [task], propertyName, false)
+}
+
+/**
+ * Remove a task's calendar event(s).
+ */
+export async function removeTaskFromCalendar(
+  token: string,
+  task:  IndexRecord,
+): Promise<void> {
+  const adapter    = await getAdapter()
+  const propertyId = task.propertyId
+  const cachedId   = getCachedCalendarId(propertyId)
+  if (!cachedId) return
+
+  const calendarEventIds = task.calendarEventIds ?? (task.calendarEventId ? [task.calendarEventId] : [])
+  for (const eventId of calendarEventIds) {
+    try { await adapter.deleteEvent(token, cachedId, eventId) } catch { /* non-fatal */ }
+  }
 }
