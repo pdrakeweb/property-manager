@@ -3,19 +3,21 @@ import { NavLink, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard, Camera, Wrench, BarChart3,
   MessageSquare, ClipboardList, Settings, ChevronDown,
-  Building2, TreePine,
+  Building2, TreePine, Users, Droplets,
 } from 'lucide-react'
 import { cn } from '../../utils/cn'
 import { PROPERTIES } from '../../data/mockData'
 import { useAppStore } from '../../store/AppStoreContext'
 
 const NAV_ITEMS = [
-  { to: '/',           icon: LayoutDashboard, label: 'Dashboard'   },
-  { to: '/capture',    icon: Camera,          label: 'Capture'     },
-  { to: '/maintenance',icon: Wrench,          label: 'Maintenance' },
-  { to: '/budget',     icon: BarChart3,       label: 'Budget'      },
-  { to: '/advisor',    icon: MessageSquare,   label: 'Ask AI'      },
-  { to: '/inventory',  icon: ClipboardList,   label: 'Inventory'   },
+  { to: '/',           icon: LayoutDashboard, label: 'Dashboard',   mobileShow: true  },
+  { to: '/capture',    icon: Camera,          label: 'Capture',     mobileShow: true  },
+  { to: '/maintenance',icon: Wrench,          label: 'Maintenance', mobileShow: true  },
+  { to: '/budget',     icon: BarChart3,       label: 'Budget',      mobileShow: true  },
+  { to: '/advisor',    icon: MessageSquare,   label: 'Ask AI',      mobileShow: true  },
+  { to: '/inventory',  icon: ClipboardList,   label: 'Inventory',   mobileShow: false },
+  { to: '/vendors',    icon: Users,           label: 'Vendors',     mobileShow: false },
+  { to: '/fuel',       icon: Droplets,        label: 'Fuel',        mobileShow: false },
 ]
 
 const PROPERTY_ICONS = { residence: Building2, camp: TreePine, land: Building2 }
@@ -212,7 +214,7 @@ export function AppShell({ children }: AppShellProps) {
       {/* ── Mobile Bottom Nav ─────────────────────────────────────────── */}
       <nav className="lg:hidden fixed bottom-0 inset-x-0 bg-white border-t border-slate-200 z-30 safe-bottom">
         <div className="flex items-center">
-          {NAV_ITEMS.filter(n => n.to !== '/inventory').map(({ to, icon: Icon, label }) => (
+          {NAV_ITEMS.filter(n => n.mobileShow).map(({ to, icon: Icon, label }) => (
             <NavLink
               key={to}
               to={to}

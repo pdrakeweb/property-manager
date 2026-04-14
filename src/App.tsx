@@ -12,6 +12,12 @@ import { BudgetScreen }         from './screens/BudgetScreen'
 import { AIAdvisoryScreen }     from './screens/AIAdvisoryScreen'
 import { InventoryScreen }      from './screens/InventoryScreen'
 import { SettingsScreen }       from './screens/SettingsScreen'
+import { VendorScreen }         from './screens/VendorScreen'
+import { ExpiryManageScreen }   from './screens/ExpiryManageScreen'
+import { EmergencyScreen }      from './screens/EmergencyScreen'
+import { WellTestScreen }       from './screens/WellTestScreen'
+import { SepticScreen }         from './screens/SepticScreen'
+import { FuelScreen }           from './screens/FuelScreen'
 
 import {
   isAuthenticated,
@@ -235,6 +241,13 @@ function MainApp() {
           <Route path="/advisor"             element={<AIAdvisoryScreen />}    />
           <Route path="/inventory"           element={<InventoryScreen />}     />
           <Route path="/settings"            element={<SettingsScreen />}      />
+          <Route path="/vendors"             element={<VendorScreen />}        />
+          <Route path="/expiry"              element={<ExpiryManageScreen />}  />
+          <Route path="/emergency/:propertyId" element={<EmergencyScreen />}  />
+          <Route path="/emergency"           element={<EmergencyScreen />}     />
+          <Route path="/well-tests"          element={<WellTestScreen />}      />
+          <Route path="/septic-log"          element={<SepticScreen />}        />
+          <Route path="/fuel"                element={<FuelScreen />}          />
           <Route path="*"                    element={<Navigate to="/" />}     />
         </Routes>
       </AppShell>
@@ -251,6 +264,13 @@ export default function App() {
     // If we have ?code= in the URL it's an OAuth callback
     const params = new URLSearchParams(window.location.search)
     if (params.has('code')) return 'callback'
+    // Emergency bypass: if cached locally and URL has emergency=true
+    const hashVal = window.location.hash
+    if (hashVal.includes('/emergency') && hashVal.includes('emergency=true')) {
+      const pidMatch = hashVal.match(/\/emergency\/([^/?]+)/)
+      const pid = pidMatch?.[1] ?? 'tannerville'
+      if (localStorage.getItem(`pm_emergency_${pid}`)) return 'authenticated'
+    }
     return isAuthenticated() ? 'authenticated' : 'unauthenticated'
   })
 

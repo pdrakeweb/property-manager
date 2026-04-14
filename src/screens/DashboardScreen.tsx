@@ -1,13 +1,16 @@
 import { useNavigate } from 'react-router-dom'
 import {
   Camera, Wrench, BarChart3, MessageSquare, AlertTriangle,
-  CheckCircle2, Circle, ChevronRight, Wifi, WifiOff, Zap,
-  TrendingUp, ClipboardList,
+  CheckCircle2, Circle, ChevronRight, Zap, ShieldAlert,
 } from 'lucide-react'
 import { cn } from '../utils/cn'
 import {
   MAINTENANCE_TASKS, CAPITAL_ITEMS, HA_STATUS, CATEGORIES,
 } from '../data/mockData'
+import { getYTDSpend } from '../lib/costStore'
+import { getUpcomingExpiries } from '../lib/expiryStore'
+import { ExpiryWidget } from '../components/ExpiryWidget'
+import { useAppStore } from '../store/AppStoreContext'
 import type { Priority, HAStatus } from '../types'
 
 // ── Helpers ──────────────────────────────────────────────────────────────
@@ -79,6 +82,7 @@ function Card({ children, className }: { children: React.ReactNode; className?: 
 
 export function DashboardScreen() {
   const navigate = useNavigate()
+  const { activePropertyId } = useAppStore()
 
   const overdueTasks = MAINTENANCE_TASKS.filter(t => t.status === 'overdue')
   const dueTasks     = MAINTENANCE_TASKS.filter(t => t.status === 'due' || t.status === 'overdue')
@@ -89,6 +93,9 @@ export function DashboardScreen() {
 
   const currentHour = new Date().getHours()
   const greeting = currentHour < 12 ? 'Good morning' : currentHour < 17 ? 'Good afternoon' : 'Good evening'
+
+  const ytdSpend = getYTDSpend(activePropertyId)
+  const expiries = getUpcomingExpiries(activePropertyId, 90)
 
   return (
     <div className="space-y-5">
@@ -117,12 +124,13 @@ export function DashboardScreen() {
       )}
 
       {/* ── Quick Actions ────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-5">
         {[
           { icon: Camera,       label: 'Capture',     sub: 'Record equipment',    to: '/capture',     color: 'bg-sky-600'     },
           { icon: Wrench,       label: 'Maintenance', sub: `${dueTasks.length} due`,    to: '/maintenance', color: 'bg-orange-500'  },
           { icon: BarChart3,    label: 'Budget',      sub: 'Capital forecast',    to: '/budget',      color: 'bg-violet-600'  },
           { icon: MessageSquare,label: 'Ask AI',      sub: 'Property advisor',    to: '/advisor',     color: 'bg-emerald-600' },
+          { icon: ShieldAlert,  label: 'Emergency',   sub: 'Shutoffs & contacts', to: '/emergency',   color: 'bg-red-600'     },
         ].map(({ icon: Icon, label, sub, to, color }) => (
           <button
             key={to}
@@ -137,6 +145,19 @@ export function DashboardScreen() {
           </button>
         ))}
       </div>
+
+      {/* ── YTD Spend Card ──────────────────────────────────────────── */}
+      {ytdSpend > 0 && (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-2xl px-5 py-4 flex items-center justify-between">
+          <div>
+            <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wide">YTD Maintenance Spend</p>
+            <p className="text-2xl font-bold text-emerald-800 mt-0.5">${ytdSpend.toLocaleString()}</p>
+          </div>
+          <div className="text-xs text-emerald-600 text-right">
+            <p>{new Date().getFullYear()}</p>
+          </div>
+        </div>
+      )}
 
       {/* ── Two-column grid on desktop ──────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
@@ -273,6 +294,11 @@ export function DashboardScreen() {
             </div>
           </div>
         </Card>
+
+        {/* Expiry Widget */}
+        {expiries.length > 0 && (
+          <ExpiryWidget propertyId={activePropertyId} />
+        )}
 
       </div>
 
