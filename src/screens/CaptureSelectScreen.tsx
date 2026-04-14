@@ -1,52 +1,24 @@
-import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { CheckCircle2, ChevronRight, Sparkles, Loader2 } from 'lucide-react'
-import { CATEGORIES, PROPERTIES } from '../data/mockData'
+import { CheckCircle2, ChevronRight, Sparkles } from 'lucide-react'
+import { CATEGORIES } from '../data/mockData'
 import { useAppStore } from '../store/AppStoreContext'
-import { getValidToken } from '../auth/oauth'
-import { DriveClient } from '../lib/driveClient'
+import { localIndex } from '../lib/localIndex'
 import type { Category } from '../types'
 
 export function CaptureSelectScreen() {
   const navigate = useNavigate()
-  const { driveFileCounts, driveCountsLoaded, setDriveFileCount, activePropertyId } = useAppStore()
-
-  const activeProperty = PROPERTIES.find(p => p.id === activePropertyId) ?? PROPERTIES[0]
-
-  // Load Drive file counts for any category not yet fetched
-  useEffect(() => {
-    const rootFolderId = activeProperty.driveRootFolderId
-    if (!rootFolderId) return
-
-    async function loadCounts() {
-      const token = await getValidToken()
-      if (!token) return
-
-      for (const cat of CATEGORIES) {
-        if (driveCountsLoaded[cat.id]) continue
-
-        try {
-          const folderId = await DriveClient.resolveFolderId(token, cat.id, rootFolderId)
-          const files    = await DriveClient.listFiles(token, folderId)
-          setDriveFileCount(cat.id, files.length)
-        } catch {
-          // Non-fatal: fall back to 0 count for this category
-          setDriveFileCount(cat.id, 0)
-        }
-      }
-    }
-
-    loadCounts()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activePropertyId])
+  const { activePropertyId } = useAppStore()
 
   function getCount(cat: Category): number {
-    if (driveCountsLoaded[cat.id]) return driveFileCounts[cat.id] ?? 0
+    // Local index is the source of truth — works offline, no Drive polling needed.
+    // Fall back to mock seed value if index hasn't been populated yet.
+    const indexed = localIndex.getCount('equipment', activePropertyId)
+    if (indexed > 0) {
+      // Count per-category from index
+      return localIndex.getAll('equipment', activePropertyId)
+        .filter(r => r.categoryId === cat.id).length
+    }
     return cat.recordCount ?? 0
-  }
-
-  function isLoading(cat: Category): boolean {
-    return !driveCountsLoaded[cat.id]
   }
 
   const withRecords    = CATEGORIES.filter(c => getCount(c) > 0)
@@ -58,7 +30,7 @@ export function CaptureSelectScreen() {
       <div>
         <h1 className="text-xl font-bold text-slate-900">New Record</h1>
         <p className="text-sm text-slate-500 mt-0.5">
-          Select what you want to capture. Counts reflect your Drive — AI extraction available where shown.
+          Select what you want to capture. Counts are from your local index — AI extraction available where shown.
         </p>
       </div>
 
@@ -88,10 +60,7 @@ export function CaptureSelectScreen() {
                 </div>
                 <p className="text-xs text-slate-500 mt-0.5 truncate">{cat.description}</p>
               </div>
-              {isLoading(cat)
-                ? <Loader2 className="w-3.5 h-3.5 text-slate-300 animate-spin shrink-0" />
-                : <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-slate-500 shrink-0 transition-colors" />
-              }
+              <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-slate-500 shrink-0 transition-colors" />
             </button>
           ))}
         </div>
@@ -123,10 +92,7 @@ export function CaptureSelectScreen() {
                     )}
                   </div>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    {isLoading(cat)
-                      ? <span className="flex items-center gap-1"><Loader2 className="w-2.5 h-2.5 animate-spin" /> Loading from Drive…</span>
-                      : `${getCount(cat)} file${getCount(cat) !== 1 ? 's' : ''} in Drive · ${cat.description}`
-                    }
+                    {`${getCount(cat)} record${getCount(cat) !== 1 ? 's' : ''} · ${cat.description}`}
                   </p>
                 </div>
                 <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-slate-500 shrink-0 transition-colors" />

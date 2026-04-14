@@ -6,7 +6,7 @@ import {
 } from 'lucide-react'
 import { cn } from '../utils/cn'
 import { CATEGORIES, EQUIPMENT } from '../data/mockData'
-import { equipmentStore } from '../lib/equipmentStore'
+import { localIndex } from '../lib/localIndex'
 
 type FilterMode = 'all' | 'documented' | 'missing'
 
@@ -18,13 +18,11 @@ export function InventoryScreen() {
 
   const activePropertyId = localStorage.getItem('active_property_id') ?? 'tannerville'
 
-  // Count from localStorage (accurate offline) with mock data as seed
+  // Count from local index (accurate offline). Falls back to mock seed.
   function getCount(cat: typeof CATEGORIES[0]): number {
-    const stored = equipmentStore.getAll().filter(
-      r => r.categoryId === cat.id && r.propertyId === activePropertyId,
-    ).length
-    // Fall back to mock recordCount if no localStorage records yet
-    return stored > 0 ? stored : (cat.recordCount ?? 0)
+    const indexed = localIndex.getAll('equipment', activePropertyId)
+      .filter(r => r.categoryId === cat.id).length
+    return indexed > 0 ? indexed : (cat.recordCount ?? 0)
   }
 
   const total        = CATEGORIES.length
