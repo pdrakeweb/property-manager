@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import {
   Eye, EyeOff, CheckCircle2, Wifi, WifiOff,
-  ExternalLink, ChevronRight, Building2, Loader2, RefreshCw,
+  ExternalLink, ChevronRight, Building2, Loader2, RefreshCw, Sparkles,
 } from 'lucide-react'
 import { cn } from '../utils/cn'
 import { getUserEmail, getUserName, signOut, getValidToken } from '../auth/oauth'
@@ -169,7 +169,26 @@ export function SettingsScreen() {
 
       {/* OpenRouter */}
       <Section title="OpenRouter AI">
-        <Row label="API Key" sub="openrouter.ai — multi-model access">
+        {!openRouterKey && (
+          <div className="px-4 py-3 bg-sky-50 border-b border-sky-100 flex items-start gap-2.5">
+            <Sparkles className="w-4 h-4 text-sky-500 shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-medium text-sky-800">AI extraction not configured</p>
+              <p className="text-xs text-sky-600 mt-0.5">
+                OpenRouter provides access to Claude, Gemini, and GPT-4o for nameplate extraction and advisory features.
+              </p>
+              <a
+                href="https://openrouter.ai/keys"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-xs font-semibold text-sky-700 hover:text-sky-800 mt-1.5"
+              >
+                Get a free API key at openrouter.ai <ExternalLink className="w-3 h-3" />
+              </a>
+            </div>
+          </div>
+        )}
+        <Row label="API Key" sub="openrouter.ai — multi-model AI access">
           <div className="flex items-center gap-2">
             <input
               type={showKey ? 'text' : 'password'}
