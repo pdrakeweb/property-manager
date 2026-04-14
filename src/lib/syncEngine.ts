@@ -1,7 +1,16 @@
 import { DriveClient } from './driveClient'
+import { localDriveAdapter } from './localDriveAdapter'
 import { localIndex } from './localIndex'
 import { MAINTENANCE_TASKS, PROPERTIES, CATEGORIES } from '../data/mockData'
 import type { MaintenanceTask } from '../types'
+
+/** Returns the real DriveClient in production, or the localStorage adapter in dev bypass mode */
+function drive(): typeof DriveClient {
+  const token = localStorage.getItem('google_access_token')
+  return token === 'dev_token'
+    ? (localDriveAdapter as typeof DriveClient)
+    : DriveClient
+}
 
 export interface SyncResult {
   uploaded: number
@@ -34,8 +43,8 @@ export async function pushPending(token: string): Promise<{ uploaded: number; fa
     }
 
     try {
-      const folderId = await DriveClient.resolveFolderId(token, categoryId, rootFolderId)
-      const file     = await DriveClient.uploadFile(token, folderId, filename, mdContent, 'text/markdown')
+      const folderId = await drive().resolveFolderId(token, categoryId, rootFolderId)
+      const file     = await drive().uploadFile(token, folderId, filename, mdContent, 'text/markdown')
       localIndex.markSynced(record.id, file.id, new Date().toISOString())
       uploaded++
     } catch {
@@ -75,8 +84,8 @@ export async function pullFromDrive(
 
   for (const cat of CATEGORIES) {
     try {
-      const folderId = await DriveClient.resolveFolderId(token, cat.id, rootFolderId)
-      const files    = await DriveClient.listFiles(token, folderId)
+      const folderId = await drive().resolveFolderId(token, cat.id, rootFolderId)
+      const files    = await drive().listFiles(token, folderId)
 
       for (const file of files) {
         if (!file.name.endsWith('.md')) continue

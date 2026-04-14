@@ -166,6 +166,11 @@ export function isAuthenticated(): boolean {
   return !!localStorage.getItem('google_access_token')
 }
 
+/** True when the dev bypass token is in use (not a real Google OAuth token) */
+export function isDev(): boolean {
+  return localStorage.getItem('google_access_token') === 'dev_token'
+}
+
 export function getUserEmail(): string {
   return localStorage.getItem('google_user_email') ?? ''
 }

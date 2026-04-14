@@ -11,6 +11,7 @@ import { PROPERTIES } from '../../data/mockData'
 import { useAppStore } from '../../store/AppStoreContext'
 import { localIndex } from '../../lib/localIndex'
 import type { SyncStats } from '../../lib/localIndex'
+import { isDev } from '../../auth/oauth'
 
 const NAV_ITEMS = [
   { to: '/',           icon: LayoutDashboard, label: 'Dashboard',   mobileShow: true  },
@@ -136,6 +137,7 @@ function MobilePropertySwitcher() {
 function SyncPill() {
   const navigate = useNavigate()
   const [stats, setStats] = useState<SyncStats>(() => localIndex.getSyncStats())
+  const devMode = isDev()
 
   useEffect(() => {
     const refresh = () => setStats(localIndex.getSyncStats())
@@ -151,6 +153,7 @@ function SyncPill() {
         className="flex items-center gap-1 bg-red-500 hover:bg-red-600 text-white text-xs font-semibold rounded-full px-2.5 py-1 transition-colors shrink-0"
       >
         <RefreshCw className="w-3 h-3" />
+        {devMode && <span className="opacity-75">DEV</span>}
         {stats.conflicts} conflict{stats.conflicts > 1 ? 's' : ''}
       </button>
     )
@@ -160,11 +163,25 @@ function SyncPill() {
     return (
       <button
         onClick={() => navigate('/settings')}
-        className="flex items-center gap-1 bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold rounded-full px-2.5 py-1 transition-colors shrink-0"
+        className={cn(
+          'flex items-center gap-1 text-white text-xs font-semibold rounded-full px-2.5 py-1 transition-colors shrink-0',
+          devMode ? 'bg-sky-500 hover:bg-sky-600' : 'bg-amber-500 hover:bg-amber-600',
+        )}
       >
         <RefreshCw className="w-3 h-3" />
+        {devMode && <span className="opacity-75">DEV</span>}
         {stats.pending} pending
       </button>
+    )
+  }
+
+  // In dev mode, always show a quiet indicator even when synced
+  if (devMode) {
+    return (
+      <span className="flex items-center gap-1 bg-sky-100 text-sky-700 text-xs font-semibold rounded-full px-2.5 py-1 shrink-0">
+        <RefreshCw className="w-3 h-3" />
+        DEV
+      </span>
     )
   }
 
