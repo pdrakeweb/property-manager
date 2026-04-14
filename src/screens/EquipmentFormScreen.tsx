@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   Camera, Upload, Sparkles, CheckCircle2, AlertCircle,
-  Loader2, X, ChevronLeft, Cloud, Image as ImageIcon, WifiOff,
+  Loader2, X, ChevronLeft, Cloud, Image as ImageIcon, WifiOff, Settings,
 } from 'lucide-react'
 import { cn } from '../utils/cn'
 import { CATEGORIES, PROPERTIES } from '../data/mockData'
@@ -417,10 +417,20 @@ export function EquipmentFormScreen() {
         <div className="p-4">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-sm font-semibold text-slate-700">Photograph Nameplate</h2>
-            <span className="flex items-center gap-1 text-xs text-sky-600">
-              <Sparkles className="w-3 h-3" />
-              AI extraction
-            </span>
+            {!localStorage.getItem('openrouter_api_key') ? (
+              <button
+                onClick={() => navigate('/settings')}
+                className="flex items-center gap-1 text-xs text-amber-600 hover:text-amber-700 font-medium"
+              >
+                <Settings className="w-3 h-3" />
+                Setup AI
+              </button>
+            ) : (
+              <span className="flex items-center gap-1 text-xs text-sky-600">
+                <Sparkles className="w-3 h-3" />
+                AI extraction
+              </span>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-2 mb-3">
@@ -456,7 +466,16 @@ export function EquipmentFormScreen() {
               <span className="font-medium flex-1">
                 {aiState === 'extracting' && 'Extracting specifications…'}
                 {aiState === 'done'       && 'Extraction complete — review fields below'}
-                {aiState === 'error'      && (aiError || 'Extraction failed — fill manually')}
+                {aiState === 'error'      && (
+                  aiError?.toLowerCase().includes('api key') || aiError?.toLowerCase().includes('openrouter')
+                    ? <span>
+                        No OpenRouter API key configured.{' '}
+                        <button onClick={() => navigate('/settings')} className="underline font-semibold">
+                          Configure in Settings →
+                        </button>
+                      </span>
+                    : (aiError || 'Extraction failed — fill in fields manually')
+                )}
               </span>
               {(aiState === 'done' || aiState === 'error') && (
                 <button
