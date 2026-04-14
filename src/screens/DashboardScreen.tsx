@@ -1,13 +1,18 @@
 import { useNavigate } from 'react-router-dom'
 import {
   Camera, Wrench, BarChart3, MessageSquare, AlertTriangle,
-  CheckCircle2, Circle, ChevronRight, Zap,
+  CheckCircle2, Circle, ChevronRight, Zap, ShieldAlert, Receipt, Home,
 } from 'lucide-react'
 import { cn } from '../utils/cn'
 import {
   MAINTENANCE_TASKS, CAPITAL_ITEMS, HA_STATUS, PROPERTIES,
 } from '../data/mockData'
-import { CATEGORIES } from '../data/categories'
+import { getYTDSpend } from '../lib/costStore'
+import { getUpcomingExpiries } from '../lib/expiryStore'
+import { ExpiryWidget } from '../components/ExpiryWidget'
+import { getNextTaxPayment, getOverdueTaxPayments } from '../lib/taxStore'
+import { getTotalMortgageBalance } from '../lib/mortgageStore'
+import { getAssessmentsForProperty } from '../lib/taxStore'
 import { useAppStore } from '../store/AppStoreContext'
 import type { Priority, HAStatus } from '../types'
 
@@ -81,7 +86,6 @@ function Card({ children, className }: { children: React.ReactNode; className?: 
 export function DashboardScreen() {
   const navigate = useNavigate()
   const { activePropertyId } = useAppStore()
-  const activeProperty = PROPERTIES.find(p => p.id === activePropertyId) ?? PROPERTIES[0]
 
   const tasks = MAINTENANCE_TASKS.filter(t => t.propertyId === activePropertyId)
   const items = CAPITAL_ITEMS.filter(i => i.propertyId === activePropertyId)
@@ -97,6 +101,18 @@ export function DashboardScreen() {
   const currentHour = new Date().getHours()
   const greeting = currentHour < 12 ? 'Good morning' : currentHour < 17 ? 'Good afternoon' : 'Good evening'
 
+  const ytdSpend = getYTDSpend(activePropertyId)
+  const expiries = getUpcomingExpiries(activePropertyId, 90)
+
+  // Tax & mortgage
+  const nextTaxPmt      = getNextTaxPayment(activePropertyId)
+  const overdueTaxPmts  = getOverdueTaxPayments(activePropertyId)
+  const totalMtgBalance = getTotalMortgageBalance(activePropertyId)
+  const latestAssess    = getAssessmentsForProperty(activePropertyId)[0]
+  const equity          = latestAssess && totalMtgBalance > 0
+    ? (latestAssess.marketValue ?? latestAssess.totalAssessed) - totalMtgBalance
+    : null
+
   return (
     <div className="space-y-5">
 
@@ -108,7 +124,7 @@ export function DashboardScreen() {
         </p>
       </div>
 
-      {/* ── Alert Banner ────────────────────────────────────────────── */}
+      {/* ── Alert Banners ───────────────────────────────────────────── */}
       {overdueTasks.length > 0 && (
         <div
           onClick={() => navigate('/maintenance')}
@@ -123,13 +139,28 @@ export function DashboardScreen() {
         </div>
       )}
 
+      {overdueTaxPmts.length > 0 && (
+        <div
+          onClick={() => navigate('/tax')}
+          className="flex items-center gap-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3 cursor-pointer hover:bg-red-100 transition-colors"
+        >
+          <Receipt className="w-4 h-4 text-red-500 shrink-0" />
+          <span className="text-sm text-red-700 font-medium flex-1">
+            {overdueTaxPmts.length} overdue tax payment{overdueTaxPmts.length > 1 ? 's' : ''}
+            {' — '}${overdueTaxPmts[0].amount.toLocaleString()} due {new Date(overdueTaxPmts[0].dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+          </span>
+          <ChevronRight className="w-4 h-4 text-red-400" />
+        </div>
+      )}
+
       {/* ── Quick Actions ────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-5">
         {[
           { icon: Camera,       label: 'Capture',     sub: 'Record equipment',    to: '/capture',     color: 'bg-sky-600'     },
           { icon: Wrench,       label: 'Maintenance', sub: `${dueTasks.length} due`,    to: '/maintenance', color: 'bg-orange-500'  },
           { icon: BarChart3,    label: 'Budget',      sub: 'Capital forecast',    to: '/budget',      color: 'bg-violet-600'  },
           { icon: MessageSquare,label: 'Ask AI',      sub: 'Property advisor',    to: '/advisor',     color: 'bg-emerald-600' },
+          { icon: ShieldAlert,  label: 'Emergency',   sub: 'Shutoffs & contacts', to: '/emergency',   color: 'bg-red-600'     },
         ].map(({ icon: Icon, label, sub, to, color }) => (
           <button
             key={to}
@@ -144,6 +175,19 @@ export function DashboardScreen() {
           </button>
         ))}
       </div>
+
+      {/* ── YTD Spend Card ──────────────────────────────────────────── */}
+      {ytdSpend > 0 && (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-2xl px-5 py-4 flex items-center justify-between">
+          <div>
+            <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wide">YTD Maintenance Spend</p>
+            <p className="text-2xl font-bold text-emerald-800 mt-0.5">${ytdSpend.toLocaleString()}</p>
+          </div>
+          <div className="text-xs text-emerald-600 text-right">
+            <p>{new Date().getFullYear()}</p>
+          </div>
+        </div>
+      )}
 
       {/* ── Two-column grid on desktop ──────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
@@ -280,6 +324,56 @@ export function DashboardScreen() {
             </div>
           </div>
         </Card>
+
+        {/* Expiry Widget */}
+        {expiries.length > 0 && (
+          <ExpiryWidget propertyId={activePropertyId} />
+        )}
+
+        {/* Next Tax Payment */}
+        {nextTaxPmt && (
+          <Card>
+            <div className="px-5 pt-5 pb-4">
+              <SectionHeader title="Property Tax" action="View all" onAction={() => navigate('/tax')} />
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center shrink-0">
+                  <Receipt className="w-5 h-5 text-amber-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-slate-800">
+                    {nextTaxPmt.year} · Installment {nextTaxPmt.installment}
+                  </p>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Due {new Date(nextTaxPmt.dueDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                  </p>
+                </div>
+                <p className="text-base font-bold text-amber-700 shrink-0">
+                  ${nextTaxPmt.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </p>
+              </div>
+            </div>
+          </Card>
+        )}
+
+        {/* Equity Card */}
+        {equity !== null && (
+          <Card>
+            <div className="px-5 pt-5 pb-4">
+              <SectionHeader title="Home Equity" action="Mortgages" onAction={() => navigate('/mortgage')} />
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center shrink-0">
+                  <Home className="w-5 h-5 text-emerald-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-2xl font-bold text-emerald-700">${equity.toLocaleString()}</p>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Market ${(latestAssess!.marketValue ?? latestAssess!.totalAssessed).toLocaleString()} − Debt ${totalMtgBalance.toLocaleString()}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </Card>
+        )}
 
       </div>
 

@@ -13,6 +13,15 @@ import { BudgetScreen }         from './screens/BudgetScreen'
 import { AIAdvisoryScreen }     from './screens/AIAdvisoryScreen'
 import { InventoryScreen }      from './screens/InventoryScreen'
 import { SettingsScreen }       from './screens/SettingsScreen'
+import { VendorScreen }         from './screens/VendorScreen'
+import { ExpiryManageScreen }   from './screens/ExpiryManageScreen'
+import { EmergencyScreen }      from './screens/EmergencyScreen'
+import { WellTestScreen }       from './screens/WellTestScreen'
+import { SepticScreen }         from './screens/SepticScreen'
+import { FuelScreen }           from './screens/FuelScreen'
+import { TaxScreen }            from './screens/TaxScreen'
+import { MortgageScreen }       from './screens/MortgageScreen'
+import { UtilityScreen }        from './screens/UtilityScreen'
 
 import {
   isAuthenticated,
@@ -225,23 +234,31 @@ function OAuthCallbackHandler({ onDone }: { onDone: (ok: boolean) => void }) {
 
 function MainApp() {
   return (
-    <ErrorBoundary>
-      <HashRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-        <AppShell>
-          <Routes>
-            <Route path="/"                    element={<ErrorBoundary fallbackTitle="Dashboard error"><DashboardScreen /></ErrorBoundary>}     />
-            <Route path="/capture"             element={<ErrorBoundary fallbackTitle="Capture error"><CaptureSelectScreen /></ErrorBoundary>} />
-            <Route path="/capture/:categoryId" element={<ErrorBoundary fallbackTitle="Form error"><EquipmentFormScreen /></ErrorBoundary>} />
-            <Route path="/maintenance"         element={<ErrorBoundary fallbackTitle="Maintenance error"><MaintenanceScreen /></ErrorBoundary>}   />
-            <Route path="/budget"              element={<ErrorBoundary fallbackTitle="Budget error"><BudgetScreen /></ErrorBoundary>}        />
-            <Route path="/advisor"             element={<ErrorBoundary fallbackTitle="Advisor error"><AIAdvisoryScreen /></ErrorBoundary>}    />
-            <Route path="/inventory"           element={<ErrorBoundary fallbackTitle="Inventory error"><InventoryScreen /></ErrorBoundary>}     />
-            <Route path="/settings"            element={<ErrorBoundary fallbackTitle="Settings error"><SettingsScreen /></ErrorBoundary>}      />
-            <Route path="*"                    element={<Navigate to="/" />}     />
-          </Routes>
-        </AppShell>
-      </HashRouter>
-    </ErrorBoundary>
+    <HashRouter>
+      <AppShell>
+        <Routes>
+          <Route path="/"                    element={<DashboardScreen />}     />
+          <Route path="/capture"             element={<CaptureSelectScreen />} />
+          <Route path="/capture/:categoryId" element={<EquipmentFormScreen />} />
+          <Route path="/maintenance"         element={<MaintenanceScreen />}   />
+          <Route path="/budget"              element={<BudgetScreen />}        />
+          <Route path="/advisor"             element={<AIAdvisoryScreen />}    />
+          <Route path="/inventory"           element={<InventoryScreen />}     />
+          <Route path="/settings"            element={<SettingsScreen />}      />
+          <Route path="/vendors"             element={<VendorScreen />}        />
+          <Route path="/expiry"              element={<ExpiryManageScreen />}  />
+          <Route path="/emergency/:propertyId" element={<EmergencyScreen />}  />
+          <Route path="/emergency"           element={<EmergencyScreen />}     />
+          <Route path="/well-tests"          element={<WellTestScreen />}      />
+          <Route path="/septic-log"          element={<SepticScreen />}        />
+          <Route path="/fuel"                element={<FuelScreen />}          />
+          <Route path="/tax"                 element={<TaxScreen />}           />
+          <Route path="/mortgage"            element={<MortgageScreen />}      />
+          <Route path="/utilities"           element={<UtilityScreen />}       />
+          <Route path="*"                    element={<Navigate to="/" />}     />
+        </Routes>
+      </AppShell>
+    </HashRouter>
   )
 }
 
@@ -254,6 +271,13 @@ export default function App() {
     // If we have ?code= in the URL it's an OAuth callback
     const params = new URLSearchParams(window.location.search)
     if (params.has('code')) return 'callback'
+    // Emergency bypass: if cached locally and URL has emergency=true
+    const hashVal = window.location.hash
+    if (hashVal.includes('/emergency') && hashVal.includes('emergency=true')) {
+      const pidMatch = hashVal.match(/\/emergency\/([^/?]+)/)
+      const pid = pidMatch?.[1] ?? 'tannerville'
+      if (localStorage.getItem(`pm_emergency_${pid}`)) return 'authenticated'
+    }
     return isAuthenticated() ? 'authenticated' : 'unauthenticated'
   })
 
