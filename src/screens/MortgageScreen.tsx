@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import {
   Plus, X, Camera, Upload, Sparkles, Loader2, AlertCircle, CheckCircle2,
-  TrendingDown, DollarSign, Calculator,
+  TrendingDown, DollarSign, Calculator, ChevronLeft, ChevronRight,
 } from 'lucide-react'
 import { cn } from '../utils/cn'
 import { useAppStore } from '../store/AppStoreContext'
@@ -364,8 +364,11 @@ function PaymentForm({
 
 // ── Amortization + simulator ──────────────────────────────────────────────────
 
+const PAGE_SIZE = 24
+
 function AmortizationView({ mortgage }: { mortgage: Mortgage }) {
   const [extra, setExtra] = useState('')
+  const [page,  setPage]  = useState(0)
   const schedule = buildAmortizationSchedule(
     mortgage.currentBalance,
     mortgage.interestRate,
@@ -415,26 +418,51 @@ function AmortizationView({ mortgage }: { mortgage: Mortgage }) {
         )}
       </div>
 
-      {/* Amortization table — first 24 rows */}
+      {/* Amortization table — paginated */}
       <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-        <div className="px-4 py-3 border-b border-slate-100">
-          <h3 className="text-sm font-semibold text-slate-700">Amortization Schedule</h3>
-          <p className="text-xs text-slate-400 mt-0.5">Based on current balance — first 24 months shown</p>
+        <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-semibold text-slate-700">Amortization Schedule</h3>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Months {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, schedule.length)} of {schedule.length}
+            </p>
+          </div>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setPage(p => p - 1)}
+              disabled={page === 0}
+              className="p-1.5 rounded-lg hover:bg-slate-100 disabled:opacity-30 transition-colors"
+            >
+              <ChevronLeft className="w-4 h-4 text-slate-600" />
+            </button>
+            <span className="text-xs text-slate-500 tabular-nums w-12 text-center">
+              {page + 1} / {Math.ceil(schedule.length / PAGE_SIZE)}
+            </span>
+            <button
+              onClick={() => setPage(p => p + 1)}
+              disabled={(page + 1) * PAGE_SIZE >= schedule.length}
+              className="p-1.5 rounded-lg hover:bg-slate-100 disabled:opacity-30 transition-colors"
+            >
+              <ChevronRight className="w-4 h-4 text-slate-600" />
+            </button>
+          </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-slate-100 text-slate-500 uppercase tracking-wide">
                 <th className="px-4 py-2.5 text-left font-medium">Mo</th>
+                <th className="px-4 py-2.5 text-right font-medium">Payment</th>
                 <th className="px-4 py-2.5 text-right font-medium">Principal</th>
                 <th className="px-4 py-2.5 text-right font-medium">Interest</th>
                 <th className="px-4 py-2.5 text-right font-medium">Balance</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {schedule.slice(0, 24).map(row => (
+              {schedule.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE).map(row => (
                 <tr key={row.month} className="hover:bg-slate-50">
                   <td className="px-4 py-2 font-medium text-slate-600">{row.month}</td>
+                  <td className="px-4 py-2 text-right tabular-nums text-slate-700">${(row.principal + row.interest).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                   <td className="px-4 py-2 text-right tabular-nums text-emerald-600">${row.principal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                   <td className="px-4 py-2 text-right tabular-nums text-red-500">${row.interest.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                   <td className="px-4 py-2 text-right tabular-nums text-slate-700">${row.balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
@@ -443,11 +471,6 @@ function AmortizationView({ mortgage }: { mortgage: Mortgage }) {
             </tbody>
           </table>
         </div>
-        {schedule.length > 24 && (
-          <div className="px-4 py-2.5 border-t border-slate-100 text-xs text-slate-400 text-center">
-            {schedule.length - 24} more months not shown
-          </div>
-        )}
       </div>
     </div>
   )
