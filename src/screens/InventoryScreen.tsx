@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   CheckCircle2, Circle, ChevronRight, Search,
-  Camera, Wrench, AlertTriangle,
+  Camera, Wrench, AlertTriangle, Trash2,
 } from 'lucide-react'
 import { cn } from '../utils/cn'
 import { EQUIPMENT, PROPERTIES } from '../data/mockData'

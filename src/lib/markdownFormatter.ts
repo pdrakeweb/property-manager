@@ -1,11 +1,11 @@
-import type { CaptureCategory } from '../data/categories'
+import type { Category } from '../types'
 
 /**
  * Generate a safe filename stem for a record.
  * e.g. "generator_Generac_22kW_2026-04-12"
  */
 export function formatFileStem(
-  category:    CaptureCategory,
+  category:    Category,
   fields:      Record<string, string>,
   capturedAt:  Date,
 ): string {
@@ -26,7 +26,7 @@ export function formatFileStem(
  * This is what gets saved to Google Drive.
  */
 export function formatRecord(
-  category:       CaptureCategory,
+  category:       Category,
   fields:         Record<string, string>,
   photoFilenames: string[],
   capturedAt:     Date,

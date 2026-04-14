@@ -1,180 +1,244 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   Camera, Upload, Sparkles, CheckCircle2, AlertCircle,
   Loader2, X, ChevronLeft, Cloud, Image as ImageIcon, WifiOff,
 } from 'lucide-react'
-import { z } from 'zod'
-import { zodToJsonSchema } from 'zod-to-json-schema'
 import { cn } from '../utils/cn'
-import { PROPERTIES } from '../data/mockData'
-import { getCategoryById, type CaptureCategory } from '../data/categories'
+import { CATEGORIES, PROPERTIES } from '../data/mockData'
 import { getValidToken } from '../auth/oauth'
 import { DriveClient } from '../lib/driveClient'
 import { formatFileStem, formatRecord } from '../lib/markdownFormatter'
 import { enqueue } from '../lib/offlineQueue'
+import { useDocumentExtraction, confidenceRing } from '../hooks/useDocumentExtraction'
+import type { Category } from '../types'
 
-// ── Zod schema for AI extraction ─────────────────────────────────────────────
+// ── Field definitions ────────────────────────────────────────────────────────
 
-const ExtractedField = z.object({
-  value:      z.string(),
-  confidence: z.enum(['high', 'medium', 'low']),
-})
-const NameplateExtractionSchema = z.record(z.string(), ExtractedField)
-type ExtractionResult = z.infer<typeof NameplateExtractionSchema>
-
-// ── AI extraction helpers ─────────────────────────────────────────────────────
-
-async function blobToBase64(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve((reader.result as string).split(',')[1])
-    reader.onerror = reject
-    reader.readAsDataURL(blob)
-  })
+type FieldDef = {
+  id: string
+  label: string
+  type: 'text' | 'number' | 'date' | 'select' | 'textarea' | 'boolean'
+  options?: string[]
+  unit?: string
+  placeholder?: string
 }
 
-async function extractNameplate(
-  photo: Blob,
-  mimeType: string,
-  fieldIds: string[],
-  nameplatePrompt?: string,
-): Promise<ExtractionResult> {
-  const apiKey = localStorage.getItem('openrouter_api_key')
-  if (!apiKey) throw new Error('No OpenRouter API key — add it in Settings')
-
-  const base64 = await blobToBase64(photo)
-
-  const systemPrompt = nameplatePrompt
-    ?? `Extract equipment nameplate data from the image. Return only fields you can read clearly. Field IDs to extract: ${fieldIds.join(', ')}.`
-
-  const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: 'anthropic/claude-sonnet-4-6',
-      response_format: {
-        type: 'json_schema',
-        json_schema: {
-          name: 'nameplate_extraction',
-          schema: zodToJsonSchema(NameplateExtractionSchema),
-          strict: true,
-        },
-      },
-      messages: [
-        {
-          role: 'user',
-          content: [
-            {
-              type:      'image_url',
-              image_url: { url: `data:${mimeType};base64,${base64}` },
-            },
-            {
-              type: 'text',
-              text: systemPrompt,
-            },
-          ],
-        },
-      ],
-      max_tokens: 1024,
-    }),
-  })
-
-  if (!resp.ok) {
-    const text = await resp.text()
-    throw new Error(`OpenRouter error (${resp.status}): ${text.slice(0, 200)}`)
-  }
-
-  const data = await resp.json() as { choices?: { message?: { content?: string } }[] }
-  const content = data.choices?.[0]?.message?.content
-  if (!content) throw new Error('Empty response from AI')
-
-  return NameplateExtractionSchema.parse(JSON.parse(content))
+const CATEGORY_FIELDS: Record<string, FieldDef[]> = {
+  generator: [
+    { id: 'brand',               label: 'Brand',                type: 'text'     },
+    { id: 'model',               label: 'Model Name',           type: 'text'     },
+    { id: 'model_number',        label: 'Model Number',         type: 'text'     },
+    { id: 'serial_number',       label: 'Serial Number',        type: 'text'     },
+    { id: 'kw_rating',           label: 'Output',               type: 'number',  unit: 'kW'  },
+    { id: 'fuel_type',           label: 'Fuel Type',            type: 'select',  options: ['Propane', 'Natural Gas', 'Gasoline', 'Diesel'] },
+    { id: 'transfer_switch_brand', label: 'Transfer Switch Brand', type: 'text' },
+    { id: 'transfer_switch_amps',  label: 'Transfer Switch Amps',  type: 'number', unit: 'A' },
+    { id: 'oil_type',            label: 'Engine Oil Type',      type: 'text',    placeholder: 'e.g. 5W-30 Synthetic' },
+    { id: 'oil_capacity_qt',     label: 'Oil Capacity',         type: 'number',  unit: 'qt' },
+    { id: 'air_filter_part',     label: 'Air Filter Part #',    type: 'text'     },
+    { id: 'last_service_date',   label: 'Last Service Date',    type: 'date'     },
+    { id: 'notes',               label: 'Notes',                type: 'textarea' },
+  ],
+  hvac: [
+    { id: 'unit_type',     label: 'Unit Type',        type: 'select', options: ['Furnace', 'Air Conditioner', 'Heat Pump', 'Air Handler', 'Mini-Split'] },
+    { id: 'unit_label',    label: 'Zone / Label',     type: 'text',   placeholder: 'e.g. Main Floor, Sunroom' },
+    { id: 'brand',         label: 'Brand',            type: 'text'     },
+    { id: 'model',         label: 'Model Number',     type: 'text'     },
+    { id: 'serial_number', label: 'Serial Number',    type: 'text'     },
+    { id: 'install_date',  label: 'Install Date',     type: 'date'     },
+    { id: 'tonnage',       label: 'Cooling Tonnage',  type: 'number',  unit: 'tons' },
+    { id: 'seer',          label: 'SEER Rating',      type: 'number'   },
+    { id: 'refrigerant_type', label: 'Refrigerant',  type: 'select',  options: ['R-410A', 'R-32', 'R-22', 'R-454B'] },
+    { id: 'filter_size',   label: 'Filter Size',      type: 'text',    placeholder: 'e.g. 20×25×4' },
+    { id: 'notes',         label: 'Notes',            type: 'textarea' },
+  ],
+  water_heater: [
+    { id: 'brand',         label: 'Brand',            type: 'text'   },
+    { id: 'model',         label: 'Model Number',     type: 'text'   },
+    { id: 'serial_number', label: 'Serial Number',    type: 'text'   },
+    { id: 'fuel_type',     label: 'Fuel Type',        type: 'select', options: ['Natural Gas', 'Propane', 'Electric', 'Heat Pump', 'Tankless Gas'] },
+    { id: 'tank_gallons',  label: 'Tank Capacity',    type: 'number', unit: 'gal' },
+    { id: 'btu_input',     label: 'BTU Input',        type: 'number', unit: 'BTU' },
+    { id: 'install_date',  label: 'Install Date',     type: 'date'   },
+    { id: 'notes',         label: 'Notes',            type: 'textarea' },
+  ],
+  water_treatment: [
+    { id: 'system_type',   label: 'System Type',      type: 'select', options: ['Water Softener', 'Iron Filter', 'UV Disinfection', 'RO System', 'Whole House Filter'] },
+    { id: 'brand',         label: 'Brand',            type: 'text'   },
+    { id: 'model',         label: 'Model Number',     type: 'text'   },
+    { id: 'serial_number', label: 'Serial Number',    type: 'text'   },
+    { id: 'install_date',  label: 'Install Date',     type: 'date'   },
+    { id: 'location',      label: 'Location',         type: 'text',  placeholder: 'e.g. Utility room' },
+    { id: 'notes',         label: 'Notes',            type: 'textarea' },
+  ],
+  appliance: [
+    { id: 'appliance_type', label: 'Appliance Type', type: 'select', options: ['Refrigerator', 'Dishwasher', 'Range/Oven', 'Microwave', 'Washer', 'Dryer', 'Freezer', 'Garbage Disposal', 'Garage Door Opener', 'Other'] },
+    { id: 'brand',          label: 'Brand',          type: 'text'   },
+    { id: 'model',          label: 'Model Number',   type: 'text'   },
+    { id: 'serial_number',  label: 'Serial Number',  type: 'text'   },
+    { id: 'install_date',   label: 'Purchase / Install Date', type: 'date' },
+    { id: 'location',       label: 'Location',       type: 'text',  placeholder: 'e.g. Kitchen, Garage' },
+    { id: 'notes',          label: 'Notes',          type: 'textarea' },
+  ],
+  propane: [
+    { id: 'supplier',      label: 'Supplier',         type: 'text',  placeholder: 'e.g. Ferrellgas' },
+    { id: 'tank_gallons',  label: 'Tank Capacity',    type: 'number', unit: 'gal' },
+    { id: 'ownership',     label: 'Tank Ownership',   type: 'select', options: ['Owned', 'Rented/Leased'] },
+    { id: 'tank_age_year', label: 'Tank Year',        type: 'number', placeholder: 'e.g. 2006' },
+    { id: 'location',      label: 'Location',         type: 'text',  placeholder: 'e.g. South yard' },
+    { id: 'account_number', label: 'Account Number',  type: 'text'   },
+    { id: 'notes',         label: 'Notes',            type: 'textarea' },
+  ],
+  well: [
+    { id: 'pump_brand',    label: 'Pump Brand',       type: 'text'   },
+    { id: 'pump_model',    label: 'Pump Model',       type: 'text'   },
+    { id: 'pump_hp',       label: 'Pump HP',          type: 'number', unit: 'HP' },
+    { id: 'well_depth_ft', label: 'Well Depth',       type: 'number', unit: 'ft' },
+    { id: 'tank_brand',    label: 'Pressure Tank Brand', type: 'text' },
+    { id: 'tank_gallons',  label: 'Tank Capacity',    type: 'number', unit: 'gal' },
+    { id: 'install_date',  label: 'Install Date',     type: 'date'   },
+    { id: 'notes',         label: 'Notes',            type: 'textarea' },
+  ],
+  septic: [
+    { id: 'tank_gallons',  label: 'Tank Capacity',    type: 'number', unit: 'gal' },
+    { id: 'tank_material', label: 'Tank Material',    type: 'select', options: ['Concrete', 'Fiberglass', 'Plastic'] },
+    { id: 'last_pumped',   label: 'Last Pumped',      type: 'date'   },
+    { id: 'pump_company',  label: 'Pump Company',     type: 'text'   },
+    { id: 'drainfield_info', label: 'Drainfield Info', type: 'textarea' },
+    { id: 'notes',         label: 'Notes',            type: 'textarea' },
+  ],
+  electrical: [
+    { id: 'panel_type',    label: 'Panel Type',       type: 'select', options: ['Main Panel', 'Sub Panel'] },
+    { id: 'brand',         label: 'Brand',            type: 'text',  placeholder: 'e.g. Square D, Eaton' },
+    { id: 'amps',          label: 'Amperage',         type: 'number', unit: 'A' },
+    { id: 'circuits',      label: 'Circuit Count',    type: 'number' },
+    { id: 'location',      label: 'Location',         type: 'text',  placeholder: 'e.g. Basement utility room' },
+    { id: 'install_date',  label: 'Install Date',     type: 'date'   },
+    { id: 'notes',         label: 'Notes / Circuit Directory', type: 'textarea' },
+  ],
+  roof: [
+    { id: 'section',       label: 'Section / Area',   type: 'text',  placeholder: 'e.g. Main House, Barn, Addition' },
+    { id: 'material',      label: 'Material',         type: 'select', options: ['Asphalt Shingle', 'Metal Standing Seam', 'Metal Corrugated', 'EPDM Rubber', 'TPO', 'Cedar Shake', 'Slate', 'Other'] },
+    { id: 'install_date',  label: 'Install Date',     type: 'date'   },
+    { id: 'contractor',    label: 'Contractor',       type: 'text'   },
+    { id: 'warranty_years', label: 'Warranty Years',  type: 'number', unit: 'yr' },
+    { id: 'color',         label: 'Color / Style',    type: 'text'   },
+    { id: 'notes',         label: 'Notes',            type: 'textarea' },
+  ],
+  sump_pump: [
+    { id: 'pump_type',     label: 'Pump Type',        type: 'select', options: ['Primary Electric', 'Battery Backup', 'Water-Powered Backup'] },
+    { id: 'brand',         label: 'Brand',            type: 'text'   },
+    { id: 'model',         label: 'Model',            type: 'text'   },
+    { id: 'hp',            label: 'HP Rating',        type: 'number', unit: 'HP' },
+    { id: 'install_date',  label: 'Install Date',     type: 'date'   },
+    { id: 'location',      label: 'Pit Location',     type: 'text'   },
+    { id: 'notes',         label: 'Notes',            type: 'textarea' },
+  ],
+  radon: [
+    { id: 'contractor',    label: 'Installer',        type: 'text'   },
+    { id: 'install_date',  label: 'Install Date',     type: 'date'   },
+    { id: 'fan_brand',     label: 'Fan Brand/Model',  type: 'text'   },
+    { id: 'last_test_level', label: 'Last Test Level', type: 'number', unit: 'pCi/L' },
+    { id: 'last_test_date',  label: 'Last Test Date',  type: 'date'   },
+    { id: 'notes',         label: 'Notes',            type: 'textarea' },
+  ],
+  barn: [
+    { id: 'structure_year', label: 'Built / Estimated Year', type: 'number' },
+    { id: 'size_sqft',     label: 'Square Footage',   type: 'number', unit: 'sq ft' },
+    { id: 'electrical',    label: 'Electrical',       type: 'text',  placeholder: 'e.g. 100A sub-panel, 4 circuits' },
+    { id: 'roof_material', label: 'Roof Material',    type: 'text'   },
+    { id: 'condition',     label: 'Overall Condition', type: 'select', options: ['Good', 'Fair', 'Poor', 'Needs Attention'] },
+    { id: 'notes',         label: 'Notes',            type: 'textarea' },
+  ],
+  surveillance: [
+    { id: 'camera_brand',  label: 'Camera Brand',     type: 'text',  placeholder: 'e.g. Reolink, Hikvision' },
+    { id: 'camera_model',  label: 'Camera Model',     type: 'text'   },
+    { id: 'location',      label: 'Camera Location',  type: 'text',  placeholder: 'e.g. Driveway, Back door' },
+    { id: 'resolution',    label: 'Resolution',       type: 'select', options: ['1080p', '4MP', '4K/8MP', 'Other'] },
+    { id: 'nvr_brand',     label: 'NVR/DVR Brand',    type: 'text'   },
+    { id: 'ip_address',    label: 'IP Address',       type: 'text',  placeholder: 'e.g. 192.168.1.x' },
+    { id: 'notes',         label: 'Notes',            type: 'textarea' },
+  ],
+  forestry_cauv: [
+    { id: 'record_type',   label: 'Record Type',      type: 'select', options: ['CAUV Renewal', 'Timber Harvest', 'Tree Planting', 'Forest Management Plan', 'Boundary Survey', 'Other'] },
+    { id: 'date',          label: 'Activity Date',    type: 'date'   },
+    { id: 'acres',         label: 'Acres Affected',   type: 'number', unit: 'ac' },
+    { id: 'contractor',    label: 'Contractor / Agency', type: 'text' },
+    { id: 'notes',         label: 'Notes',            type: 'textarea' },
+  ],
+  service_record: [
+    { id: 'system',        label: 'System / Area',    type: 'text',  placeholder: 'e.g. Generator, HVAC, Well' },
+    { id: 'date',          label: 'Service Date',     type: 'date'   },
+    { id: 'contractor',    label: 'Contractor',       type: 'text'   },
+    { id: 'work_done',     label: 'Work Performed',   type: 'textarea', placeholder: 'Describe what was done' },
+    { id: 'cost',          label: 'Total Cost',       type: 'number', unit: '$' },
+    { id: 'invoice_ref',   label: 'Invoice Reference', type: 'text'  },
+    { id: 'notes',         label: 'Notes',            type: 'textarea' },
+  ],
 }
 
-// ── Photo capture state ──────────────────────────────────────────────────────
-
-interface CapturedPhoto {
-  name:     string
-  blob:     Blob
-  preview:  string // object URL for display
-}
+const DEFAULT_FIELDS: FieldDef[] = [
+  { id: 'brand',         label: 'Brand',         type: 'text'     },
+  { id: 'model',         label: 'Model Number',  type: 'text'     },
+  { id: 'serial_number', label: 'Serial Number', type: 'text'     },
+  { id: 'install_date',  label: 'Install Date',  type: 'date'     },
+  { id: 'notes',         label: 'Notes',         type: 'textarea' },
+]
 
 // ── Component ────────────────────────────────────────────────────────────────
 
-type AIState   = 'idle' | 'extracting' | 'done' | 'error'
 type SaveState = 'idle' | 'saving' | 'saved' | 'offline'
+
+/** Build a nameplate extraction prompt for a given category and its fields */
+function buildExtractionPrompt(categoryLabel: string, fieldIds: string[]): string {
+  return (
+    `This is a photo of a ${categoryLabel} equipment nameplate or data tag. ` +
+    `Extract the following fields: ${fieldIds.join(', ')}. ` +
+    `For date fields, use YYYY-MM-DD format. ` +
+    `Return confidence high/medium/low for each field. ` +
+    `If a field is not visible on the nameplate, return value "" with confidence "low".`
+  )
+}
 
 export function EquipmentFormScreen() {
   const { categoryId = 'generator' } = useParams<{ categoryId: string }>()
   const navigate = useNavigate()
 
-  const category = getCategoryById(categoryId)
-  const fields   = category?.fields ?? []
+  const category = CATEGORIES.find(c => c.id === categoryId) as Category | undefined
+  const fields   = CATEGORY_FIELDS[categoryId] ?? DEFAULT_FIELDS
 
-  const [aiState,      setAiState]      = useState<AIState>('idle')
-  const [aiExtracted,  setAiExtracted]  = useState<ExtractionResult>({})
-  const [values,       setValues]       = useState<Record<string, string>>({})
-  const [photos,       setPhotos]       = useState<CapturedPhoto[]>([])
-  const [saveState,    setSaveState]    = useState<SaveState>('idle')
-  const [saveError,    setSaveError]    = useState('')
-  const [driveLink,    setDriveLink]    = useState('')
-
-  const cameraInputRef = useRef<HTMLInputElement>(null)
-  const uploadInputRef = useRef<HTMLInputElement>(null)
+  const [values,    setValues]    = useState<Record<string, string>>({})
+  const [saveState, setSaveState] = useState<SaveState>('idle')
+  const [saveError, setSaveError] = useState('')
+  const [driveLink, setDriveLink] = useState('')
 
   // Read active property from localStorage (set by AppShell property switcher)
   const activePropertyId = localStorage.getItem('active_property_id') ?? 'tannerville'
   const activeProperty   = PROPERTIES.find(p => p.id === activePropertyId) ?? PROPERTIES[0]
 
-  // ── Photo handlers ─────────────────────────────────────────────────────────
+  // ── AI extraction via hook ─────────────────────────────────────────────────
 
-  const handleFilesChosen = useCallback((files: FileList | null, _isCamera: boolean) => {
-    if (!files || files.length === 0) return
-    const newPhotos: CapturedPhoto[] = []
-    for (const file of Array.from(files)) {
-      newPhotos.push({
-        name:    file.name || `photo_${Date.now()}.jpg`,
-        blob:    file,
-        preview: URL.createObjectURL(file),
-      })
+  const fieldIds = fields.map(f => f.id)
+  const extractionPrompt = buildExtractionPrompt(category?.label ?? categoryId, fieldIds)
+
+  const {
+    aiState, extracted, aiError, docs,
+    cameraRef, uploadRef,
+    handleFilesChosen, removeDoc, clearExtraction,
+  } = useDocumentExtraction(fieldIds, extractionPrompt)
+
+  // When extraction completes, pre-populate form fields
+  const prevAiDone = useState(false)
+  if (aiState === 'done' && !prevAiDone[0]) {
+    prevAiDone[1](true)
+    const newVals: Record<string, string> = {}
+    for (const [k, v] of Object.entries(extracted)) {
+      if (v.value) newVals[k] = v.value
     }
-    setPhotos(prev => [...prev, ...newPhotos])
-
-    if (!category?.hasAIExtraction) return
-    const firstPhoto = Array.from(files)[0]
-    if (!firstPhoto) return
-
-    setAiState('extracting')
-    setSaveError('')
-
-    void extractNameplate(firstPhoto, firstPhoto.type || 'image/jpeg', fields.map(f => f.id), category.nameplatePrompt)
-      .then(extracted => {
-        setAiExtracted(extracted)
-        setValues(prev => {
-          const next = { ...prev }
-          for (const [id, ef] of Object.entries(extracted)) {
-            if (ef?.value) next[id] = ef.value
-          }
-          return next
-        })
-        setAiState('done')
-      })
-      .catch(err => {
-        setAiState('error')
-        setSaveError(String(err))
-      })
-  }, [category, fields])
-
-  function removePhoto(index: number) {
-    setPhotos(prev => {
-      URL.revokeObjectURL(prev[index].preview)
-      return prev.filter((_, i) => i !== index)
-    })
+    if (Object.keys(newVals).length > 0) setValues(prev => ({ ...prev, ...newVals }))
   }
+  if (aiState !== 'done' && prevAiDone[0]) prevAiDone[1](false)
 
   // ── Save to Drive ──────────────────────────────────────────────────────────
 
@@ -183,17 +247,16 @@ export function EquipmentFormScreen() {
     setSaveError('')
 
     const capturedAt = new Date()
-    const cat: CaptureCategory = category ?? {
+    const cat: Category = category ?? {
       id: categoryId, label: categoryId, icon: '', description: '',
-      propertyTypes: [], hasAIExtraction: false,
-      allowMultiple: true, fields: [],
+      propertyTypes: [], allowMultiple: true, hasAIExtraction: false,
     }
     const fileStem   = formatFileStem(cat, values, capturedAt)
     const mdFilename = `${fileStem}.md`
     const mdContent  = formatRecord(
       cat,
       values,
-      photos.map(p => p.name),
+      docs.map(d => d.name),
       capturedAt,
     )
 
@@ -219,12 +282,12 @@ export function EquipmentFormScreen() {
       const mdFile = await DriveClient.uploadFile(token, folderId, mdFilename, mdContent, 'text/markdown')
       setDriveLink(`https://drive.google.com/file/d/${mdFile.id}/view`)
 
-      // Upload each photo
-      for (const photo of photos) {
-        const ext      = photo.name.split('.').pop() ?? 'jpg'
-        const photoName = `${fileStem}_${photo.name}`
-        const mime      = photo.blob.type || `image/${ext}`
-        await DriveClient.uploadFile(token, folderId, photoName, photo.blob, mime)
+      // Upload each photo/document
+      for (const doc of docs) {
+        const ext      = doc.name.split('.').pop() ?? 'jpg'
+        const docName  = `${fileStem}_${doc.name}`
+        const mime     = doc.mimeType || `image/${ext}`
+        await DriveClient.uploadFile(token, folderId, docName, doc.blob, mime)
       }
 
       setSaveState('saved')
@@ -328,7 +391,7 @@ export function EquipmentFormScreen() {
 
       {/* Hidden file inputs */}
       <input
-        ref={cameraInputRef}
+        ref={cameraRef}
         type="file"
         accept="image/*"
         capture="environment"
@@ -337,12 +400,12 @@ export function EquipmentFormScreen() {
         onChange={e => handleFilesChosen(e.target.files, true)}
       />
       <input
-        ref={uploadInputRef}
+        ref={uploadRef}
         type="file"
         accept="image/*,application/pdf"
         multiple
         className="hidden"
-        onChange={e => handleFilesChosen(e.target.files, false)}
+        onChange={e => handleFilesChosen(e.target.files, true)}
       />
 
       {/* Photo Capture Card */}
@@ -350,17 +413,15 @@ export function EquipmentFormScreen() {
         <div className="p-4">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-sm font-semibold text-slate-700">Photograph Nameplate</h2>
-            {category?.hasAIExtraction && (
-              <span className="flex items-center gap-1 text-xs text-sky-600">
-                <Sparkles className="w-3 h-3" />
-                AI extraction
-              </span>
-            )}
+            <span className="flex items-center gap-1 text-xs text-sky-600">
+              <Sparkles className="w-3 h-3" />
+              AI extraction
+            </span>
           </div>
 
           <div className="grid grid-cols-2 gap-2 mb-3">
             <button
-              onClick={() => cameraInputRef.current?.click()}
+              onClick={() => cameraRef.current?.click()}
               disabled={aiState === 'extracting'}
               className="flex items-center justify-center gap-2 bg-sky-600 hover:bg-sky-700 disabled:bg-sky-400 text-white text-sm font-medium rounded-xl px-4 py-3 transition-colors"
             >
@@ -368,7 +429,8 @@ export function EquipmentFormScreen() {
               Camera
             </button>
             <button
-              onClick={() => uploadInputRef.current?.click()}
+              onClick={() => uploadRef.current?.click()}
+              disabled={aiState === 'extracting'}
               className="flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium rounded-xl px-4 py-3 transition-colors"
             >
               <Upload className="w-4 h-4" />
@@ -379,33 +441,45 @@ export function EquipmentFormScreen() {
           {/* AI status banner */}
           {aiState !== 'idle' && (
             <div className={cn(
-              'flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm',
+              'flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm mb-3',
               aiState === 'extracting' && 'bg-sky-50 text-sky-700',
               aiState === 'done'       && 'bg-emerald-50 text-emerald-700',
               aiState === 'error'      && 'bg-red-50 text-red-700',
             )}>
-              {aiState === 'extracting' && <Loader2 className="w-4 h-4 animate-spin" />}
-              {aiState === 'done'       && <CheckCircle2 className="w-4 h-4" />}
-              {aiState === 'error'      && <AlertCircle className="w-4 h-4" />}
-              <span className="font-medium">
+              {aiState === 'extracting' && <Loader2 className="w-4 h-4 animate-spin shrink-0" />}
+              {aiState === 'done'       && <CheckCircle2 className="w-4 h-4 shrink-0" />}
+              {aiState === 'error'      && <AlertCircle className="w-4 h-4 shrink-0" />}
+              <span className="font-medium flex-1">
                 {aiState === 'extracting' && 'Extracting specifications…'}
-                {aiState === 'done'       && 'Extraction complete — review below'}
-                {aiState === 'error'      && <span className="font-medium">Extraction failed — {saveError || 'fill manually'}</span>}
+                {aiState === 'done'       && 'Extraction complete — review fields below'}
+                {aiState === 'error'      && (aiError || 'Extraction failed — fill manually')}
               </span>
+              {(aiState === 'done' || aiState === 'error') && (
+                <button
+                  onClick={() => { clearExtraction(); setValues({}) }}
+                  className="text-xs opacity-70 hover:opacity-100 shrink-0"
+                >
+                  Clear
+                </button>
+              )}
             </div>
           )}
 
           {/* Photo thumbnails */}
-          {photos.length > 0 && (
-            <div className="flex gap-2 mt-3 flex-wrap">
-              {photos.map((p, i) => (
+          {docs.length > 0 && (
+            <div className="flex gap-2 flex-wrap">
+              {docs.map((d, i) => (
                 <div
                   key={i}
                   className="relative w-16 h-16 rounded-lg border border-slate-200 overflow-hidden group bg-slate-100"
                 >
-                  <img src={p.preview} alt={p.name} className="w-full h-full object-cover" />
+                  {d.mimeType.startsWith('image') ? (
+                    <img src={d.preview} alt={d.name} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-xs text-slate-500 font-medium">PDF</div>
+                  )}
                   <button
-                    onClick={() => removePhoto(i)}
+                    onClick={() => removeDoc(i)}
                     className="absolute -top-1 -right-1 w-5 h-5 bg-slate-800 text-white rounded-full items-center justify-center hidden group-hover:flex text-xs leading-none"
                   >
                     <X className="w-3 h-3" />
@@ -413,7 +487,7 @@ export function EquipmentFormScreen() {
                 </div>
               ))}
               <button
-                onClick={() => uploadInputRef.current?.click()}
+                onClick={() => uploadRef.current?.click()}
                 className="w-16 h-16 bg-slate-50 rounded-lg border border-dashed border-slate-300 flex items-center justify-center text-slate-400 hover:text-slate-600 hover:border-slate-400 transition-colors"
               >
                 <ImageIcon className="w-5 h-5" />
@@ -428,35 +502,23 @@ export function EquipmentFormScreen() {
         <div className="p-4 border-b border-slate-100">
           <h2 className="text-sm font-semibold text-slate-700">Equipment Details</h2>
           {aiState === 'done' && (
-            <p className="text-xs text-slate-500 mt-0.5">Fields highlighted by AI confidence — emerald=high, amber=medium, red=low. Please verify.</p>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Green = high confidence · Amber = medium · Red = low — verify all AI-filled fields.
+            </p>
           )}
         </div>
         <div className="p-4 space-y-4">
           {fields.map(field => {
             const val        = values[field.id] ?? ''
-            const confidence = aiExtracted[field.id]?.confidence
-            const aiFilledStyle = confidence
-              ? confidence === 'high'   ? 'ring-2 ring-emerald-200 border-emerald-300'
-              : confidence === 'medium' ? 'ring-2 ring-amber-200 border-amber-300'
-              :                           'ring-2 ring-red-200 border-red-300'
-              : ''
-            const baseClass = 'w-full text-sm border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-sky-300 focus:border-sky-300 transition-all placeholder:text-slate-400'
+            const conf       = extracted[field.id]?.confidence
+            const ringStyle  = conf ? confidenceRing(conf) : ''
+            const baseClass  = 'w-full text-sm border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-sky-300 focus:border-sky-300 transition-all placeholder:text-slate-400'
 
             return (
               <div key={field.id}>
                 <label className="block text-xs font-medium text-slate-600 mb-1.5">
                   {field.label}
                   {field.unit && <span className="text-slate-400 font-normal ml-1">({field.unit})</span>}
-                  {confidence && (
-                    <span className={cn(
-                      'ml-2 text-xs font-semibold px-1.5 py-0.5 rounded-full',
-                      confidence === 'high'   ? 'text-emerald-700 bg-emerald-50'
-                      : confidence === 'medium' ? 'text-amber-700 bg-amber-50'
-                      :                           'text-red-700 bg-red-50',
-                    )}>
-                      AI {confidence}
-                    </span>
-                  )}
                 </label>
 
                 {field.type === 'textarea' ? (
@@ -465,13 +527,13 @@ export function EquipmentFormScreen() {
                     value={val}
                     placeholder={field.placeholder}
                     onChange={e => setValues(prev => ({ ...prev, [field.id]: e.target.value }))}
-                    className={cn(baseClass, 'resize-none', aiFilledStyle)}
+                    className={cn(baseClass, 'resize-none', ringStyle)}
                   />
                 ) : field.type === 'select' ? (
                   <select
                     value={val}
                     onChange={e => setValues(prev => ({ ...prev, [field.id]: e.target.value }))}
-                    className={cn(baseClass, 'bg-white', aiFilledStyle)}
+                    className={cn(baseClass, 'bg-white', ringStyle)}
                   >
                     <option value="">Select…</option>
                     {field.options?.map(o => <option key={o} value={o}>{o}</option>)}
@@ -492,7 +554,7 @@ export function EquipmentFormScreen() {
                     value={val}
                     placeholder={field.placeholder}
                     onChange={e => setValues(prev => ({ ...prev, [field.id]: e.target.value }))}
-                    className={cn(baseClass, aiFilledStyle)}
+                    className={cn(baseClass, ringStyle)}
                   />
                 )}
               </div>

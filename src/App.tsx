@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react'
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Building2, Loader2, AlertCircle, Eye, EyeOff } from 'lucide-react'
 
-import { ErrorBoundary }         from './components/ErrorBoundary'
 import { AppStoreProvider } from './store/AppStoreContext'
 import { AppShell }             from './components/layout/AppShell'
 import { DashboardScreen }      from './screens/DashboardScreen'

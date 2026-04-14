@@ -48,6 +48,22 @@ export interface MaintenanceTask {
   source: 'manual' | 'ai-suggested' | 'manufacturer' | 'ha-trigger'
 }
 
+export interface CapitalTransaction {
+  id: string
+  capitalItemId: string
+  date: string
+  amount: number
+  vendorId?: string
+  invoiceRef?: string
+  notes?: string
+}
+
+export interface CapitalItemOverride {
+  id: string   // same as capitalItemId
+  status: 'planned' | 'in-progress' | 'complete'
+  percentComplete: number
+}
+
 export interface CapitalItem {
   id: string
   propertyId: string
@@ -61,6 +77,8 @@ export interface CapitalItem {
   costHigh: number
   notes?: string
   source: 'manual' | 'ai-suggested' | 'age-based'
+  status?: 'planned' | 'in-progress' | 'complete'
+  percentComplete?: number
 }
 
 export interface ServiceRecord {
