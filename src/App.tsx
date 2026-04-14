@@ -26,6 +26,7 @@ import { InsuranceScreen }     from './screens/InsuranceScreen'
 import { PermitsScreen }       from './screens/PermitsScreen'
 import { ChecklistScreen }     from './screens/ChecklistScreen'
 import { ChecklistRunScreen }  from './screens/ChecklistRunScreen'
+import { GeneratorScreen }     from './screens/GeneratorScreen'
 
 import { syncAll, seedTasksForProperty } from './lib/syncEngine'
 import { PROPERTIES } from './data/mockData'
@@ -295,6 +296,7 @@ function MainApp() {
           <Route path="/permits"             element={<PermitsScreen />}       />
           <Route path="/checklists"          element={<ChecklistScreen />}     />
           <Route path="/checklists/:runId"   element={<ChecklistRunScreen />}  />
+          <Route path="/generator"           element={<GeneratorScreen />}     />
           <Route path="*"                    element={<Navigate to="/" />}     />
         </Routes>
       </AppShell>
