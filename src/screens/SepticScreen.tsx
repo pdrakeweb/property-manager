@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Plus, AlertTriangle, X, Trash2, ChevronDown, ChevronUp } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Plus, AlertTriangle, X, Trash2, ChevronDown, ChevronUp, Droplets } from 'lucide-react'
 import { cn } from '../utils/cn'
 import { septicStore, getEventsForProperty } from '../lib/septicStore'
 import { vendorStore } from '../lib/vendorStore'
@@ -26,7 +26,8 @@ interface AddModalProps {
 }
 
 function AddModal({ propertyId, onSave, onClose }: AddModalProps) {
-  const [date,         setDate]         = useState(new Date().toISOString().split('T')[0])
+  const today = new Date().toISOString().split('T')[0]
+  const [date,         setDate]         = useState(today)
   const [vendorId,     setVendorId]     = useState('')
   const [technician,   setTechnician]   = useState('')
   const [gallons,      setGallons]      = useState('')
@@ -34,6 +35,12 @@ function AddModal({ propertyId, onSave, onClose }: AddModalProps) {
   const [condition,    setCondition]    = useState('')
   const [techNotes,    setTechNotes]    = useState('')
   const [nextDate,     setNextDate]     = useState('')
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
 
   function handleSave() {
     onSave({
@@ -65,7 +72,7 @@ function AddModal({ propertyId, onSave, onClose }: AddModalProps) {
         <div className="space-y-3">
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">Date *</label>
-            <input type="date" value={date} onChange={e => setDate(e.target.value)} className={inputCls} />
+            <input type="date" value={date} max={today} onChange={e => setDate(e.target.value)} className={inputCls} />
           </div>
 
           <div>
@@ -148,7 +155,7 @@ function EventCard({ event, onDelete }: { event: SepticEvent; onDelete: () => vo
                 {event.cost && (
                   <span className="text-sm font-semibold text-slate-700">${event.cost.toLocaleString()}</span>
                 )}
-                <button onClick={() => setExpanded(e => !e)} className="text-slate-400 hover:text-slate-600 p-0.5">
+                <button onClick={() => setExpanded(e => !e)} className="text-slate-400 hover:text-slate-600 p-2 -m-1">
                   {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                 </button>
               </div>
@@ -266,7 +273,7 @@ export function SepticScreen() {
         {/* Empty state */}
         {events.length === 0 && (
           <div className="text-center py-16 space-y-3">
-            <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto text-2xl">🧹</div>
+            <Droplets className="w-12 h-12 text-slate-200 mx-auto" />
             <p className="text-slate-500 font-medium">No service records yet.</p>
             <p className="text-sm text-slate-400">Log your septic pump-outs to track history and get reminders.</p>
           </div>

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Plus, Star, Phone, Trash2, Edit2, X, Users, ChevronLeft } from 'lucide-react'
 import { cn } from '../utils/cn'
 import { vendorStore } from '../lib/vendorStore'
@@ -79,6 +79,12 @@ interface VendorModalProps {
 
 function VendorModal({ initial, onSave, onClose }: VendorModalProps) {
   const [form, setForm] = useState<VendorFormData>(initial ? vendorToForm(initial) : emptyForm())
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
 
   function set(k: keyof VendorFormData, v: string | number | string[]) {
     setForm(f => ({ ...f, [k]: v }))

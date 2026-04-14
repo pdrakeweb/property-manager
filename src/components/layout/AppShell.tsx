@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { NavLink, useLocation } from 'react-router-dom'
+import { NavLink, Link, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard, Camera, Wrench, BarChart3,
   MessageSquare, ClipboardList, Settings, ChevronDown,
@@ -225,29 +225,30 @@ export function AppShell({ children }: AppShellProps) {
       {/* ── Mobile Bottom Nav (fixed, outside flex flow) ───────────────── */}
       <nav className="lg:hidden fixed bottom-0 inset-x-0 bg-white border-t border-slate-200 z-30 safe-bottom">
         <div className="flex items-center">
-          {NAV_ITEMS.filter(n => n.mobileShow).map(({ to, icon: Icon, label }) => (
-            <NavLink
-              key={to}
-              to={to}
-              end={to === '/'}
-              className={({ isActive }) => cn(
-                'flex-1 flex flex-col items-center gap-0.5 py-2.5 text-xs transition-colors',
-                isActive ? 'text-sky-600' : 'text-slate-500',
-              )}
-            >
-              {({ isActive }) => (
-                <>
-                  <div className={cn(
-                    'w-8 h-8 flex items-center justify-center rounded-lg transition-colors',
-                    isActive && 'bg-sky-50',
-                  )}>
-                    <Icon className="w-5 h-5" />
-                  </div>
-                  <span className="font-medium">{label}</span>
-                </>
-              )}
-            </NavLink>
-          ))}
+          {NAV_ITEMS.filter(n => n.mobileShow).map(({ to, icon: Icon, label }) => {
+            // Use location.pathname directly — HashRouter exposes the path here correctly
+            const isActive = to === '/'
+              ? location.pathname === '/'
+              : location.pathname.startsWith(to)
+            return (
+              <Link
+                key={to}
+                to={to}
+                className={cn(
+                  'flex-1 flex flex-col items-center gap-0.5 py-2.5 text-xs transition-colors',
+                  isActive ? 'text-sky-600' : 'text-slate-500',
+                )}
+              >
+                <div className={cn(
+                  'w-8 h-8 flex items-center justify-center rounded-lg transition-colors',
+                  isActive && 'bg-sky-50',
+                )}>
+                  <Icon className="w-5 h-5" />
+                </div>
+                <span className="font-medium">{label}</span>
+              </Link>
+            )
+          })}
         </div>
       </nav>
 

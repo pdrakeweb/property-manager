@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Plus, AlertTriangle, X, Trash2, ChevronDown, ChevronUp, FlaskConical } from 'lucide-react'
 import { cn } from '../utils/cn'
 import { wellTestStore, getTestsForProperty } from '../lib/wellTestStore'
@@ -124,6 +124,12 @@ function AddModal({ propertyId, onSave, onClose }: AddModalProps) {
     PRESET_PARAMS.map(p => ({ ...p, value: '' }))
   )
 
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+
   function setParam(i: number, field: keyof WellTestParameter, val: string) {
     setParams(ps => ps.map((p, j) => j === i ? { ...p, [field]: val } : p))
   }
@@ -178,7 +184,7 @@ function AddModal({ propertyId, onSave, onClose }: AddModalProps) {
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">Test Date *</label>
-            <input type="date" value={date} onChange={e => handleDateChange(e.target.value)} className={inputCls} />
+            <input type="date" value={date} max={today} onChange={e => handleDateChange(e.target.value)} className={inputCls} />
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">Next Test Date</label>
@@ -295,7 +301,7 @@ function TestCard({ test, onDelete }: { test: WellTest; onDelete: () => void }) 
                 </span>
                 <button
                   onClick={() => setExpanded(e => !e)}
-                  className="text-slate-400 hover:text-slate-600 p-0.5"
+                  className="text-slate-400 hover:text-slate-600 p-2 -m-1"
                 >
                   {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                 </button>

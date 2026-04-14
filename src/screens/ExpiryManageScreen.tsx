@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Plus, Trash2, AlertTriangle, X, FileText } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Plus, Trash2, AlertTriangle, X, FileText, Pencil } from 'lucide-react'
 import { cn } from '../utils/cn'
 import { expiryStore } from '../lib/expiryStore'
 import { useAppStore } from '../store/AppStoreContext'
@@ -58,6 +58,12 @@ function AddModal({ propertyId, initial, onSave, onClose }: AddModalProps) {
   function set<K extends keyof AddFormData>(k: K, v: AddFormData[K]) {
     setForm(f => ({ ...f, [k]: v }))
   }
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
 
   function submit() {
     if (!form.filename.trim() || !form.expiryDate) return
@@ -237,16 +243,16 @@ export function ExpiryManageScreen() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2">
                       <p className="text-sm font-semibold text-slate-800 leading-tight">{d.filename}</p>
-                      <div className="flex gap-1.5 shrink-0">
+                      <div className="flex gap-1 shrink-0">
                         <button
                           onClick={() => { setEditRecord(d); setShowModal(true) }}
-                          className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
+                          className="text-slate-400 hover:text-slate-600 p-2 rounded-lg"
                         >
-                          <Plus className="w-3.5 h-3.5" />
+                          <Pencil className="w-3.5 h-3.5" />
                         </button>
                         <button
                           onClick={() => handleDelete(d.id)}
-                          className="text-slate-400 hover:text-red-500 p-1 rounded-lg"
+                          className="text-slate-400 hover:text-red-500 p-2 rounded-lg"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>

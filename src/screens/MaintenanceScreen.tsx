@@ -1,8 +1,8 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import {
   CheckCircle2, Clock, AlertTriangle, Zap, ChevronDown,
   ChevronUp, Calendar, DollarSign, User, RepeatIcon, X, Camera,
-  ImageIcon,
+  ImageIcon, Wrench,
 } from 'lucide-react'
 import { cn } from '../utils/cn'
 import { MAINTENANCE_TASKS, SERVICE_RECORDS } from '../data/mockData'
@@ -96,6 +96,12 @@ function DoneModal({ task, propertyId, onConfirm, onClose }: DoneModalProps) {
     // Reset so same file can be re-selected
     e.target.value = ''
   }
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
 
   function removePhoto(id: string) {
     setPhotos(prev => prev.filter(p => p.id !== id))
@@ -309,7 +315,7 @@ function EventHistoryCard({ event }: { event: ReturnType<typeof costStore.getAll
             {hasPhotos && (
               <button
                 onClick={() => setExpanded(e => !e)}
-                className="text-slate-400 hover:text-slate-600"
+                className="text-slate-400 hover:text-slate-600 p-2 -m-1 rounded-lg"
               >
                 {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
               </button>
@@ -418,7 +424,7 @@ function TaskCard({ task, propertyId }: { task: MaintenanceTask; propertyId: str
                 <p className="text-sm font-semibold text-slate-800 leading-tight">{task.title}</p>
                 <button
                   onClick={() => setExpanded(e => !e)}
-                  className="shrink-0 w-6 h-6 flex items-center justify-center text-slate-400 hover:text-slate-600"
+                  className="shrink-0 p-2 -m-1 flex items-center justify-center text-slate-400 hover:text-slate-600 rounded-lg"
                 >
                   {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                 </button>
@@ -603,12 +609,26 @@ export function MaintenanceScreen() {
 
       {tab === 'upcoming' && (
         <div className="space-y-3">
+          {upcomingTasks.length === 0 && (
+            <div className="text-center py-12 text-slate-400">
+              <Calendar className="w-10 h-10 mx-auto mb-2 text-slate-200" />
+              <p className="text-sm font-medium">No upcoming tasks scheduled.</p>
+            </div>
+          )}
           {upcomingTasks.map(task => <TaskCard key={task.id} task={task} propertyId={activePropertyId} />)}
         </div>
       )}
 
       {tab === 'history' && (
         <div className="space-y-3">
+
+          {historyCount === 0 && (
+            <div className="text-center py-12 text-slate-400">
+              <Wrench className="w-10 h-10 mx-auto mb-2 text-slate-200" />
+              <p className="text-sm font-medium">No service history yet.</p>
+              <p className="text-xs mt-1">Mark tasks as done to build your history.</p>
+            </div>
+          )}
 
           {/* Completed events with before/after photos */}
           {completedEvents.length > 0 && (

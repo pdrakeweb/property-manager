@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Plus, X, Droplets } from 'lucide-react'
 import { cn } from '../utils/cn'
 import { fuelStore, getDeliveriesForProperty } from '../lib/fuelStore'
@@ -143,13 +143,20 @@ interface AddModalProps {
 }
 
 function AddModal({ propertyId, onSave, onClose }: AddModalProps) {
-  const [date,       setDate]       = useState(new Date().toISOString().split('T')[0])
+  const today = new Date().toISOString().split('T')[0]
+  const [date,       setDate]       = useState(today)
   const [fuelType,   setFuelType]   = useState<FuelType>('propane')
   const [gallons,    setGallons]    = useState('')
   const [pricePerGal,setPricePerGal] = useState('')
   const [totalCost,  setTotalCost]  = useState('')
   const [vendorId,   setVendorId]   = useState('')
   const [notes,      setNotes]      = useState('')
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
 
   function recalcTotal(g: string, p: string) {
     const gal = parseFloat(g)
@@ -200,7 +207,7 @@ function AddModal({ propertyId, onSave, onClose }: AddModalProps) {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-slate-600 mb-1">Date *</label>
-              <input type="date" value={date} onChange={e => setDate(e.target.value)} className={inputCls} />
+              <input type="date" value={date} max={today} onChange={e => setDate(e.target.value)} className={inputCls} />
             </div>
             <div>
               <label className="block text-xs font-medium text-slate-600 mb-1">Fuel Type</label>
