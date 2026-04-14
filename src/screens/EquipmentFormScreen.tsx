@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   Camera, Upload, Sparkles, CheckCircle2, AlertCircle,
@@ -10,6 +10,7 @@ import { getValidToken } from '../auth/oauth'
 import { DriveClient } from '../lib/driveClient'
 import { formatFileStem, formatRecord } from '../lib/markdownFormatter'
 import { enqueue } from '../lib/offlineQueue'
+import { useDocumentExtraction, confidenceRing } from '../hooks/useDocumentExtraction'
 import type { Category } from '../types'
 
 // ── Field definitions ────────────────────────────────────────────────────────
@@ -185,37 +186,20 @@ const DEFAULT_FIELDS: FieldDef[] = [
   { id: 'notes',         label: 'Notes',         type: 'textarea' },
 ]
 
-// ── Mock extraction per category (demo AI flow) ──────────────────────────────
-
-const MOCK_EXTRACTED: Record<string, Record<string, string>> = {
-  generator: {
-    brand: 'Generac', model: '22kW Air-Cooled', model_number: '7043',
-    serial_number: '7234891042', kw_rating: '22', fuel_type: 'Propane',
-    transfer_switch_brand: 'Generac', transfer_switch_amps: '200',
-    oil_type: '5W-30 Synthetic', oil_capacity_qt: '1.7', air_filter_part: '0G8442',
-  },
-  hvac: {
-    unit_type: 'Air Conditioner', brand: 'Trane', model: 'XR15',
-    serial_number: '2194XE31T', tonnage: '3', seer: '15', refrigerant_type: 'R-410A',
-  },
-  water_heater: {
-    brand: 'Rheem', model: 'PROG50-38N RH67', serial_number: '0908M4J12345',
-    fuel_type: 'Propane', tank_gallons: '50', btu_input: '38000',
-  },
-}
-
-// ── Photo capture state ──────────────────────────────────────────────────────
-
-interface CapturedPhoto {
-  name:     string
-  blob:     Blob
-  preview:  string // object URL for display
-}
-
 // ── Component ────────────────────────────────────────────────────────────────
 
-type AIState   = 'idle' | 'extracting' | 'done' | 'error'
 type SaveState = 'idle' | 'saving' | 'saved' | 'offline'
+
+/** Build a nameplate extraction prompt for a given category and its fields */
+function buildExtractionPrompt(categoryLabel: string, fieldIds: string[]): string {
+  return (
+    `This is a photo of a ${categoryLabel} equipment nameplate or data tag. ` +
+    `Extract the following fields: ${fieldIds.join(', ')}. ` +
+    `For date fields, use YYYY-MM-DD format. ` +
+    `Return confidence high/medium/low for each field. ` +
+    `If a field is not visible on the nameplate, return value "" with confidence "low".`
+  )
+}
 
 export function EquipmentFormScreen() {
   const { categoryId = 'generator' } = useParams<{ categoryId: string }>()
@@ -224,51 +208,37 @@ export function EquipmentFormScreen() {
   const category = CATEGORIES.find(c => c.id === categoryId) as Category | undefined
   const fields   = CATEGORY_FIELDS[categoryId] ?? DEFAULT_FIELDS
 
-  const [aiState,    setAiState]    = useState<AIState>('idle')
-  const [values,     setValues]     = useState<Record<string, string>>({})
-  const [photos,     setPhotos]     = useState<CapturedPhoto[]>([])
-  const [saveState,  setSaveState]  = useState<SaveState>('idle')
-  const [saveError,  setSaveError]  = useState('')
-  const [driveLink,  setDriveLink]  = useState('')
-
-  const cameraInputRef = useRef<HTMLInputElement>(null)
-  const uploadInputRef = useRef<HTMLInputElement>(null)
+  const [values,    setValues]    = useState<Record<string, string>>({})
+  const [saveState, setSaveState] = useState<SaveState>('idle')
+  const [saveError, setSaveError] = useState('')
+  const [driveLink, setDriveLink] = useState('')
 
   // Read active property from localStorage (set by AppShell property switcher)
   const activePropertyId = localStorage.getItem('active_property_id') ?? 'tannerville'
   const activeProperty   = PROPERTIES.find(p => p.id === activePropertyId) ?? PROPERTIES[0]
 
-  // ── Photo handlers ─────────────────────────────────────────────────────────
+  // ── AI extraction via hook ─────────────────────────────────────────────────
 
-  const handleFilesChosen = useCallback((files: FileList | null, isCamera: boolean) => {
-    if (!files || files.length === 0) return
-    const newPhotos: CapturedPhoto[] = []
-    for (const file of Array.from(files)) {
-      newPhotos.push({
-        name:    file.name || `photo_${Date.now()}.jpg`,
-        blob:    file,
-        preview: URL.createObjectURL(file),
-      })
+  const fieldIds = fields.map(f => f.id)
+  const extractionPrompt = buildExtractionPrompt(category?.label ?? categoryId, fieldIds)
+
+  const {
+    aiState, extracted, aiError, docs,
+    cameraRef, uploadRef,
+    handleFilesChosen, removeDoc, clearExtraction,
+  } = useDocumentExtraction(fieldIds, extractionPrompt)
+
+  // When extraction completes, pre-populate form fields
+  const prevAiDone = useState(false)
+  if (aiState === 'done' && !prevAiDone[0]) {
+    prevAiDone[1](true)
+    const newVals: Record<string, string> = {}
+    for (const [k, v] of Object.entries(extracted)) {
+      if (v.value) newVals[k] = v.value
     }
-    setPhotos(prev => [...prev, ...newPhotos])
-
-    // Trigger AI extraction on camera capture if category supports it
-    if (isCamera && category?.hasAIExtraction) {
-      setAiState('extracting')
-      setTimeout(() => {
-        const extracted = MOCK_EXTRACTED[categoryId] ?? {}
-        setValues(prev => ({ ...prev, ...extracted }))
-        setAiState('done')
-      }, 1800)
-    }
-  }, [category, categoryId])
-
-  function removePhoto(index: number) {
-    setPhotos(prev => {
-      URL.revokeObjectURL(prev[index].preview)
-      return prev.filter((_, i) => i !== index)
-    })
+    if (Object.keys(newVals).length > 0) setValues(prev => ({ ...prev, ...newVals }))
   }
+  if (aiState !== 'done' && prevAiDone[0]) prevAiDone[1](false)
 
   // ── Save to Drive ──────────────────────────────────────────────────────────
 
@@ -286,7 +256,7 @@ export function EquipmentFormScreen() {
     const mdContent  = formatRecord(
       cat,
       values,
-      photos.map(p => p.name),
+      docs.map(d => d.name),
       capturedAt,
     )
 
@@ -312,12 +282,12 @@ export function EquipmentFormScreen() {
       const mdFile = await DriveClient.uploadFile(token, folderId, mdFilename, mdContent, 'text/markdown')
       setDriveLink(`https://drive.google.com/file/d/${mdFile.id}/view`)
 
-      // Upload each photo
-      for (const photo of photos) {
-        const ext      = photo.name.split('.').pop() ?? 'jpg'
-        const photoName = `${fileStem}_${photo.name}`
-        const mime      = photo.blob.type || `image/${ext}`
-        await DriveClient.uploadFile(token, folderId, photoName, photo.blob, mime)
+      // Upload each photo/document
+      for (const doc of docs) {
+        const ext      = doc.name.split('.').pop() ?? 'jpg'
+        const docName  = `${fileStem}_${doc.name}`
+        const mime     = doc.mimeType || `image/${ext}`
+        await DriveClient.uploadFile(token, folderId, docName, doc.blob, mime)
       }
 
       setSaveState('saved')
@@ -421,7 +391,7 @@ export function EquipmentFormScreen() {
 
       {/* Hidden file inputs */}
       <input
-        ref={cameraInputRef}
+        ref={cameraRef}
         type="file"
         accept="image/*"
         capture="environment"
@@ -430,12 +400,12 @@ export function EquipmentFormScreen() {
         onChange={e => handleFilesChosen(e.target.files, true)}
       />
       <input
-        ref={uploadInputRef}
+        ref={uploadRef}
         type="file"
         accept="image/*,application/pdf"
         multiple
         className="hidden"
-        onChange={e => handleFilesChosen(e.target.files, false)}
+        onChange={e => handleFilesChosen(e.target.files, true)}
       />
 
       {/* Photo Capture Card */}
@@ -443,17 +413,15 @@ export function EquipmentFormScreen() {
         <div className="p-4">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-sm font-semibold text-slate-700">Photograph Nameplate</h2>
-            {category?.hasAIExtraction && (
-              <span className="flex items-center gap-1 text-xs text-sky-600">
-                <Sparkles className="w-3 h-3" />
-                AI extraction
-              </span>
-            )}
+            <span className="flex items-center gap-1 text-xs text-sky-600">
+              <Sparkles className="w-3 h-3" />
+              AI extraction
+            </span>
           </div>
 
           <div className="grid grid-cols-2 gap-2 mb-3">
             <button
-              onClick={() => cameraInputRef.current?.click()}
+              onClick={() => cameraRef.current?.click()}
               disabled={aiState === 'extracting'}
               className="flex items-center justify-center gap-2 bg-sky-600 hover:bg-sky-700 disabled:bg-sky-400 text-white text-sm font-medium rounded-xl px-4 py-3 transition-colors"
             >
@@ -461,7 +429,8 @@ export function EquipmentFormScreen() {
               Camera
             </button>
             <button
-              onClick={() => uploadInputRef.current?.click()}
+              onClick={() => uploadRef.current?.click()}
+              disabled={aiState === 'extracting'}
               className="flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium rounded-xl px-4 py-3 transition-colors"
             >
               <Upload className="w-4 h-4" />
@@ -472,33 +441,45 @@ export function EquipmentFormScreen() {
           {/* AI status banner */}
           {aiState !== 'idle' && (
             <div className={cn(
-              'flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm',
+              'flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm mb-3',
               aiState === 'extracting' && 'bg-sky-50 text-sky-700',
               aiState === 'done'       && 'bg-emerald-50 text-emerald-700',
               aiState === 'error'      && 'bg-red-50 text-red-700',
             )}>
-              {aiState === 'extracting' && <Loader2 className="w-4 h-4 animate-spin" />}
-              {aiState === 'done'       && <CheckCircle2 className="w-4 h-4" />}
-              {aiState === 'error'      && <AlertCircle className="w-4 h-4" />}
-              <span className="font-medium">
+              {aiState === 'extracting' && <Loader2 className="w-4 h-4 animate-spin shrink-0" />}
+              {aiState === 'done'       && <CheckCircle2 className="w-4 h-4 shrink-0" />}
+              {aiState === 'error'      && <AlertCircle className="w-4 h-4 shrink-0" />}
+              <span className="font-medium flex-1">
                 {aiState === 'extracting' && 'Extracting specifications…'}
-                {aiState === 'done'       && 'Extraction complete — review below'}
-                {aiState === 'error'      && 'Extraction failed — fill manually'}
+                {aiState === 'done'       && 'Extraction complete — review fields below'}
+                {aiState === 'error'      && (aiError || 'Extraction failed — fill manually')}
               </span>
+              {(aiState === 'done' || aiState === 'error') && (
+                <button
+                  onClick={() => { clearExtraction(); setValues({}) }}
+                  className="text-xs opacity-70 hover:opacity-100 shrink-0"
+                >
+                  Clear
+                </button>
+              )}
             </div>
           )}
 
           {/* Photo thumbnails */}
-          {photos.length > 0 && (
-            <div className="flex gap-2 mt-3 flex-wrap">
-              {photos.map((p, i) => (
+          {docs.length > 0 && (
+            <div className="flex gap-2 flex-wrap">
+              {docs.map((d, i) => (
                 <div
                   key={i}
                   className="relative w-16 h-16 rounded-lg border border-slate-200 overflow-hidden group bg-slate-100"
                 >
-                  <img src={p.preview} alt={p.name} className="w-full h-full object-cover" />
+                  {d.mimeType.startsWith('image') ? (
+                    <img src={d.preview} alt={d.name} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-xs text-slate-500 font-medium">PDF</div>
+                  )}
                   <button
-                    onClick={() => removePhoto(i)}
+                    onClick={() => removeDoc(i)}
                     className="absolute -top-1 -right-1 w-5 h-5 bg-slate-800 text-white rounded-full items-center justify-center hidden group-hover:flex text-xs leading-none"
                   >
                     <X className="w-3 h-3" />
@@ -506,7 +487,7 @@ export function EquipmentFormScreen() {
                 </div>
               ))}
               <button
-                onClick={() => uploadInputRef.current?.click()}
+                onClick={() => uploadRef.current?.click()}
                 className="w-16 h-16 bg-slate-50 rounded-lg border border-dashed border-slate-300 flex items-center justify-center text-slate-400 hover:text-slate-600 hover:border-slate-400 transition-colors"
               >
                 <ImageIcon className="w-5 h-5" />
@@ -521,16 +502,17 @@ export function EquipmentFormScreen() {
         <div className="p-4 border-b border-slate-100">
           <h2 className="text-sm font-semibold text-slate-700">Equipment Details</h2>
           {aiState === 'done' && (
-            <p className="text-xs text-slate-500 mt-0.5">Fields highlighted in blue were filled by AI — please verify.</p>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Green = high confidence · Amber = medium · Red = low — verify all AI-filled fields.
+            </p>
           )}
         </div>
         <div className="p-4 space-y-4">
           {fields.map(field => {
-            const val          = values[field.id] ?? ''
-            const aiFilledStyle = aiState === 'done' && val
-              ? 'ring-2 ring-sky-200 border-sky-300'
-              : ''
-            const baseClass = 'w-full text-sm border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-sky-300 focus:border-sky-300 transition-all placeholder:text-slate-400'
+            const val        = values[field.id] ?? ''
+            const conf       = extracted[field.id]?.confidence
+            const ringStyle  = conf ? confidenceRing(conf) : ''
+            const baseClass  = 'w-full text-sm border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-sky-300 focus:border-sky-300 transition-all placeholder:text-slate-400'
 
             return (
               <div key={field.id}>
@@ -545,13 +527,13 @@ export function EquipmentFormScreen() {
                     value={val}
                     placeholder={field.placeholder}
                     onChange={e => setValues(prev => ({ ...prev, [field.id]: e.target.value }))}
-                    className={cn(baseClass, 'resize-none', aiFilledStyle)}
+                    className={cn(baseClass, 'resize-none', ringStyle)}
                   />
                 ) : field.type === 'select' ? (
                   <select
                     value={val}
                     onChange={e => setValues(prev => ({ ...prev, [field.id]: e.target.value }))}
-                    className={cn(baseClass, 'bg-white', aiFilledStyle)}
+                    className={cn(baseClass, 'bg-white', ringStyle)}
                   >
                     <option value="">Select…</option>
                     {field.options?.map(o => <option key={o} value={o}>{o}</option>)}
@@ -572,7 +554,7 @@ export function EquipmentFormScreen() {
                     value={val}
                     placeholder={field.placeholder}
                     onChange={e => setValues(prev => ({ ...prev, [field.id]: e.target.value }))}
-                    className={cn(baseClass, aiFilledStyle)}
+                    className={cn(baseClass, ringStyle)}
                   />
                 )}
               </div>
