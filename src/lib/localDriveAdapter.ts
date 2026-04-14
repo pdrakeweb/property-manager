@@ -2,12 +2,14 @@
  * localStorage-backed mock of DriveClient.
  * Used in dev bypass mode so the full sync flow runs without OAuth.
  *
- * Storage key: pm_dev_drive_v1 → { files: Record<id, DevEntry> }
+ * Storage key: pm_dev_drive_v1 → Record<id, DevEntry>
  * Folders and files are both DevEntry; folders have isFolder=true.
+ * Each file entry carries an `etag` (simple incrementing version string)
+ * so we can simulate 412 Precondition Failed when If-Match doesn't match.
  */
 
-import type { DriveFile } from './driveClient'
-import { CATEGORY_FOLDER_NAMES } from './driveClient'
+import type { DriveFile, DriveFileWithContent } from './driveClient'
+import { CATEGORY_FOLDER_NAMES, ETagConflictError } from './driveClient'
 
 const STORE_KEY = 'pm_dev_drive_v1'
 
@@ -18,6 +20,7 @@ interface DevEntry {
   isFolder:  boolean
   content?:  string
   mimeType?: string
+  etag?:     string    // "v1", "v2", … — bumped on each write
 }
 
 function load(): Record<string, DevEntry> {
@@ -36,6 +39,12 @@ function devId(): string {
   return 'dev_' + Math.random().toString(36).slice(2, 10)
 }
 
+function nextEtag(current?: string): string {
+  if (!current) return 'v1'
+  const n = parseInt(current.replace('v', ''), 10)
+  return `v${isNaN(n) ? 1 : n + 1}`
+}
+
 /** Find or create a folder with the given name inside parentId. Returns folder id. */
 function findOrCreateFolder(name: string, parentId: string): string {
   const store = load()
@@ -44,7 +53,7 @@ function findOrCreateFolder(name: string, parentId: string): string {
   )
   if (existing) return existing.id
 
-  const id: string = devId()
+  const id = devId()
   store[id] = { id, name, parentId, isFolder: true }
   save(store)
   return id
@@ -53,14 +62,14 @@ function findOrCreateFolder(name: string, parentId: string): string {
 // ── Adapter (same method signatures as DriveClient) ──────────────────────────
 
 export const localDriveAdapter = {
+
   /** Mirrors DriveClient.resolveFolderId */
   async resolveFolderId(
-    _token: string,
-    categoryId: string,
+    _token:       string,
+    categoryId:   string,
     rootFolderId: string,
   ): Promise<string> {
     const folderName = CATEGORY_FOLDER_NAMES[categoryId] ?? categoryId
-    // Ensure root exists
     const root = load()
     if (!root[rootFolderId]) {
       root[rootFolderId] = { id: rootFolderId, name: 'PropertyManager', parentId: '', isFolder: true }
@@ -77,17 +86,34 @@ export const localDriveAdapter = {
       .map(e => ({ id: e.id, name: e.name }))
   },
 
-  /** Mirrors DriveClient.uploadFile */
+  /** Mirrors DriveClient.downloadFile — returns content + etag */
+  async downloadFile(_token: string, fileId: string): Promise<DriveFileWithContent> {
+    const store = load()
+    const entry = store[fileId]
+    if (!entry || entry.isFolder) throw new Error(`Dev adapter: file ${fileId} not found`)
+    return {
+      id:      entry.id,
+      name:    entry.name,
+      content: entry.content ?? '',
+      etag:    entry.etag ?? 'v1',
+    }
+  },
+
+  /**
+   * Mirrors DriveClient.uploadFile.
+   * If ifMatchEtag is provided and doesn't match the stored etag → throws ETagConflictError,
+   * exactly as Drive would return 412.
+   */
   async uploadFile(
-    _token:   string,
-    folderId: string,
-    filename: string,
-    content:  string | Blob,
-    mimeType: string,
-  ): Promise<DriveFile> {
+    _token:       string,
+    folderId:     string,
+    filename:     string,
+    content:      string | Blob,
+    mimeType:     string,
+    ifMatchEtag?: string,
+  ): Promise<DriveFile & { etag: string }> {
     const store = load()
 
-    // Resolve string content (Blob not supported in localStorage; convert if needed)
     let text: string
     if (content instanceof Blob) {
       text = await content.text()
@@ -95,21 +121,32 @@ export const localDriveAdapter = {
       text = content
     }
 
-    // Overwrite if same filename in same folder
     const existing = Object.values(store).find(
       e => !e.isFolder && e.name === filename && e.parentId === folderId,
     )
 
-    if (existing) {
-      existing.content  = text
-      existing.mimeType = mimeType
-      save(store)
-      return { id: existing.id, name: existing.name }
+    // ── Simulate 412 when ETag doesn't match ────────────────────────────────
+    if (existing && ifMatchEtag !== undefined && existing.etag !== ifMatchEtag) {
+      throw new ETagConflictError(
+        existing.id,
+        existing.etag ?? 'v1',
+        existing.content ?? '',
+      )
     }
 
-    const id = devId()
-    store[id] = { id, name: filename, parentId: folderId, isFolder: false, content: text, mimeType }
+    if (existing) {
+      const newEtag = nextEtag(existing.etag)
+      existing.content  = text
+      existing.mimeType = mimeType
+      existing.etag     = newEtag
+      save(store)
+      return { id: existing.id, name: existing.name, etag: newEtag }
+    }
+
+    const id    = devId()
+    const etag  = 'v1'
+    store[id] = { id, name: filename, parentId: folderId, isFolder: false, content: text, mimeType, etag }
     save(store)
-    return { id, name: filename }
+    return { id, name: filename, etag }
   },
 }
