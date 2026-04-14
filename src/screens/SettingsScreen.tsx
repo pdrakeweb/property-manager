@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react'
 import {
   Eye, EyeOff, CheckCircle2, Wifi, WifiOff,
-  ExternalLink, ChevronRight, Building2, Loader2, RefreshCw, Sparkles,
+  ExternalLink, ChevronRight, Building2, Loader2, RefreshCw, Sparkles, Calendar,
 } from 'lucide-react'
 import { cn } from '../utils/cn'
-import { getUserEmail, getUserName, signOut, getValidToken } from '../auth/oauth'
+import { getUserEmail, getUserName, signOut, getValidToken, startOAuthFlow, isDev } from '../auth/oauth'
 import { getQueueCount, retryAll } from '../lib/offlineQueue'
 import { PROPERTIES } from '../data/mockData'
 import {
@@ -116,6 +116,17 @@ export function SettingsScreen() {
     setQueueCount(getQueueCount())
   }, [])
 
+  // ── Calendar ────────────────────────────────────────────────────────────────
+  // calendar.events scope is included in every OAuth flow since Apr 2026.
+  // If the user signed in before that, they need to re-authorize.
+  const hasCalendarScope = !!localStorage.getItem('google_access_token') && !isDev()
+  const [calReauthing, setCalReauthing] = useState(false)
+
+  async function reauthorizeCalendar() {
+    setCalReauthing(true)
+    await startOAuthFlow()   // redirects — never returns
+  }
+
   // ── Active property (for Drive Root display) ────────────────────────────────
   const activePropertyId = localStorage.getItem('active_property_id') ?? 'tannerville'
   const activeProperty   = PROPERTIES.find(p => p.id === activePropertyId) ?? PROPERTIES[0]
@@ -149,6 +160,36 @@ export function SettingsScreen() {
             <CheckCircle2 className="w-3.5 h-3.5" />
             Authorized
           </span>
+        </Row>
+        <Row
+          label="Google Calendar"
+          sub={isDev()
+            ? 'Dev bypass mode — calendar runs on local mock'
+            : hasCalendarScope
+              ? 'calendar.events scope authorized'
+              : 'Not connected — re-authorize to enable reminders'
+          }
+        >
+          {isDev() ? (
+            <span className="text-xs text-amber-600 flex items-center gap-1 shrink-0">
+              <Calendar className="w-3.5 h-3.5" />
+              Dev mode
+            </span>
+          ) : hasCalendarScope ? (
+            <span className="text-xs text-emerald-600 flex items-center gap-1 shrink-0">
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              Connected
+            </span>
+          ) : (
+            <button
+              onClick={reauthorizeCalendar}
+              disabled={calReauthing}
+              className="flex items-center gap-1 text-xs text-sky-600 font-medium hover:text-sky-700 disabled:opacity-50 shrink-0"
+            >
+              {calReauthing && <Loader2 className="w-3 h-3 animate-spin" />}
+              Connect Calendar
+            </button>
+          )}
         </Row>
         <Row
           label="Drive Root"

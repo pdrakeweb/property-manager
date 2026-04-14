@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import {
   CheckCircle2, Clock, AlertTriangle, Zap, ChevronDown,
   ChevronUp, Calendar, DollarSign, User, RepeatIcon, X, Camera,
-  ImageIcon, Wrench, Plus,
+  ImageIcon, Wrench, Plus, CalendarPlus, Loader2, RefreshCw,
 } from 'lucide-react'
 import { cn } from '../utils/cn'
 import { SERVICE_RECORDS } from '../data/mockData'
@@ -15,6 +15,13 @@ import {
   setTaskDelay,
   setTaskRecurrence,
 } from '../lib/maintenanceStore'
+import { localIndex } from '../lib/localIndex'
+import { syncAllToCalendar } from '../lib/calendarClient'
+import type { DryRunResult } from '../lib/calendarClient'
+import { DryRunModal } from '../components/DryRunModal'
+import { TaskCalendarChip } from '../components/TaskCalendarChip'
+import { getValidToken, isDev } from '../auth/oauth'
+import { PROPERTIES } from '../data/mockData'
 import type { MaintenanceTask, Priority } from '../types'
 import type { EventPhoto } from '../schemas'
 
@@ -521,6 +528,13 @@ function EventHistoryCard({ event }: { event: ReturnType<typeof costStore.getAll
 
 // ── Task Card ─────────────────────────────────────────────────────────────────
 
+// Bridges MaintenanceTask (legacy type) to the IndexRecord-based TaskCalendarChip
+function TaskCalendarChipWrapper({ task, propertyId }: { task: MaintenanceTask; propertyId: string }) {
+  const record = localIndex.getById(task.id)
+  if (!record) return null
+  return <TaskCalendarChip task={record} propertyId={propertyId} />
+}
+
 interface TaskCardProps {
   task: MaintenanceTask
   propertyId: string
@@ -584,6 +598,9 @@ function TaskCard({ task, propertyId, onMutate }: TaskCardProps) {
                   </span>
                 )}
               </div>
+              <div className="mt-2">
+                <TaskCalendarChipWrapper task={task} propertyId={propertyId} />
+              </div>
             </div>
           </div>
           {expanded && (task.contractor || task.notes) && (
@@ -642,11 +659,35 @@ function TaskCard({ task, propertyId, onMutate }: TaskCardProps) {
 
 export function MaintenanceScreen() {
   const { activePropertyId } = useAppStore()
-  const [tab,          setTab]          = useState<Tab>('due')
-  const [tick,         setTick]         = useState(0)
-  const [showAddTask,  setShowAddTask]  = useState(false)
+  const [tab,           setTab]           = useState<Tab>('due')
+  const [tick,          setTick]          = useState(0)
+  const [showAddTask,   setShowAddTask]   = useState(false)
+  const [calSyncing,    setCalSyncing]    = useState(false)
+  const [dryRunResult,  setDryRunResult]  = useState<DryRunResult | null>(null)
 
   function onMutate() { setTick(t => t + 1) }
+
+  async function handleCalendarSync() {
+    const propertyName = PROPERTIES.find(p => p.id === activePropertyId)?.name ?? activePropertyId
+    if (isDev()) {
+      setCalSyncing(true)
+      try {
+        const result = await syncAllToCalendar('dev_token', activePropertyId, propertyName, true)
+        setDryRunResult(result as DryRunResult)
+      } finally {
+        setCalSyncing(false)
+      }
+      return
+    }
+    setCalSyncing(true)
+    try {
+      const token = await getValidToken()
+      if (!token) return
+      await syncAllToCalendar(token, activePropertyId, propertyName)
+    } finally {
+      setCalSyncing(false)
+    }
+  }
 
   const ytdSpend = getYTDSpend(activePropertyId)
 
@@ -680,12 +721,30 @@ export function MaintenanceScreen() {
     <div className="space-y-5" key={tick}>
 
       {/* Header */}
-      <div>
-        <h1 className="text-xl font-bold text-slate-900">Maintenance</h1>
-        <p className="text-sm text-slate-500 mt-0.5">
-          {dueTasks.length} tasks due · ${totalCostDue.toLocaleString()} estimated cost
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-bold text-slate-900">Maintenance</h1>
+          <p className="text-sm text-slate-500 mt-0.5">
+            {dueTasks.length} tasks due · ${totalCostDue.toLocaleString()} estimated cost
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={handleCalendarSync}
+          disabled={calSyncing}
+          title={isDev() ? 'Preview calendar sync (dev mode)' : 'Sync all tasks to Google Calendar'}
+          className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium border transition-colors shrink-0 bg-white border-slate-200 text-slate-600 hover:border-sky-300 hover:text-sky-700 hover:bg-sky-50 disabled:opacity-50"
+        >
+          {calSyncing
+            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            : isDev()
+              ? <CalendarPlus className="w-3.5 h-3.5" />
+              : <RefreshCw className="w-3.5 h-3.5" />
+          }
+          {isDev() ? 'Preview Calendar' : 'Sync Calendar'}
+        </button>
       </div>
+      {dryRunResult && <DryRunModal result={dryRunResult} onClose={() => setDryRunResult(null)} />}
 
       {/* YTD Spend */}
       {ytdSpend > 0 && (
