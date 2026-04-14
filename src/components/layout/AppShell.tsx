@@ -1,13 +1,15 @@
-import { useState } from 'react'
-import { NavLink, useLocation } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, Camera, Wrench, BarChart3,
   MessageSquare, ClipboardList, Settings, ChevronDown,
   Building2, TreePine, Users, Droplets, Receipt, Home, Zap, CalendarDays,
+  RefreshCw,
 } from 'lucide-react'
 import { cn } from '../../utils/cn'
 import { PROPERTIES } from '../../data/mockData'
 import { useAppStore } from '../../store/AppStoreContext'
+import { getQueueCount } from '../../lib/offlineQueue'
 
 const NAV_ITEMS = [
   { to: '/',           icon: LayoutDashboard, label: 'Dashboard',   mobileShow: true  },
@@ -125,6 +127,28 @@ function MobilePropertySwitcher() {
   )
 }
 
+function OfflinePill() {
+  const navigate = useNavigate()
+  const [count, setCount] = useState(getQueueCount)
+
+  useEffect(() => {
+    const id = setInterval(() => setCount(getQueueCount()), 5000)
+    return () => clearInterval(id)
+  }, [])
+
+  if (count === 0) return null
+
+  return (
+    <button
+      onClick={() => navigate('/settings')}
+      className="flex items-center gap-1 bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold rounded-full px-2.5 py-1 transition-colors shrink-0"
+    >
+      <RefreshCw className="w-3 h-3" />
+      {count} pending
+    </button>
+  )
+}
+
 interface AppShellProps {
   children: React.ReactNode
 }
@@ -178,8 +202,8 @@ export function AppShell({ children }: AppShellProps) {
           ))}
         </nav>
 
-        {/* Settings at bottom */}
-        <div className="px-3 pb-6 border-t border-slate-700 pt-4">
+        {/* Settings + offline pill at bottom */}
+        <div className="px-3 pb-6 border-t border-slate-700 pt-4 space-y-2">
           <NavLink
             to="/settings"
             className={({ isActive }) => cn(
@@ -190,6 +214,9 @@ export function AppShell({ children }: AppShellProps) {
             <Settings className="w-4 h-4 shrink-0" />
             Settings
           </NavLink>
+          <div className="px-3">
+            <OfflinePill />
+          </div>
         </div>
       </aside>
 
@@ -204,7 +231,10 @@ export function AppShell({ children }: AppShellProps) {
               {currentNav?.label ?? 'Property Manager'}
             </span>
           </div>
-          <MobilePropertySwitcher />
+          <div className="flex items-center gap-2">
+            <OfflinePill />
+            <MobilePropertySwitcher />
+          </div>
         </div>
       </header>
 
