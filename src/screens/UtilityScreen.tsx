@@ -295,7 +295,7 @@ function MonthlyChart({ propertyId }: { propertyId: string }) {
       <div className="flex items-end gap-1.5 h-28">
         {months.map(m => {
           const pct = (m.cost / maxCost) * 100
-          const label = new Date(m.month + '-15').toLocaleDateString('en-US', { month: 'short' })
+          const label = new Date(m.month + '-15T12:00:00').toLocaleDateString('en-US', { month: 'short' })
           return (
             <div key={m.month} className="flex-1 flex flex-col items-center gap-1">
               <div className="w-full flex flex-col justify-end" style={{ height: '88px' }}>
@@ -417,7 +417,7 @@ function AccountDetail({
               <div key={b.id} className="flex items-center gap-3 px-4 py-3.5">
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-slate-800">
-                    {new Date(b.periodStart).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+                    {new Date(b.periodStart + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
                   </p>
                   <p className="text-xs text-slate-500 mt-0.5">
                     {b.periodStart} → {b.periodEnd}

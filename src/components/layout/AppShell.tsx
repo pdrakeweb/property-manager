@@ -1,14 +1,15 @@
-import { useState } from 'react'
-import { NavLink, Link, useLocation } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, Camera, Wrench, BarChart3,
   MessageSquare, ClipboardList, Settings, ChevronDown,
   Building2, TreePine, Users, Droplets, Receipt, Home, Zap, CalendarDays,
+  RefreshCw,
 } from 'lucide-react'
 import { cn } from '../../utils/cn'
 import { PROPERTIES } from '../../data/mockData'
 import { useAppStore } from '../../store/AppStoreContext'
-import { getUserEmail } from '../../auth/oauth'
+import { getQueueCount } from '../../lib/offlineQueue'
 
 const NAV_ITEMS = [
   { to: '/',           icon: LayoutDashboard, label: 'Dashboard',   mobileShow: true  },
@@ -126,23 +127,43 @@ function MobilePropertySwitcher() {
   )
 }
 
+function OfflinePill() {
+  const navigate = useNavigate()
+  const [count, setCount] = useState(getQueueCount)
+
+  useEffect(() => {
+    const id = setInterval(() => setCount(getQueueCount()), 5000)
+    return () => clearInterval(id)
+  }, [])
+
+  if (count === 0) return null
+
+  return (
+    <button
+      onClick={() => navigate('/settings')}
+      className="flex items-center gap-1 bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold rounded-full px-2.5 py-1 transition-colors shrink-0"
+    >
+      <RefreshCw className="w-3 h-3" />
+      {count} pending
+    </button>
+  )
+}
+
 interface AppShellProps {
   children: React.ReactNode
 }
 
 export function AppShell({ children }: AppShellProps) {
   const location = useLocation()
-  const userEmail = getUserEmail()
 
   const currentNav = NAV_ITEMS.find(n =>
     n.to === '/' ? location.pathname === '/' : location.pathname.startsWith(n.to)
   )
 
   return (
-    // P0 fix: h-screen flex col so main can flex-1 and scroll internally
-    <div className="h-screen flex flex-col overflow-hidden bg-slate-50">
+    <div className="min-h-screen bg-slate-50">
 
-      {/* ── Desktop Sidebar (fixed, outside flex flow) ─────────────────── */}
+      {/* ── Desktop Sidebar ────────────────────────────────────────────── */}
       <aside className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-64 lg:flex-col bg-slate-900 z-30">
 
         {/* Logo */}
@@ -181,13 +202,8 @@ export function AppShell({ children }: AppShellProps) {
           ))}
         </nav>
 
-        {/* User + Settings at bottom */}
+        {/* Settings + offline pill at bottom */}
         <div className="px-3 pb-6 border-t border-slate-700 pt-4 space-y-2">
-          {userEmail && (
-            <div className="px-3 py-1">
-              <p className="text-xs text-slate-500 truncate">{userEmail}</p>
-            </div>
-          )}
           <NavLink
             to="/settings"
             className={({ isActive }) => cn(
@@ -198,11 +214,14 @@ export function AppShell({ children }: AppShellProps) {
             <Settings className="w-4 h-4 shrink-0" />
             Settings
           </NavLink>
+          <div className="px-3">
+            <OfflinePill />
+          </div>
         </div>
       </aside>
 
-      {/* ── Mobile Header (shrink-0 so it doesn't compress) ───────────── */}
-      <header className="lg:hidden sticky top-0 z-30 bg-white border-b border-slate-200 shrink-0">
+      {/* ── Mobile Header ─────────────────────────────────────────────── */}
+      <header className="lg:hidden sticky top-0 z-30 bg-white border-b border-slate-200">
         <div className="flex items-center justify-between px-4 h-14">
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 bg-sky-600 rounded-md flex items-center justify-center">
@@ -212,44 +231,46 @@ export function AppShell({ children }: AppShellProps) {
               {currentNav?.label ?? 'Property Manager'}
             </span>
           </div>
-          <MobilePropertySwitcher />
+          <div className="flex items-center gap-2">
+            <OfflinePill />
+            <MobilePropertySwitcher />
+          </div>
         </div>
       </header>
 
-      {/* ── Main Content (flex-1 min-h-0 = fills remaining height and scrolls) */}
-      <main className="flex-1 min-h-0 overflow-y-auto lg:pl-64">
+      {/* ── Main Content ──────────────────────────────────────────────── */}
+      <main className="lg:pl-64">
         <div className="px-4 py-5 sm:px-6 lg:px-8 pb-28 lg:pb-8 max-w-5xl">
           {children}
         </div>
       </main>
 
-      {/* ── Mobile Bottom Nav (fixed, outside flex flow) ───────────────── */}
+      {/* ── Mobile Bottom Nav ─────────────────────────────────────────── */}
       <nav className="lg:hidden fixed bottom-0 inset-x-0 bg-white border-t border-slate-200 z-30 safe-bottom">
         <div className="flex items-center">
-          {NAV_ITEMS.filter(n => n.mobileShow).map(({ to, icon: Icon, label }) => {
-            // Use location.pathname directly — HashRouter exposes the path here correctly
-            const isActive = to === '/'
-              ? location.pathname === '/'
-              : location.pathname.startsWith(to)
-            return (
-              <Link
-                key={to}
-                to={to}
-                className={cn(
-                  'flex-1 flex flex-col items-center gap-0.5 py-2.5 text-xs transition-colors',
-                  isActive ? 'text-sky-600' : 'text-slate-500',
-                )}
-              >
-                <div className={cn(
-                  'w-8 h-8 flex items-center justify-center rounded-lg transition-colors',
-                  isActive && 'bg-sky-50',
-                )}>
-                  <Icon className="w-5 h-5" />
-                </div>
-                <span className="font-medium">{label}</span>
-              </Link>
-            )
-          })}
+          {NAV_ITEMS.filter(n => n.mobileShow).map(({ to, icon: Icon, label }) => (
+            <NavLink
+              key={to}
+              to={to}
+              end={to === '/'}
+              className={({ isActive }) => cn(
+                'flex-1 flex flex-col items-center gap-0.5 py-2.5 text-xs transition-colors',
+                isActive ? 'text-sky-600' : 'text-slate-500',
+              )}
+            >
+              {({ isActive }) => (
+                <>
+                  <div className={cn(
+                    'w-8 h-8 flex items-center justify-center rounded-lg transition-colors',
+                    isActive && 'bg-sky-50',
+                  )}>
+                    <Icon className="w-5 h-5" />
+                  </div>
+                  <span className="font-medium">{label}</span>
+                </>
+              )}
+            </NavLink>
+          ))}
         </div>
       </nav>
 

@@ -10,6 +10,7 @@ import { getValidToken } from '../auth/oauth'
 import { DriveClient } from '../lib/driveClient'
 import { formatFileStem, formatRecord } from '../lib/markdownFormatter'
 import { enqueue } from '../lib/offlineQueue'
+import { equipmentStore } from '../lib/equipmentStore'
 import { useDocumentExtraction, confidenceRing } from '../hooks/useDocumentExtraction'
 import type { Category } from '../types'
 
@@ -272,6 +273,7 @@ export function EquipmentFormScreen() {
           mdContent,
           capturedAt:   capturedAt.toISOString(),
         })
+        equipmentStore.add({ id: crypto.randomUUID(), categoryId, propertyId: activePropertyId, capturedAt: capturedAt.toISOString() })
         setSaveState('offline')
         return
       }
@@ -290,6 +292,7 @@ export function EquipmentFormScreen() {
         await DriveClient.uploadFile(token, folderId, docName, doc.blob, mime)
       }
 
+      equipmentStore.add({ id: crypto.randomUUID(), categoryId, propertyId: activePropertyId, capturedAt: capturedAt.toISOString() })
       setSaveState('saved')
 
       // Navigate back after 2s
@@ -304,6 +307,7 @@ export function EquipmentFormScreen() {
         mdContent,
         capturedAt:   capturedAt.toISOString(),
       })
+      equipmentStore.add({ id: crypto.randomUUID(), categoryId, propertyId: activePropertyId, capturedAt: capturedAt.toISOString() })
       setSaveState('offline')
       setSaveError(String(err))
     }

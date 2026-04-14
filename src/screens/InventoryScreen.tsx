@@ -2,38 +2,47 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   CheckCircle2, Circle, ChevronRight, Search,
-  Camera, Wrench, AlertTriangle, Trash2,
+  Camera, Wrench, AlertTriangle,
 } from 'lucide-react'
 import { cn } from '../utils/cn'
-import { EQUIPMENT, PROPERTIES } from '../data/mockData'
-import { CATEGORIES } from '../data/categories'
-import { useAppStore } from '../store/AppStoreContext'
+import { CATEGORIES, EQUIPMENT } from '../data/mockData'
+import { equipmentStore } from '../lib/equipmentStore'
 
 type FilterMode = 'all' | 'documented' | 'missing'
 
 export function InventoryScreen() {
   const navigate    = useNavigate()
-  const { activePropertyId } = useAppStore()
-  const activeProperty = PROPERTIES.find(p => p.id === activePropertyId) ?? PROPERTIES[0]
+  const [filter, setFilter]   = useState<FilterMode>('all')
+  const [search, setSearch]   = useState('')
+  const [, forceUpdate]       = useState(0)
 
-  const [filter,          setFilter]          = useState<FilterMode>('all')
-  const [search,          setSearch]          = useState('')
-  const [equipment,       setEquipment]       = useState(EQUIPMENT)
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  const activePropertyId = localStorage.getItem('active_property_id') ?? 'tannerville'
 
-  const cats = CATEGORIES.filter(c => c.propertyTypes.includes(activeProperty.type))
-  const documented   = cats.filter(c => c.recordCount && c.recordCount > 0).length
-  const total        = cats.length
-  const pct          = Math.round(documented / total * 100)
-
-  function deleteEquipment(id: string) {
-    setEquipment(prev => prev.filter(e => e.id !== id))
-    setConfirmDeleteId(null)
+  // Count from localStorage (accurate offline) with mock data as seed
+  function getCount(cat: typeof CATEGORIES[0]): number {
+    const stored = equipmentStore.getAll().filter(
+      r => r.categoryId === cat.id && r.propertyId === activePropertyId,
+    ).length
+    // Fall back to mock recordCount if no localStorage records yet
+    return stored > 0 ? stored : (cat.recordCount ?? 0)
   }
 
-  const visibleCategories = cats.filter(cat => {
-    if (filter === 'documented' && !(cat.recordCount && cat.recordCount > 0)) return false
-    if (filter === 'missing'    &&  (cat.recordCount && cat.recordCount > 0)) return false
+  const total        = CATEGORIES.length
+  const documented   = CATEGORIES.filter(c => getCount(c) > 0).length
+  const pct          = Math.round(documented / total * 100)
+
+  // Refresh counts after capture (storage event from same tab won't fire, but
+  // a simple focus listener keeps things fresh when returning from capture)
+  useState(() => {
+    const refresh = () => forceUpdate(n => n + 1)
+    window.addEventListener('focus', refresh)
+    return () => window.removeEventListener('focus', refresh)
+  })
+
+  const visibleCategories = CATEGORIES.filter(cat => {
+    const count = getCount(cat)
+    if (filter === 'documented' && count === 0) return false
+    if (filter === 'missing'    && count >  0)  return false
     if (search) {
       const q = search.toLowerCase()
       return cat.label.toLowerCase().includes(q) || cat.description.toLowerCase().includes(q)
@@ -114,8 +123,9 @@ export function InventoryScreen() {
       {/* Category list */}
       <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm divide-y divide-slate-100">
         {visibleCategories.map(cat => {
-          const isDone = !!(cat.recordCount && cat.recordCount > 0)
-          const records = equipment.filter(e => e.categoryId === cat.id && e.propertyId === activePropertyId)
+          const count  = getCount(cat)
+          const isDone = count > 0
+          const records = EQUIPMENT.filter(e => e.categoryId === cat.id)
 
           return (
             <div key={cat.id}>
@@ -135,7 +145,7 @@ export function InventoryScreen() {
                 <div className="flex items-center gap-2 shrink-0">
                   {isDone ? (
                     <span className="text-xs text-emerald-600 font-medium">
-                      {cat.recordCount} record{(cat.recordCount ?? 0) > 1 ? 's' : ''}
+                      {count} record{count > 1 ? 's' : ''}
                     </span>
                   ) : (
                     <button
@@ -153,53 +163,32 @@ export function InventoryScreen() {
               {records.length > 0 && (
                 <div className="ml-16 mr-4 mb-3 space-y-1.5">
                   {records.map(eq => (
-                    <div key={eq.id}>
-                      <div className="flex items-center gap-2 bg-slate-50 rounded-xl px-3 py-2.5 hover:bg-slate-100 transition-colors cursor-pointer">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-semibold text-slate-700 truncate">{eq.label}</p>
-                          <p className="text-xs text-slate-400">
-                            {eq.installYear ? `Installed ${eq.installYear}` : ''}
-                            {eq.installYear && eq.lastServiceDate ? ' · ' : ''}
-                            {eq.lastServiceDate ? `Last svc ${new Date(eq.lastServiceDate).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}` : ''}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          {eq.hasPhotos && <Camera className="w-3 h-3 text-slate-400" />}
-                          <button
-                            onClick={e => { e.stopPropagation(); navigate('/maintenance') }}
-                            className="text-slate-300 hover:text-slate-500 transition-colors"
-                          >
-                            <Wrench className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={e => { e.stopPropagation(); setConfirmDeleteId(eq.id) }}
-                            className="text-slate-300 hover:text-red-400 transition-colors"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                          <ChevronRight className="w-3.5 h-3.5 text-slate-300" />
-                        </div>
+                    <div
+                      key={eq.id}
+                      className="flex items-center gap-2 bg-slate-50 rounded-xl px-3 py-2.5 hover:bg-slate-100 transition-colors cursor-pointer"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold text-slate-700 truncate">{eq.label}</p>
+                        <p className="text-xs text-slate-400">
+                          {eq.installYear ? `Installed ${eq.installYear}` : ''}
+                          {eq.installYear && eq.lastServiceDate ? ' · ' : ''}
+                          {eq.lastServiceDate ? `Last svc ${new Date(eq.lastServiceDate).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}` : ''}
+                        </p>
                       </div>
-                      {/* Inline delete confirmation */}
-                      {confirmDeleteId === eq.id && (
-                        <div className="mt-1 bg-red-50 border border-red-200 rounded-xl px-3 py-2.5 flex items-center justify-between gap-3">
-                          <p className="text-xs text-red-700 font-medium">Delete this record?</p>
-                          <div className="flex items-center gap-2 shrink-0">
-                            <button
-                              onClick={() => setConfirmDeleteId(null)}
-                              className="text-xs text-slate-500 hover:text-slate-700 font-medium px-2.5 py-1 rounded-lg bg-white border border-slate-200"
-                            >
-                              Cancel
-                            </button>
-                            <button
-                              onClick={() => deleteEquipment(eq.id)}
-                              className="text-xs text-white font-medium px-2.5 py-1 rounded-lg bg-red-500 hover:bg-red-600"
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        </div>
-                      )}
+                      <div className="flex items-center gap-1.5">
+                        {eq.hasPhotos && (
+                          <span className="text-xs text-slate-400">
+                            <Camera className="w-3 h-3" />
+                          </span>
+                        )}
+                        <button
+                          onClick={() => navigate('/maintenance')}
+                          className="text-slate-300 hover:text-slate-500 transition-colors"
+                        >
+                          <Wrench className="w-3.5 h-3.5" />
+                        </button>
+                        <ChevronRight className="w-3.5 h-3.5 text-slate-300" />
+                      </div>
                     </div>
                   ))}
                 </div>
