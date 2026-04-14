@@ -12,6 +12,7 @@ import {
 import { getYTDSpend, costStore } from '../lib/costStore'
 import { getUpcomingExpiries } from '../lib/expiryStore'
 import { ExpiryWidget } from '../components/ExpiryWidget'
+import { MiniCalendar } from '../components/MiniCalendar'
 import { getNextTaxPayment, getOverdueTaxPayments, getAssessmentsForProperty } from '../lib/taxStore'
 import { getTotalMortgageBalance } from '../lib/mortgageStore'
 import { customTaskStore, getAllCustomTasks } from '../lib/maintenanceStore'
@@ -422,6 +423,12 @@ export function DashboardScreen() {
           </Card>
         </div>
       )}
+
+      {/* ── Mini Calendar ───────────────────────────────────────────────── */}
+      <div>
+        <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Calendar</h2>
+        <MiniCalendar propertyId={activePropertyId} />
+      </div>
 
       {/* ── Quick Actions ────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-5">
