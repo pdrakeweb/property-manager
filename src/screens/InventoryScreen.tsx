@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { cn } from '../utils/cn'
 import { CATEGORIES, EQUIPMENT } from '../data/mockData'
+import { equipmentStore } from '../lib/equipmentStore'
 
 type FilterMode = 'all' | 'documented' | 'missing'
 
@@ -13,14 +14,35 @@ export function InventoryScreen() {
   const navigate    = useNavigate()
   const [filter, setFilter]   = useState<FilterMode>('all')
   const [search, setSearch]   = useState('')
+  const [, forceUpdate]       = useState(0)
 
-  const documented   = CATEGORIES.filter(c => c.recordCount && c.recordCount > 0).length
+  const activePropertyId = localStorage.getItem('active_property_id') ?? 'tannerville'
+
+  // Count from localStorage (accurate offline) with mock data as seed
+  function getCount(cat: typeof CATEGORIES[0]): number {
+    const stored = equipmentStore.getAll().filter(
+      r => r.categoryId === cat.id && r.propertyId === activePropertyId,
+    ).length
+    // Fall back to mock recordCount if no localStorage records yet
+    return stored > 0 ? stored : (cat.recordCount ?? 0)
+  }
+
   const total        = CATEGORIES.length
+  const documented   = CATEGORIES.filter(c => getCount(c) > 0).length
   const pct          = Math.round(documented / total * 100)
 
+  // Refresh counts after capture (storage event from same tab won't fire, but
+  // a simple focus listener keeps things fresh when returning from capture)
+  useState(() => {
+    const refresh = () => forceUpdate(n => n + 1)
+    window.addEventListener('focus', refresh)
+    return () => window.removeEventListener('focus', refresh)
+  })
+
   const visibleCategories = CATEGORIES.filter(cat => {
-    if (filter === 'documented' && !(cat.recordCount && cat.recordCount > 0)) return false
-    if (filter === 'missing'    &&  (cat.recordCount && cat.recordCount > 0)) return false
+    const count = getCount(cat)
+    if (filter === 'documented' && count === 0) return false
+    if (filter === 'missing'    && count >  0)  return false
     if (search) {
       const q = search.toLowerCase()
       return cat.label.toLowerCase().includes(q) || cat.description.toLowerCase().includes(q)
@@ -101,7 +123,8 @@ export function InventoryScreen() {
       {/* Category list */}
       <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm divide-y divide-slate-100">
         {visibleCategories.map(cat => {
-          const isDone = !!(cat.recordCount && cat.recordCount > 0)
+          const count  = getCount(cat)
+          const isDone = count > 0
           const records = EQUIPMENT.filter(e => e.categoryId === cat.id)
 
           return (
@@ -122,7 +145,7 @@ export function InventoryScreen() {
                 <div className="flex items-center gap-2 shrink-0">
                   {isDone ? (
                     <span className="text-xs text-emerald-600 font-medium">
-                      {cat.recordCount} record{(cat.recordCount ?? 0) > 1 ? 's' : ''}
+                      {count} record{count > 1 ? 's' : ''}
                     </span>
                   ) : (
                     <button
