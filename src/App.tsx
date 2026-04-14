@@ -23,6 +23,8 @@ import { MortgageScreen }       from './screens/MortgageScreen'
 import { UtilityScreen }        from './screens/UtilityScreen'
 import { CalendarScreen }      from './screens/CalendarScreen'
 
+import { syncAll, seedTasksForProperty } from './lib/syncEngine'
+import { PROPERTIES } from './data/mockData'
 import {
   isAuthenticated,
   startOAuthFlow,
@@ -230,9 +232,38 @@ function OAuthCallbackHandler({ onDone }: { onDone: (ok: boolean) => void }) {
   )
 }
 
+// ── Startup sync hook ────────────────────────────────────────────────────────
+
+function useStartupSync() {
+  useEffect(() => {
+    // 1. Seed tasks for all properties immediately (no network needed)
+    for (const p of PROPERTIES) seedTasksForProperty(p.id)
+
+    // 2. Async Drive sync — pull remote files into index, push any pending
+    async function run() {
+      try {
+        const { getValidToken } = await import('./auth/oauth')
+        const token = await getValidToken()
+        if (!token) return
+        // Sync all properties in sequence (rate-limit friendly)
+        for (const p of PROPERTIES) {
+          await syncAll(token, p.id)
+        }
+      } catch {
+        // Non-fatal — app works offline from local index
+      }
+    }
+    run()
+  // Run once on mount
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+}
+
 // ── Main app routes ──────────────────────────────────────────────────────────
 
 function MainApp() {
+  useStartupSync()
+
   return (
     <HashRouter>
       <AppShell>
