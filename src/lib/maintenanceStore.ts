@@ -1,89 +1,102 @@
-import { makeStore } from './localStore'
-import { MAINTENANCE_TASKS } from '../data/mockData'
+import { localIndex } from './localIndex'
+import { seedTasksForProperty } from './syncEngine'
 import type { MaintenanceTask } from '../types'
 
-// ── Custom tasks (user-created) ───────────────────────────────────────────────
+// ── Status recalculation ──────────────────────────────────────────────────────
 
-/** Custom tasks created via add-task forms. Persisted under `pm_tasks`. */
-export const customTaskStore = makeStore<MaintenanceTask>('pm_tasks')
-
-// Backwards-compat alias (old key used in DashboardScreen quick-add)
-const _legacyStore = makeStore<MaintenanceTask>('pm_custom_tasks')
-
-export function getAllCustomTasks(): MaintenanceTask[] {
-  return [...customTaskStore.getAll(), ..._legacyStore.getAll()]
-}
-
-export function getCustomTasksForProperty(propertyId: string): MaintenanceTask[] {
-  return getAllCustomTasks().filter(t => t.propertyId === propertyId)
-}
-
-// ── Task overrides (delay/recurrence changes on static tasks) ─────────────────
-
-export interface TaskOverride {
-  id: string      // matches MaintenanceTask.id
-  dueDate?: string
-  recurrence?: string
-}
-
-export const taskOverrideStore = makeStore<TaskOverride>('pm_task_overrides')
-
-export function applyOverride(task: MaintenanceTask): MaintenanceTask {
-  const override = taskOverrideStore.getAll().find(o => o.id === task.id)
-  if (!override) return task
-  const dueDate   = override.dueDate    ?? task.dueDate
-  const recurrence = override.recurrence ?? task.recurrence
-  // Recalculate status from updated dueDate
+function recalcStatus(task: MaintenanceTask): MaintenanceTask['status'] {
+  if (task.status === 'completed') return 'completed'
   const today     = new Date().toISOString().slice(0, 10)
   const sevenDays = new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10)
-  let status = task.status
-  if (status !== 'completed') {
-    if (dueDate < today)      status = 'overdue'
-    else if (dueDate <= sevenDays) status = 'due'
-    else                      status = 'upcoming'
-  }
-  return { ...task, dueDate, recurrence, status }
+  if (task.dueDate < today)      return 'overdue'
+  if (task.dueDate <= sevenDays) return 'due'
+  return 'upcoming'
 }
 
+// ── Core task helpers ─────────────────────────────────────────────────────────
+
+function indexToTask(r: ReturnType<typeof localIndex.getAll>[0]): MaintenanceTask {
+  return r.data as unknown as MaintenanceTask
+}
+
+// ── Unified active-task query ─────────────────────────────────────────────────
+
+/**
+ * Returns all tasks for a property from the local index.
+ * Seeds from MAINTENANCE_TASKS + old stores on first call per property.
+ */
+export function getActiveTasks(propertyId: string): MaintenanceTask[] {
+  seedTasksForProperty(propertyId)
+  return localIndex.getAll('task', propertyId).map(indexToTask)
+}
+
+// ── Task mutations ────────────────────────────────────────────────────────────
+
 export function setTaskDelay(taskId: string, newDueDate: string): void {
-  const existing = taskOverrideStore.getAll().find(o => o.id === taskId)
-  if (existing) {
-    taskOverrideStore.update({ ...existing, dueDate: newDueDate })
-  } else {
-    taskOverrideStore.add({ id: taskId, dueDate: newDueDate })
-  }
-  // Also update custom task if it lives there
-  const ct = customTaskStore.getAll().find(t => t.id === taskId)
-  if (ct) customTaskStore.update({ ...ct, dueDate: newDueDate, status: 'upcoming' })
-  const lt = _legacyStore.getAll().find(t => t.id === taskId)
-  if (lt) _legacyStore.update({ ...lt, dueDate: newDueDate, status: 'upcoming' })
+  const record = localIndex.getById(taskId)
+  if (!record) return
+  const task    = { ...(record.data as unknown as MaintenanceTask), dueDate: newDueDate }
+  task.status   = recalcStatus(task)
+  localIndex.upsert({
+    ...record,
+    data:      task as unknown as Record<string, unknown>,
+    syncState: record.syncState === 'local_only' ? 'local_only' : 'pending_upload',
+  })
 }
 
 export function setTaskRecurrence(taskId: string, recurrence: string): void {
-  const existing = taskOverrideStore.getAll().find(o => o.id === taskId)
-  if (existing) {
-    taskOverrideStore.update({ ...existing, recurrence })
-  } else {
-    taskOverrideStore.add({ id: taskId, recurrence })
-  }
-  const ct = customTaskStore.getAll().find(t => t.id === taskId)
-  if (ct) customTaskStore.update({ ...ct, recurrence })
-  const lt = _legacyStore.getAll().find(t => t.id === taskId)
-  if (lt) _legacyStore.update({ ...lt, recurrence })
+  const record = localIndex.getById(taskId)
+  if (!record) return
+  localIndex.upsert({
+    ...record,
+    data:      { ...(record.data as object), recurrence } as Record<string, unknown>,
+    syncState: record.syncState === 'local_only' ? 'local_only' : 'pending_upload',
+  })
 }
 
-// ── Unified active-task query (used by all screens) ───────────────────────────
+export function markTaskDone(taskId: string): void {
+  const record = localIndex.getById(taskId)
+  if (!record) return
+  const task = { ...(record.data as unknown as MaintenanceTask), status: 'completed' as const }
+  localIndex.upsert({
+    ...record,
+    data:      task as unknown as Record<string, unknown>,
+    syncState: record.syncState === 'local_only' ? 'local_only' : 'pending_upload',
+  })
+}
 
-/**
- * Returns all tasks for a property — static + custom — with delay/recurrence
- * overrides applied and status recalculated from the effective dueDate.
- */
-export function getActiveTasks(propertyId: string): MaintenanceTask[] {
-  const statics = MAINTENANCE_TASKS
-    .filter(t => t.propertyId === propertyId)
-    .map(applyOverride)
-  const customs = getAllCustomTasks()
-    .filter(t => t.propertyId === propertyId)
-    .map(applyOverride)
-  return [...statics, ...customs]
+// ── Add task (writes to local index) ─────────────────────────────────────────
+
+function addToIndex(task: MaintenanceTask): void {
+  localIndex.upsert({
+    id:         task.id,
+    type:       'task',
+    categoryId: task.categoryId,
+    propertyId: task.propertyId,
+    title:      task.title,
+    data:       task as unknown as Record<string, unknown>,
+    syncState:  'pending_upload',
+  })
+}
+
+// ── customTaskStore shim ──────────────────────────────────────────────────────
+// Kept so existing call-sites (MaintenanceScreen AddTaskModal,
+// DashboardScreen QuickAddModal) continue to compile without changes.
+
+export const customTaskStore = {
+  add(task: MaintenanceTask)    { addToIndex(task) },
+  update(task: MaintenanceTask) { addToIndex(task) },
+  getAll(): MaintenanceTask[]   {
+    // Tasks are now in localIndex — callers should use getActiveTasks() instead.
+    // Return empty so we don't double-count; getActiveTasks() is the source of truth.
+    return []
+  },
+}
+
+// ── getAllCustomTasks (used by DashboardScreen) ───────────────────────────────
+// Returns user-created tasks only (syncState = pending_upload) across all properties.
+export function getAllCustomTasks(): MaintenanceTask[] {
+  return localIndex.getPending()
+    .filter(r => r.type === 'task')
+    .map(indexToTask)
 }

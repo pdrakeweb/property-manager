@@ -9,8 +9,7 @@ import { CATEGORIES, PROPERTIES } from '../data/mockData'
 import { getValidToken } from '../auth/oauth'
 import { DriveClient } from '../lib/driveClient'
 import { formatFileStem, formatRecord } from '../lib/markdownFormatter'
-import { enqueue } from '../lib/offlineQueue'
-import { equipmentStore } from '../lib/equipmentStore'
+import { localIndex } from '../lib/localIndex'
 import { useDocumentExtraction, confidenceRing } from '../hooks/useDocumentExtraction'
 import type { Category } from '../types'
 
@@ -241,73 +240,70 @@ export function EquipmentFormScreen() {
   }
   if (aiState !== 'done' && prevAiDone[0]) prevAiDone[1](false)
 
-  // ── Save to Drive ──────────────────────────────────────────────────────────
+  // ── Save: local index first, then Drive ────────────────────────────────────
 
   async function handleSave() {
     setSaveState('saving')
     setSaveError('')
 
-    const capturedAt = new Date()
+    const capturedAt    = new Date()
+    const recordId      = crypto.randomUUID()
     const cat: Category = category ?? {
       id: categoryId, label: categoryId, icon: '', description: '',
       propertyTypes: [], allowMultiple: true, hasAIExtraction: false,
     }
     const fileStem   = formatFileStem(cat, values, capturedAt)
     const mdFilename = `${fileStem}.md`
-    const mdContent  = formatRecord(
-      cat,
-      values,
-      docs.map(d => d.name),
-      capturedAt,
-    )
+    const mdContent  = formatRecord(cat, values, docs.map(d => d.name), capturedAt)
 
+    // 1. Write to local index immediately — visible to all screens right away.
+    //    Includes Drive upload metadata so syncEngine.pushPending() can retry later.
+    localIndex.upsert({
+      id:         recordId,
+      type:       'equipment',
+      categoryId,
+      propertyId: activePropertyId,
+      title:      [values['brand'], values['model'] || values['model_number']].filter(Boolean).join(' ') || cat.label,
+      data: {
+        values,
+        categoryId,
+        propertyId:   activePropertyId,
+        capturedAt:   capturedAt.toISOString(),
+        mdContent,
+        filename:     mdFilename,
+        rootFolderId: activeProperty.driveRootFolderId,
+      },
+      syncState: 'pending_upload',
+    })
+
+    // 2. Attempt Drive upload now (if online)
     try {
       const token = await getValidToken()
 
       if (!token) {
-        // Offline: queue the MD record (photos can't be queued as blobs)
-        enqueue({
-          categoryId,
-          rootFolderId: activeProperty.driveRootFolderId,
-          filename:     mdFilename,
-          mdContent,
-          capturedAt:   capturedAt.toISOString(),
-        })
-        equipmentStore.add({ id: crypto.randomUUID(), categoryId, propertyId: activePropertyId, capturedAt: capturedAt.toISOString() })
         setSaveState('offline')
         return
       }
 
       const folderId = await DriveClient.resolveFolderId(token, categoryId, activeProperty.driveRootFolderId)
-
-      // Upload the markdown record first
-      const mdFile = await DriveClient.uploadFile(token, folderId, mdFilename, mdContent, 'text/markdown')
+      const mdFile   = await DriveClient.uploadFile(token, folderId, mdFilename, mdContent, 'text/markdown')
       setDriveLink(`https://drive.google.com/file/d/${mdFile.id}/view`)
 
-      // Upload each photo/document
+      // Upload photos (best-effort — failures don't block the md record)
       for (const doc of docs) {
-        const ext      = doc.name.split('.').pop() ?? 'jpg'
-        const docName  = `${fileStem}_${doc.name}`
-        const mime     = doc.mimeType || `image/${ext}`
-        await DriveClient.uploadFile(token, folderId, docName, doc.blob, mime)
+        const ext     = doc.name.split('.').pop() ?? 'jpg'
+        const docName = `${fileStem}_${doc.name}`
+        const mime    = doc.mimeType || `image/${ext}`
+        try { await DriveClient.uploadFile(token, folderId, docName, doc.blob, mime) } catch { /* non-fatal */ }
       }
 
-      equipmentStore.add({ id: crypto.randomUUID(), categoryId, propertyId: activePropertyId, capturedAt: capturedAt.toISOString() })
+      localIndex.markSynced(recordId, mdFile.id, new Date().toISOString())
       setSaveState('saved')
-
-      // Navigate back after 2s
       setTimeout(() => navigate('/capture'), 2000)
 
     } catch (err) {
-      // Upload failed — queue the MD for later
-      enqueue({
-        categoryId,
-        rootFolderId: activeProperty.driveRootFolderId,
-        filename:     mdFilename,
-        mdContent,
-        capturedAt:   capturedAt.toISOString(),
-      })
-      equipmentStore.add({ id: crypto.randomUUID(), categoryId, propertyId: activePropertyId, capturedAt: capturedAt.toISOString() })
+      // Drive failed — record stays pending_upload in local index.
+      // syncEngine.pushPending() will retry it on the next sync.
       setSaveState('offline')
       setSaveError(String(err))
     }
@@ -323,7 +319,7 @@ export function EquipmentFormScreen() {
         </div>
         <h2 className="text-xl font-bold text-slate-900 mb-2">Saved to Drive</h2>
         <p className="text-sm text-slate-500 mb-1">
-          Record uploaded to {category?.label ?? categoryId} folder
+          Saved locally and uploaded to {category?.label ?? categoryId} folder
         </p>
         <p className="text-xs text-slate-400 mb-4">
           {category?.icon} {values['brand'] || 'Equipment'} {values['model'] || ''} · {new Date().toLocaleDateString()}
@@ -357,8 +353,8 @@ export function EquipmentFormScreen() {
         <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mb-4">
           <WifiOff className="w-8 h-8 text-amber-600" />
         </div>
-        <h2 className="text-xl font-bold text-slate-900 mb-2">Saved Offline</h2>
-        <p className="text-sm text-slate-500 mb-1">Record queued — will upload when connected.</p>
+        <h2 className="text-xl font-bold text-slate-900 mb-2">Saved Locally</h2>
+        <p className="text-sm text-slate-500 mb-1">Record saved — will sync to Drive when connected.</p>
         {saveError && <p className="text-xs text-slate-400 mb-4 max-w-xs">{saveError}</p>}
         <div className="flex gap-3 mt-4">
           <button onClick={() => navigate('/capture')} className="px-4 py-2 rounded-xl bg-sky-600 text-white text-sm font-medium hover:bg-sky-700 transition-colors">

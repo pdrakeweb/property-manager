@@ -9,7 +9,8 @@ import {
 import { cn } from '../../utils/cn'
 import { PROPERTIES } from '../../data/mockData'
 import { useAppStore } from '../../store/AppStoreContext'
-import { getQueueCount } from '../../lib/offlineQueue'
+import { localIndex } from '../../lib/localIndex'
+import type { SyncStats } from '../../lib/localIndex'
 
 const NAV_ITEMS = [
   { to: '/',           icon: LayoutDashboard, label: 'Dashboard',   mobileShow: true  },
@@ -127,26 +128,42 @@ function MobilePropertySwitcher() {
   )
 }
 
-function OfflinePill() {
+function SyncPill() {
   const navigate = useNavigate()
-  const [count, setCount] = useState(getQueueCount)
+  const [stats, setStats] = useState<SyncStats>(() => localIndex.getSyncStats())
 
   useEffect(() => {
-    const id = setInterval(() => setCount(getQueueCount()), 5000)
-    return () => clearInterval(id)
+    const refresh = () => setStats(localIndex.getSyncStats())
+    const id = setInterval(refresh, 30_000)
+    window.addEventListener('focus', refresh)
+    return () => { clearInterval(id); window.removeEventListener('focus', refresh) }
   }, [])
 
-  if (count === 0) return null
+  if (stats.conflicts > 0) {
+    return (
+      <button
+        onClick={() => navigate('/settings')}
+        className="flex items-center gap-1 bg-red-500 hover:bg-red-600 text-white text-xs font-semibold rounded-full px-2.5 py-1 transition-colors shrink-0"
+      >
+        <RefreshCw className="w-3 h-3" />
+        {stats.conflicts} conflict{stats.conflicts > 1 ? 's' : ''}
+      </button>
+    )
+  }
 
-  return (
-    <button
-      onClick={() => navigate('/settings')}
-      className="flex items-center gap-1 bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold rounded-full px-2.5 py-1 transition-colors shrink-0"
-    >
-      <RefreshCw className="w-3 h-3" />
-      {count} pending
-    </button>
-  )
+  if (stats.pending > 0) {
+    return (
+      <button
+        onClick={() => navigate('/settings')}
+        className="flex items-center gap-1 bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold rounded-full px-2.5 py-1 transition-colors shrink-0"
+      >
+        <RefreshCw className="w-3 h-3" />
+        {stats.pending} pending
+      </button>
+    )
+  }
+
+  return null
 }
 
 interface AppShellProps {
@@ -215,7 +232,7 @@ export function AppShell({ children }: AppShellProps) {
             Settings
           </NavLink>
           <div className="px-3">
-            <OfflinePill />
+            <SyncPill />
           </div>
         </div>
       </aside>
@@ -232,7 +249,7 @@ export function AppShell({ children }: AppShellProps) {
             </span>
           </div>
           <div className="flex items-center gap-2">
-            <OfflinePill />
+            <SyncPill />
             <MobilePropertySwitcher />
           </div>
         </div>

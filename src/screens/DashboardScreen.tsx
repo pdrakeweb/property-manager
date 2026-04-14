@@ -7,7 +7,7 @@ import {
 } from 'lucide-react'
 import { cn } from '../utils/cn'
 import {
-  MAINTENANCE_TASKS, CAPITAL_ITEMS, HA_STATUS, CATEGORIES, PROPERTIES,
+  CAPITAL_ITEMS, HA_STATUS, CATEGORIES, PROPERTIES,
 } from '../data/mockData'
 import { getYTDSpend, costStore } from '../lib/costStore'
 import { getUpcomingExpiries } from '../lib/expiryStore'
@@ -15,7 +15,8 @@ import { ExpiryWidget } from '../components/ExpiryWidget'
 import { MiniCalendar } from '../components/MiniCalendar'
 import { getNextTaxPayment, getOverdueTaxPayments, getAssessmentsForProperty } from '../lib/taxStore'
 import { getTotalMortgageBalance } from '../lib/mortgageStore'
-import { customTaskStore, getAllCustomTasks } from '../lib/maintenanceStore'
+import { customTaskStore, getActiveTasks } from '../lib/maintenanceStore'
+import { localIndex } from '../lib/localIndex'
 import { useAppStore } from '../store/AppStoreContext'
 import type { Priority, HAStatus, MaintenanceTask } from '../types'
 
@@ -194,9 +195,8 @@ export function DashboardScreen() {
   const today       = new Date().toISOString().slice(0, 10)
   const in30Days    = new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10)
 
-  // Combine static tasks + custom tasks
-  const customTasks = getAllCustomTasks()
-  const allTasks    = [...MAINTENANCE_TASKS, ...customTasks]
+  // All tasks across all properties from local index (seeds on first call per property)
+  const allTasks = PROPERTIES.flatMap(p => getActiveTasks(p.id))
 
   // ── Cross-property aggregates ──────────────────────────────────────────────
 
@@ -206,7 +206,13 @@ export function DashboardScreen() {
   // Property health data
   const propHealth = PROPERTIES.map(p => {
     const overdueCount = allOverdue.filter(t => t.propertyId === p.id).length
-    const docPct       = p.stats.total > 0 ? Math.round(p.stats.documented / p.stats.total * 100) : 0
+    // Count documented categories from local index (accurate offline)
+    const cats         = CATEGORIES.filter(c => c.propertyTypes.includes(p.type))
+    const docCount     = cats.filter(c => localIndex.getCount('equipment', p.id) > 0
+      ? localIndex.getAll('equipment', p.id).some(r => r.categoryId === c.id)
+      : (c.recordCount ?? 0) > 0
+    ).length
+    const docPct       = cats.length > 0 ? Math.round(docCount / cats.length * 100) : 0
     const lastActivity = costStore.getAll()
       .filter(e => e.propertyId === p.id)
       .sort((a, b) => b.completionDate.localeCompare(a.completionDate))[0]?.completionDate ?? null
@@ -231,7 +237,11 @@ export function DashboardScreen() {
   const cats      = CATEGORIES.filter(c => c.propertyTypes.includes(activeProperty.type))
   const dueTasks     = tasks.filter(t => t.status === 'due' || t.status === 'overdue')
   const topCapital   = items.filter(c => c.priority === 'critical' || c.priority === 'high')
-  const documented   = cats.reduce((n, c) => n + (c.recordCount && c.recordCount > 0 ? 1 : 0), 0)
+  const hasIndexed   = localIndex.getCount('equipment', activePropertyId) > 0
+  const documented   = cats.filter(c => hasIndexed
+    ? localIndex.getAll('equipment', activePropertyId).some(r => r.categoryId === c.id)
+    : (c.recordCount ?? 0) > 0
+  ).length
   const total        = cats.length
 
   const currentHour = new Date().getHours()

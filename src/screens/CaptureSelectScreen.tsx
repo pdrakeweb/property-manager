@@ -1,95 +1,24 @@
-import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { CheckCircle2, ChevronRight, Sparkles, Loader2 } from 'lucide-react'
-import { CATEGORIES } from '../data/categories'
-import { PROPERTIES } from '../data/mockData'
+import { CheckCircle2, ChevronRight, Sparkles } from 'lucide-react'
+import { CATEGORIES } from '../data/mockData'
 import { useAppStore } from '../store/AppStoreContext'
-import { getValidToken } from '../auth/oauth'
-import { DriveClient } from '../lib/driveClient'
-
-// ── Drive counts cache (5-minute TTL) ────────────────────────────────────────
-
-const COUNTS_CACHE_KEY = 'drive_counts_cache'
-const COUNTS_CACHE_TTL = 5 * 60 * 1000
-
-interface DriveCountsCache {
-  counts: Record<string, number>
-  propertyId: string
-  savedAt: number
-}
-
-function loadCountsCache(propertyId: string): Record<string, number> | null {
-  try {
-    const raw = localStorage.getItem(COUNTS_CACHE_KEY)
-    if (!raw) return null
-    const c = JSON.parse(raw) as DriveCountsCache
-    if (c.propertyId !== propertyId) return null
-    if (Date.now() - c.savedAt > COUNTS_CACHE_TTL) return null
-    return c.counts
-  } catch { return null }
-}
-
-function saveCountsCache(propertyId: string, counts: Record<string, number>): void {
-  const c: DriveCountsCache = { counts, propertyId, savedAt: Date.now() }
-  localStorage.setItem(COUNTS_CACHE_KEY, JSON.stringify(c))
-}
-
-// ── Component ─────────────────────────────────────────────────────────────────
+import { localIndex } from '../lib/localIndex'
+import type { Category } from '../types'
 
 export function CaptureSelectScreen() {
   const navigate = useNavigate()
-  const { driveFileCounts, driveCountsLoaded, setDriveFileCount, activePropertyId } = useAppStore()
+  const { activePropertyId } = useAppStore()
 
-  const activeProperty = PROPERTIES.find(p => p.id === activePropertyId) ?? PROPERTIES[0]
-
-  // Load Drive file counts for any category not yet fetched
-  useEffect(() => {
-    const rootFolderId = activeProperty.driveRootFolderId
-    if (!rootFolderId) return
-
-    async function loadCounts() {
-      // Check cache first
-      const cached = loadCountsCache(rootFolderId)
-      if (cached) {
-        for (const [catId, count] of Object.entries(cached)) {
-          setDriveFileCount(catId, count)
-        }
-        return
-      }
-
-      const token = await getValidToken()
-      if (!token) return
-
-      const freshCounts: Record<string, number> = {}
-      for (const cat of CATEGORIES) {
-        if (driveCountsLoaded[cat.id]) {
-          freshCounts[cat.id] = driveFileCounts[cat.id] ?? 0
-          continue
-        }
-        try {
-          const folderId = await DriveClient.resolveFolderId(token, cat.id, rootFolderId)
-          const files    = await DriveClient.listFiles(token, folderId)
-          freshCounts[cat.id] = files.length
-          setDriveFileCount(cat.id, files.length)
-        } catch {
-          freshCounts[cat.id] = 0
-          setDriveFileCount(cat.id, 0)
-        }
-      }
-      saveCountsCache(rootFolderId, freshCounts)
+  function getCount(cat: Category): number {
+    // Local index is the source of truth — works offline, no Drive polling needed.
+    // Fall back to mock seed value if index hasn't been populated yet.
+    const indexed = localIndex.getCount('equipment', activePropertyId)
+    if (indexed > 0) {
+      // Count per-category from index
+      return localIndex.getAll('equipment', activePropertyId)
+        .filter(r => r.categoryId === cat.id).length
     }
-
-    loadCounts()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activePropertyId])
-
-  function getCount(cat: typeof CATEGORIES[number]): number {
-    if (driveCountsLoaded[cat.id]) return driveFileCounts[cat.id] ?? 0
     return cat.recordCount ?? 0
-  }
-
-  function isLoading(cat: typeof CATEGORIES[number]): boolean {
-    return !driveCountsLoaded[cat.id]
   }
 
   const withRecords    = CATEGORIES.filter(c => getCount(c) > 0)
@@ -101,7 +30,7 @@ export function CaptureSelectScreen() {
       <div>
         <h1 className="text-xl font-bold text-slate-900">New Record</h1>
         <p className="text-sm text-slate-500 mt-0.5">
-          Select what you want to capture. Counts reflect your Drive — AI extraction available where shown.
+          Select what you want to capture. Counts are from your local index — AI extraction available where shown.
         </p>
       </div>
 
@@ -131,10 +60,7 @@ export function CaptureSelectScreen() {
                 </div>
                 <p className="text-xs text-slate-500 mt-0.5 truncate">{cat.description}</p>
               </div>
-              {isLoading(cat)
-                ? <Loader2 className="w-3.5 h-3.5 text-slate-300 animate-spin shrink-0" />
-                : <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-slate-500 shrink-0 transition-colors" />
-              }
+              <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-slate-500 shrink-0 transition-colors" />
             </button>
           ))}
         </div>
@@ -166,10 +92,7 @@ export function CaptureSelectScreen() {
                     )}
                   </div>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    {isLoading(cat)
-                      ? <span className="flex items-center gap-1"><Loader2 className="w-2.5 h-2.5 animate-spin" /> Loading from Drive…</span>
-                      : `${getCount(cat)} file${getCount(cat) !== 1 ? 's' : ''} in Drive · ${cat.description}`
-                    }
+                    {`${getCount(cat)} record${getCount(cat) !== 1 ? 's' : ''} · ${cat.description}`}
                   </p>
                 </div>
                 <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-slate-500 shrink-0 transition-colors" />
