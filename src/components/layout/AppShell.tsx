@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Camera, Wrench, BarChart3,
   MessageSquare, ClipboardList, Settings, ChevronDown,
   Building2, TreePine, Users, Droplets, Receipt, Home, Zap, CalendarDays,
-  RefreshCw, Shield, FileCheck,
+  RefreshCw, Shield, FileCheck, CheckSquare,
 } from 'lucide-react'
 import { cn } from '../../utils/cn'
 import { PROPERTIES } from '../../data/mockData'
@@ -17,6 +17,7 @@ const NAV_ITEMS = [
   { to: '/capture',    icon: Camera,          label: 'Capture',     mobileShow: true  },
   { to: '/maintenance',icon: Wrench,          label: 'Maintenance', mobileShow: true  },
   { to: '/calendar',   icon: CalendarDays,    label: 'Calendar',    mobileShow: true  },
+  { to: '/checklists', icon: CheckSquare,     label: 'Checklists',  mobileShow: true  },
   { to: '/budget',     icon: BarChart3,       label: 'Budget',      mobileShow: false },
   { to: '/advisor',    icon: MessageSquare,   label: 'Ask AI',      mobileShow: true  },
   { to: '/inventory',  icon: ClipboardList,   label: 'Inventory',   mobileShow: false },

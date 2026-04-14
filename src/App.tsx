@@ -24,6 +24,8 @@ import { UtilityScreen }        from './screens/UtilityScreen'
 import { CalendarScreen }      from './screens/CalendarScreen'
 import { InsuranceScreen }     from './screens/InsuranceScreen'
 import { PermitsScreen }       from './screens/PermitsScreen'
+import { ChecklistScreen }     from './screens/ChecklistScreen'
+import { ChecklistRunScreen }  from './screens/ChecklistRunScreen'
 
 import { syncAll, seedTasksForProperty } from './lib/syncEngine'
 import { PROPERTIES } from './data/mockData'
@@ -291,6 +293,8 @@ function MainApp() {
           <Route path="/calendar"            element={<CalendarScreen />}      />
           <Route path="/insurance"           element={<InsuranceScreen />}     />
           <Route path="/permits"             element={<PermitsScreen />}       />
+          <Route path="/checklists"          element={<ChecklistScreen />}     />
+          <Route path="/checklists/:runId"   element={<ChecklistRunScreen />}  />
           <Route path="*"                    element={<Navigate to="/" />}     />
         </Routes>
       </AppShell>
