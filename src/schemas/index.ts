@@ -14,6 +14,15 @@ export interface Vendor {
   lastUsed?: string
 }
 
+export interface EventPhoto {
+  id: string
+  role: 'before' | 'after' | 'general'
+  /** Base-64 data URL stored locally until Drive upload completes */
+  localDataUrl: string
+  driveFileId?: string
+  caption?: string
+}
+
 export interface CompletedEvent {
   id: string
   taskId: string
@@ -28,6 +37,7 @@ export interface CompletedEvent {
   contractor?: string
   laborWarrantyExpiry?: string
   notes?: string
+  photos?: EventPhoto[]
 }
 
 export interface DocExpiry {

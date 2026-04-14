@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import {
   CheckCircle2, Clock, AlertTriangle, Zap, ChevronDown,
-  ChevronUp, Calendar, DollarSign, User, RepeatIcon, X,
+  ChevronUp, Calendar, DollarSign, User, RepeatIcon, X, Camera,
+  ImageIcon,
 } from 'lucide-react'
 import { cn } from '../utils/cn'
 import { MAINTENANCE_TASKS, SERVICE_RECORDS } from '../data/mockData'
@@ -9,6 +10,7 @@ import { costStore, getYTDSpend } from '../lib/costStore'
 import { VendorSelector } from '../components/VendorSelector'
 import { useAppStore } from '../store/AppStoreContext'
 import type { MaintenanceTask, Priority } from '../types'
+import type { EventPhoto } from '../schemas'
 
 type Tab = 'due' | 'upcoming' | 'history'
 
@@ -37,6 +39,26 @@ const PAYMENT_METHODS = [
   { value: 'ach',   label: 'ACH/Bank Transfer'},
 ] as const
 
+// ── Photo role chip colors ────────────────────────────────────────────────────
+
+function photoRoleStyle(role: EventPhoto['role']) {
+  return {
+    before:  'bg-sky-600 text-white border-sky-600',
+    after:   'bg-emerald-600 text-white border-emerald-600',
+    general: 'bg-slate-500 text-white border-slate-500',
+  }[role]
+}
+
+function photoRoleBadge(role: EventPhoto['role']) {
+  return {
+    before:  'bg-sky-600/80 text-white',
+    after:   'bg-emerald-600/80 text-white',
+    general: 'bg-slate-600/70 text-white',
+  }[role]
+}
+
+// ── Mark Done Modal ───────────────────────────────────────────────────────────
+
 interface DoneModalProps {
   task: MaintenanceTask
   propertyId: string
@@ -53,6 +75,31 @@ function DoneModal({ task, propertyId, onConfirm, onClose }: DoneModalProps) {
   const [doneContractor,      setDoneContractor]      = useState(task.contractor ?? '')
   const [laborWarrantyExpiry, setLaborWarrantyExpiry] = useState('')
   const [doneNotes,           setDoneNotes]           = useState('')
+  const [photos,              setPhotos]              = useState<EventPhoto[]>([])
+  const [photoRole,           setPhotoRole]           = useState<EventPhoto['role']>('after')
+
+  const photoInputRef = useRef<HTMLInputElement>(null)
+
+  function handlePhotoFiles(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? [])
+    files.forEach(file => {
+      const reader = new FileReader()
+      reader.onload = ev => {
+        setPhotos(prev => [...prev, {
+          id: crypto.randomUUID(),
+          role: photoRole,
+          localDataUrl: ev.target!.result as string,
+        }])
+      }
+      reader.readAsDataURL(file)
+    })
+    // Reset so same file can be re-selected
+    e.target.value = ''
+  }
+
+  function removePhoto(id: string) {
+    setPhotos(prev => prev.filter(p => p.id !== id))
+  }
 
   function handleConfirm() {
     costStore.add({
@@ -69,9 +116,12 @@ function DoneModal({ task, propertyId, onConfirm, onClose }: DoneModalProps) {
       contractor: doneContractor || undefined,
       laborWarrantyExpiry: laborWarrantyExpiry || undefined,
       notes: doneNotes || undefined,
+      photos: photos.length > 0 ? photos : undefined,
     })
     onConfirm()
   }
+
+  const inp = 'w-full text-sm border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-sky-300'
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 px-4 pb-4">
@@ -90,103 +140,127 @@ function DoneModal({ task, propertyId, onConfirm, onClose }: DoneModalProps) {
         <div className="space-y-3">
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">Completion Date</label>
-            <input
-              type="date"
-              value={completionDate}
-              onChange={e => setCompletionDate(e.target.value)}
-              className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-sky-300"
-            />
+            <input type="date" value={completionDate} onChange={e => setCompletionDate(e.target.value)} className={inp} />
           </div>
 
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">Actual Cost ($)</label>
             <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={actualCost}
-              onChange={e => setActualCost(e.target.value)}
-              placeholder="0.00"
-              className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-sky-300"
+              type="number" min="0" step="0.01"
+              value={actualCost} onChange={e => setActualCost(e.target.value)}
+              placeholder="0.00" className={inp}
             />
           </div>
 
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">Contractor / Company</label>
             <input
-              value={doneContractor}
-              onChange={e => setDoneContractor(e.target.value)}
-              placeholder="Name or company"
-              className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-sky-300"
+              value={doneContractor} onChange={e => setDoneContractor(e.target.value)}
+              placeholder="Name or company" className={inp}
             />
           </div>
 
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">Payment Method</label>
-            <select
-              value={paymentMethod}
-              onChange={e => setPaymentMethod(e.target.value)}
-              className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-sky-300 bg-white"
-            >
+            <select value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)} className={cn(inp, 'bg-white')}>
               <option value="">Select…</option>
-              {PAYMENT_METHODS.map(m => (
-                <option key={m.value} value={m.value}>{m.label}</option>
-              ))}
+              {PAYMENT_METHODS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
             </select>
           </div>
 
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">Invoice / Reference #</label>
-            <input
-              value={invoiceRef}
-              onChange={e => setInvoiceRef(e.target.value)}
-              placeholder="INV-2024-0042"
-              className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-sky-300"
-            />
+            <input value={invoiceRef} onChange={e => setInvoiceRef(e.target.value)} placeholder="INV-2024-0042" className={inp} />
           </div>
 
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">Vendor (from directory)</label>
-            <VendorSelector
-              value={selectedVendorId}
-              onChange={setSelectedVendorId}
-              propertyId={propertyId}
-            />
+            <VendorSelector value={selectedVendorId} onChange={setSelectedVendorId} propertyId={propertyId} />
           </div>
 
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">Labor Warranty Expires</label>
-            <input
-              type="date"
-              value={laborWarrantyExpiry}
-              onChange={e => setLaborWarrantyExpiry(e.target.value)}
-              className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-sky-300"
-            />
+            <input type="date" value={laborWarrantyExpiry} onChange={e => setLaborWarrantyExpiry(e.target.value)} className={inp} />
           </div>
 
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">Notes</label>
             <textarea
-              value={doneNotes}
-              onChange={e => setDoneNotes(e.target.value)}
-              rows={2}
-              placeholder="Any notes about the work done…"
-              className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-sky-300 resize-none"
+              value={doneNotes} onChange={e => setDoneNotes(e.target.value)}
+              rows={2} placeholder="Any notes about the work done…"
+              className={cn(inp, 'resize-none')}
             />
+          </div>
+
+          {/* ── Photos ───────────────────────────────────────────────────── */}
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1.5">Photos</label>
+
+            {/* Role selector */}
+            <div className="flex gap-1 mb-2">
+              {(['before', 'after', 'general'] as const).map(role => (
+                <button
+                  key={role}
+                  type="button"
+                  onClick={() => setPhotoRole(role)}
+                  className={cn(
+                    'flex-1 py-1.5 text-xs font-medium rounded-lg border capitalize transition-colors',
+                    photoRole === role
+                      ? photoRoleStyle(role)
+                      : 'text-slate-600 border-slate-200 hover:border-sky-300 bg-white',
+                  )}
+                >
+                  {role}
+                </button>
+              ))}
+            </div>
+
+            {/* Capture button */}
+            <input
+              ref={photoInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              className="hidden"
+              onChange={handlePhotoFiles}
+            />
+            <button
+              type="button"
+              onClick={() => photoInputRef.current?.click()}
+              className="w-full py-2.5 border border-dashed border-slate-300 rounded-xl text-sm text-slate-500 hover:border-sky-300 hover:text-sky-600 hover:bg-sky-50 transition-colors flex items-center justify-center gap-2"
+            >
+              <Camera className="w-4 h-4" />
+              Add {photoRole} photo
+            </button>
+
+            {/* Thumbnails */}
+            {photos.length > 0 && (
+              <div className="grid grid-cols-3 gap-2 mt-2">
+                {photos.map(p => (
+                  <div key={p.id} className="relative rounded-xl overflow-hidden aspect-square">
+                    <img src={p.localDataUrl} alt={p.role} className="w-full h-full object-cover" />
+                    <div className={cn('absolute bottom-0 inset-x-0 text-[10px] font-semibold text-center py-0.5 capitalize', photoRoleBadge(p.role))}>
+                      {p.role}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removePhoto(p.id)}
+                      className="absolute top-1 right-1 w-5 h-5 bg-black/60 text-white rounded-full flex items-center justify-center hover:bg-black/80"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
         <div className="flex gap-3 pt-2">
-          <button
-            onClick={onClose}
-            className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl px-4 py-2.5 text-sm font-medium"
-          >
+          <button onClick={onClose} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl px-4 py-2.5 text-sm font-medium">
             Cancel
           </button>
-          <button
-            onClick={handleConfirm}
-            className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl px-4 py-2.5 text-sm font-medium"
-          >
+          <button onClick={handleConfirm} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl px-4 py-2.5 text-sm font-medium">
             Mark Complete
           </button>
         </div>
@@ -194,6 +268,126 @@ function DoneModal({ task, propertyId, onConfirm, onClose }: DoneModalProps) {
     </div>
   )
 }
+
+// ── Completed Event History Card ──────────────────────────────────────────────
+
+function EventHistoryCard({ event }: { event: ReturnType<typeof costStore.getAll>[number] }) {
+  const [expanded, setExpanded] = useState(false)
+  const beforePhotos  = event.photos?.filter(p => p.role === 'before')  ?? []
+  const afterPhotos   = event.photos?.filter(p => p.role === 'after')   ?? []
+  const generalPhotos = event.photos?.filter(p => p.role === 'general') ?? []
+  const hasPhotos = (event.photos?.length ?? 0) > 0
+
+  return (
+    <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+      <div className="px-4 py-4">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs bg-slate-100 text-slate-600 rounded-md px-2 py-0.5">
+                {event.categoryId.replace(/_/g, ' ')}
+              </span>
+              <span className="text-xs text-slate-400">
+                {new Date(event.completionDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+              </span>
+              {hasPhotos && (
+                <span className="flex items-center gap-0.5 text-xs text-sky-600">
+                  <ImageIcon className="w-3 h-3" />
+                  {event.photos!.length}
+                </span>
+              )}
+            </div>
+            <p className="text-sm font-semibold text-slate-800 mt-1.5">{event.taskTitle}</p>
+            {event.contractor && (
+              <p className="text-xs text-slate-400 mt-0.5">by {event.contractor}</p>
+            )}
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {event.cost !== undefined && (
+              <span className="text-sm font-semibold text-slate-700">${event.cost.toLocaleString()}</span>
+            )}
+            {hasPhotos && (
+              <button
+                onClick={() => setExpanded(e => !e)}
+                className="text-slate-400 hover:text-slate-600"
+              >
+                {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              </button>
+            )}
+          </div>
+        </div>
+        {event.notes && (
+          <p className="text-xs text-slate-500 mt-2 leading-relaxed">{event.notes}</p>
+        )}
+      </div>
+
+      {/* Before / After photo comparison */}
+      {expanded && hasPhotos && (
+        <div className="border-t border-slate-100 px-4 py-4 space-y-4">
+
+          {/* Before + After side-by-side */}
+          {(beforePhotos.length > 0 || afterPhotos.length > 0) && (
+            <div>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Before / After</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <p className="text-[11px] font-semibold text-sky-600 mb-1.5 uppercase tracking-wide">Before</p>
+                  {beforePhotos.length > 0 ? (
+                    <div className="space-y-2">
+                      {beforePhotos.map(p => (
+                        <div key={p.id} className="rounded-xl overflow-hidden border border-sky-200">
+                          <img src={p.localDataUrl} alt="Before" className="w-full object-cover" />
+                          {p.caption && <p className="text-[10px] text-slate-500 px-2 py-1">{p.caption}</p>}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="aspect-square rounded-xl bg-slate-100 flex items-center justify-center text-slate-300">
+                      <ImageIcon className="w-6 h-6" />
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <p className="text-[11px] font-semibold text-emerald-600 mb-1.5 uppercase tracking-wide">After</p>
+                  {afterPhotos.length > 0 ? (
+                    <div className="space-y-2">
+                      {afterPhotos.map(p => (
+                        <div key={p.id} className="rounded-xl overflow-hidden border border-emerald-200">
+                          <img src={p.localDataUrl} alt="After" className="w-full object-cover" />
+                          {p.caption && <p className="text-[10px] text-slate-500 px-2 py-1">{p.caption}</p>}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="aspect-square rounded-xl bg-slate-100 flex items-center justify-center text-slate-300">
+                      <ImageIcon className="w-6 h-6" />
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* General photos gallery */}
+          {generalPhotos.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">General</p>
+              <div className="grid grid-cols-3 gap-2">
+                {generalPhotos.map(p => (
+                  <div key={p.id} className="rounded-xl overflow-hidden border border-slate-200">
+                    <img src={p.localDataUrl} alt="General" className="w-full aspect-square object-cover" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Task Card ─────────────────────────────────────────────────────────────────
 
 function TaskCard({ task, propertyId }: { task: MaintenanceTask; propertyId: string }) {
   const [expanded,      setExpanded]      = useState(false)
@@ -231,12 +425,8 @@ function TaskCard({ task, propertyId }: { task: MaintenanceTask; propertyId: str
               </div>
 
               <div className="flex flex-wrap items-center gap-2 mt-2">
-                <span className="text-xs text-slate-500 bg-slate-100 rounded-md px-2 py-0.5">
-                  {task.systemLabel}
-                </span>
-                <span className={cn('text-xs font-medium rounded-md px-2 py-0.5', pconf.bg, pconf.text)}>
-                  {pconf.label}
-                </span>
+                <span className="text-xs text-slate-500 bg-slate-100 rounded-md px-2 py-0.5">{task.systemLabel}</span>
+                <span className={cn('text-xs font-medium rounded-md px-2 py-0.5', pconf.bg, pconf.text)}>{pconf.label}</span>
                 <span className={cn('text-xs font-medium border rounded-full px-2 py-0.5 flex items-center gap-1', src.color)}>
                   <SrcIcon className="w-2.5 h-2.5" />
                   {src.label}
@@ -264,17 +454,13 @@ function TaskCard({ task, propertyId }: { task: MaintenanceTask; propertyId: str
             </div>
           </div>
 
-          {expanded && (
+          {expanded && (task.contractor || task.notes) && (
             <div className="mt-3 pt-3 border-t border-slate-100 space-y-2 ml-5">
               {task.contractor && (
-                <p className="text-xs text-slate-600">
-                  <span className="font-medium">Contractor:</span> {task.contractor}
-                </p>
+                <p className="text-xs text-slate-600"><span className="font-medium">Contractor:</span> {task.contractor}</p>
               )}
               {task.notes && (
-                <p className="text-xs text-slate-600">
-                  <span className="font-medium">Notes:</span> {task.notes}
-                </p>
+                <p className="text-xs text-slate-600"><span className="font-medium">Notes:</span> {task.notes}</p>
               )}
             </div>
           )}
@@ -289,13 +475,9 @@ function TaskCard({ task, propertyId }: { task: MaintenanceTask; propertyId: str
             Mark Done
           </button>
           <div className="w-px bg-slate-100" />
-          <button className="flex-1 py-3 text-sm font-medium text-slate-500 hover:bg-slate-50 transition-colors">
-            Delay
-          </button>
+          <button className="flex-1 py-3 text-sm font-medium text-slate-500 hover:bg-slate-50 transition-colors">Delay</button>
           <div className="w-px bg-slate-100" />
-          <button className="flex-1 py-3 text-sm font-medium text-slate-500 hover:bg-slate-50 transition-colors">
-            Schedule
-          </button>
+          <button className="flex-1 py-3 text-sm font-medium text-slate-500 hover:bg-slate-50 transition-colors">Schedule</button>
         </div>
       </div>
 
@@ -311,9 +493,13 @@ function TaskCard({ task, propertyId }: { task: MaintenanceTask; propertyId: str
   )
 }
 
+// ── Main Screen ───────────────────────────────────────────────────────────────
+
 export function MaintenanceScreen() {
   const { activePropertyId } = useAppStore()
-  const [tab, setTab] = useState<Tab>('due')
+  const [tab,  setTab]  = useState<Tab>('due')
+  const [tick, setTick] = useState(0)
+  void tick
 
   const ytdSpend = getYTDSpend(activePropertyId)
 
@@ -325,10 +511,18 @@ export function MaintenanceScreen() {
   const upcomingTasks = upcoming
   const totalCostDue  = dueTasks.reduce((s, t) => s + (t.estimatedCost ?? 0), 0)
 
+  // Completed events from store (most recent first)
+  const completedEvents = costStore
+    .getAll()
+    .filter(e => e.propertyId === activePropertyId)
+    .sort((a, b) => b.completionDate.localeCompare(a.completionDate))
+
+  const historyCount = SERVICE_RECORDS.length + completedEvents.length
+
   const tabs: { id: Tab; label: string; count: number }[] = [
-    { id: 'due',      label: 'Due Now',  count: dueTasks.length       },
-    { id: 'upcoming', label: 'Upcoming', count: upcomingTasks.length   },
-    { id: 'history',  label: 'History',  count: SERVICE_RECORDS.length },
+    { id: 'due',      label: 'Due Now',  count: dueTasks.length  },
+    { id: 'upcoming', label: 'Upcoming', count: upcomingTasks.length },
+    { id: 'history',  label: 'History',  count: historyCount     },
   ]
 
   return (
@@ -371,9 +565,7 @@ export function MaintenanceScreen() {
             onClick={() => setTab(t.id)}
             className={cn(
               'flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-sm font-medium transition-colors',
-              tab === t.id
-                ? 'bg-white text-slate-900 shadow-sm'
-                : 'text-slate-500 hover:text-slate-700',
+              tab === t.id ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700',
             )}
           >
             {t.label}
@@ -417,31 +609,61 @@ export function MaintenanceScreen() {
 
       {tab === 'history' && (
         <div className="space-y-3">
-          {SERVICE_RECORDS.map(record => (
-            <div key={record.id} className="bg-white border border-slate-200 rounded-2xl px-4 py-4 shadow-sm">
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs bg-slate-100 text-slate-600 rounded-md px-2 py-0.5">
-                      {record.systemLabel}
-                    </span>
-                    <span className="text-xs text-slate-400">
-                      {new Date(record.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                    </span>
+
+          {/* Completed events with before/after photos */}
+          {completedEvents.length > 0 && (
+            <>
+              <p className="text-xs font-semibold uppercase text-emerald-600 tracking-wide">
+                Completed ({completedEvents.length})
+              </p>
+              {completedEvents.map(event => (
+                <EventHistoryCard
+                  key={event.id}
+                  event={event}
+                />
+              ))}
+              {/* Force re-render when events are added */}
+              {void setTick}
+            </>
+          )}
+
+          {/* Legacy service records */}
+          {SERVICE_RECORDS.length > 0 && (
+            <>
+              <p className="text-xs font-semibold uppercase text-slate-400 tracking-wide mt-2">Service Records</p>
+              {SERVICE_RECORDS.map(record => (
+                <div key={record.id} className="bg-white border border-slate-200 rounded-2xl px-4 py-4 shadow-sm">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs bg-slate-100 text-slate-600 rounded-md px-2 py-0.5">
+                          {record.systemLabel}
+                        </span>
+                        <span className="text-xs text-slate-400">
+                          {new Date(record.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </span>
+                      </div>
+                      <p className="text-sm text-slate-700 mt-1.5">{record.workDescription}</p>
+                      {record.contractor && (
+                        <p className="text-xs text-slate-400 mt-1">by {record.contractor}</p>
+                      )}
+                    </div>
+                    {record.totalCost !== undefined && (
+                      <span className="text-sm font-semibold text-slate-700 shrink-0">
+                        ${record.totalCost.toLocaleString()}
+                      </span>
+                    )}
                   </div>
-                  <p className="text-sm text-slate-700 mt-1.5">{record.workDescription}</p>
-                  {record.contractor && (
-                    <p className="text-xs text-slate-400 mt-1">by {record.contractor}</p>
-                  )}
                 </div>
-                {record.totalCost !== undefined && (
-                  <span className="text-sm font-semibold text-slate-700 shrink-0">
-                    ${record.totalCost.toLocaleString()}
-                  </span>
-                )}
-              </div>
+              ))}
+            </>
+          )}
+
+          {historyCount === 0 && (
+            <div className="text-center py-12 text-slate-400">
+              <p className="text-sm">No history yet</p>
             </div>
-          ))}
+          )}
         </div>
       )}
 
