@@ -21,6 +21,7 @@ import { FuelScreen }           from './screens/FuelScreen'
 import { TaxScreen }            from './screens/TaxScreen'
 import { MortgageScreen }       from './screens/MortgageScreen'
 import { UtilityScreen }        from './screens/UtilityScreen'
+import { CalendarScreen }      from './screens/CalendarScreen'
 
 import {
   isAuthenticated,
@@ -254,6 +255,7 @@ function MainApp() {
           <Route path="/tax"                 element={<TaxScreen />}           />
           <Route path="/mortgage"            element={<MortgageScreen />}      />
           <Route path="/utilities"           element={<UtilityScreen />}       />
+          <Route path="/calendar"            element={<CalendarScreen />}      />
           <Route path="*"                    element={<Navigate to="/" />}     />
         </Routes>
       </AppShell>
