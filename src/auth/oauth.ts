@@ -2,7 +2,7 @@
 
 const GOOGLE_AUTH_URL  = 'https://accounts.google.com/o/oauth2/v2/auth'
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token'
-const SCOPES = 'https://www.googleapis.com/auth/drive openid email profile'
+const SCOPES = 'https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/calendar.events openid email profile'
 
 /** Client ID: set VITE_GOOGLE_CLIENT_ID in .env, or store in localStorage for zero-rebuild config */
 export function getClientId(): string {
