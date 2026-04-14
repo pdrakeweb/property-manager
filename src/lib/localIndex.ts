@@ -23,6 +23,8 @@ export interface IndexRecord {
   data: Record<string, unknown>
   syncState: SyncState
   driveFileId?: string
+  driveEtag?: string          // ETag from last Drive fetch/write
+  conflictWithId?: string     // set when this record is a v2 conflict copy
   localUpdatedAt: string
   driveUpdatedAt?: string
   deletedAt?: string
@@ -70,11 +72,16 @@ export const localIndex = {
     save(index)
   },
 
-  markSynced(id: string, driveFileId: string, driveUpdatedAt: string): void {
+  markSynced(id: string, driveFileId: string, driveUpdatedAt: string, driveEtag?: string): void {
     const index = load()
     if (!index[id]) return
-    index[id] = { ...index[id], syncState: 'synced', driveFileId, driveUpdatedAt }
+    index[id] = { ...index[id], syncState: 'synced', driveFileId, driveUpdatedAt, ...(driveEtag ? { driveEtag } : {}) }
     save(index)
+  },
+
+  getConflicts(): IndexRecord[] {
+    const index = load()
+    return Object.values(index).filter(r => r.syncState === 'conflict' && !r.deletedAt)
   },
 
   markConflict(id: string): void {
