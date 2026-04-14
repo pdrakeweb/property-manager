@@ -6,7 +6,82 @@
 **Created:** April 2026  
 **Status:** Planning
 
-This document details the eight features planned for Phase 2. Phase 1 established capture, maintenance tracking, budgeting, AI advisory, and inventory. Phase 2 adds the intelligence and financial depth that makes the system genuinely useful over multiple seasons: seasonal checklists, capital project financials, cross-property situational awareness, photo workflows, generator runtime, road/access logging, permit history, and insurance tracking.
+This document details the features planned for Phase 2. Phase 1 established capture, maintenance tracking, budgeting, AI advisory, and inventory. Phase 2 adds the intelligence and financial depth that makes the system genuinely useful over multiple seasons: seasonal checklists, capital project financials, cross-property situational awareness, photo workflows, generator runtime, road/access logging, permit history, insurance tracking, utility bill tracking, property taxes, and mortgages.
+
+---
+
+## Standard Document Input Pattern
+
+All data entry screens that involve structured documents — utility bills, tax notices, mortgage statements, insurance policy declarations, permit documents — **must** implement three input modes simultaneously on the same form. This is the established pattern from `EquipmentFormScreen.tsx` and applies everywhere in Phase 2 and beyond.
+
+### The Three Modes
+
+**1. Photo capture** — Camera button using `<input type="file" accept="image/*" capture="environment">`. On selection, calls OpenRouter vision extraction, pre-populates form fields with confidence badges.
+
+**2. File upload** — `<input type="file" accept="image/*,application/pdf">` for uploading existing scans or PDFs. Same extraction pipeline as camera capture. For PDFs: attempt text extraction via `pdfjs-dist` first; fall back to vision if the PDF is scanned.
+
+**3. Manual text entry** — All fields are always visible and editable below the capture controls, regardless of AI state. Manual entry is never blocked or hidden.
+
+### UX Specification
+
+```
+┌─────────────────────────────────────┐
+│  📷 Capture          📄 Upload       │  ← always visible at top
+└─────────────────────────────────────┘
+  [thumbnail if photo taken]
+  ⟳ Extracting…                         ← spinner during AI call
+  ✓ Extraction complete — review below  ← success state
+
+  Field Label
+  ┌────────────────────────────┐ 🟢    ← green = high confidence (AI-filled)
+  │ AI-extracted value         │       ← editable regardless
+  └────────────────────────────┘
+  Field Label
+  ┌────────────────────────────┐ 🟡    ← yellow = medium confidence
+  │ AI-extracted value         │
+  └────────────────────────────┘
+  Field Label
+  ┌────────────────────────────┐       ← no badge = user-entered or not extracted
+  │                            │
+  └────────────────────────────┘
+```
+
+Confidence badge colors: green = `high`, yellow = `medium`, red = `low`. Red-confidence fields get a subtle `ring-red-200` highlight prompting the user to verify. AI-filled fields use `ring-sky-200` to distinguish them from manually entered fields (same as `EquipmentFormScreen`).
+
+### Shared Component: `DocumentCaptureCard`
+
+Extract the capture/upload/extraction UI into a reusable component so every data entry screen gets the same UX without duplicating the logic:
+
+```typescript
+// src/components/capture/DocumentCaptureCard.tsx
+
+interface ExtractedFields {
+  [fieldId: string]: {
+    value: string
+    confidence: 'high' | 'medium' | 'low'
+  }
+}
+
+interface DocumentCaptureCardProps {
+  onExtracted: (fields: ExtractedFields) => void
+  onError: (message: string) => void
+  extractFn: (blob: Blob, mimeType: string) => Promise<ExtractedFields>
+  label?: string                        // "Photograph or upload document"
+  acceptPdf?: boolean                   // default true
+  disabled?: boolean
+}
+```
+
+`extractFn` is injected per screen — each feature provides its own OpenRouter call with its own Zod schema. The card handles: file input refs, thumbnail display, loading state, error state. The parent handles: form fields and the `extractFn` implementation.
+
+Usage in any data entry screen:
+```tsx
+<DocumentCaptureCard
+  extractFn={(blob, mime) => extractUtilityBill(blob, mime, accountHint)}
+  onExtracted={fields => applyExtractedFields(fields)}
+  onError={msg => setError(msg)}
+/>
+```
 
 ---
 
@@ -610,27 +685,44 @@ src/
   components/
     permits/
       PermitCard.tsx                  // compact card with status badge + expiry
-      PermitForm.tsx                  // add/edit form
+      PermitForm.tsx                  // add/edit form with DocumentCaptureCard at top
       ExpiryAlert.tsx                 // inline warning for expiring permits
+    capture/
+      DocumentCaptureCard.tsx         // shared — see Standard Document Input Pattern
 ```
 
 ### Implementation Notes
+
+**Input pattern:** `PermitForm` uses `DocumentCaptureCard` at the top. The user photographs the permit document or uploads a scan/PDF. The `extractFn` for permits targets these fields from the document image:
+
+```typescript
+const PermitExtractionSchema = z.object({
+  permitNumber:     z.object({ value: z.string(), confidence: z.enum(['high','medium','low']) }),
+  issuingAuthority: z.object({ value: z.string(), confidence: z.enum(['high','medium','low']) }),
+  type:             z.object({ value: z.string(), confidence: z.enum(['high','medium','low']) }),
+  description:      z.object({ value: z.string(), confidence: z.enum(['high','medium','low']) }),
+  issuedDate:       z.object({ value: z.string(), confidence: z.enum(['high','medium','low']) }),
+  expirationDate:   z.object({ value: z.string(), confidence: z.enum(['high','medium','low']) }),
+})
+```
+
+All fields remain manually editable below the capture card per the standard pattern. A user without a scan can still fill in everything by hand.
 
 **Routes:** Add `/permits` to `App.tsx` routes and `NAV_ITEMS`. Consider grouping under a "Documents" nav item in Phase 2 (Permits + Insurance sharing a nav slot to avoid nav overcrowding).
 
 **Expiry alerting:** On app load, compute permits expiring within 90 days. Surface as banner on `PermitsScreen` and as items in the cross-property dashboard alert count. Severity: red if expired, orange if expiring within 30 days, yellow if within 90 days.
 
-**Drive storage:** Permit records as JSON at `{driveRoot}/Permits/{permitId}.json`. PDF uploads use `DriveClient.uploadFile` to `{driveRoot}/Permits/` and store the returned `driveFileId`.
+**Drive storage:** Permit records as JSON at `{driveRoot}/Permits/{permitId}.json`. PDF uploads use `DriveClient.uploadFile` to `{driveRoot}/Permits/` and store the returned `driveFileId`. The uploaded document is separate from the JSON record — `driveFileId` links them.
 
 **Search:** Client-side filter on `description`, `permitNumber`, `issuingAuthority`, `type`. Filter chips for `type` and `status`. Sort by `issuedDate` descending (most recent first).
 
 **Link to Capital Watch:** When `linkedCapitalItemId` is set, `PermitDetailScreen` shows a card linking to the associated capital project. Reciprocally, `CapitalProjectDetailScreen` shows any linked permits.
 
-**Initial data entry:** No AI extraction for permits in Phase 2. Manual entry only. Phase 3 may add document parsing for uploaded permit PDFs.
-
 ### Acceptance Criteria
 
-- [ ] Permit record can be created with all required fields and saves to Drive
+- [ ] Permit form shows Capture and Upload buttons at the top per the standard pattern
+- [ ] Photographing or uploading a permit document populates fields with confidence badges
+- [ ] All fields remain editable regardless of AI extraction state
 - [ ] PDF upload stores file in Drive and links from permit record
 - [ ] Search filters permits by description, number, authority, and type
 - [ ] Permits expiring within 90 days surface as alerts on PermitsScreen
@@ -706,13 +798,35 @@ src/
   components/
     insurance/
       PolicyCard.tsx                  // compact card with insurer, type, renewal date
-      PolicyForm.tsx                  // add/edit form
+      PolicyForm.tsx                  // add/edit form with DocumentCaptureCard at top
       CoverageGapChecklist.tsx        // which coverage types are present/missing
       RenewalAlert.tsx                // alert for policies renewing within 30 days
       AgentContactCard.tsx            // name, phone, email with tap-to-call
+    capture/
+      DocumentCaptureCard.tsx         // shared — see Standard Document Input Pattern
 ```
 
 ### Implementation Notes
+
+**Input pattern:** `PolicyForm` uses `DocumentCaptureCard` at the top. The user photographs the declarations page (the one-page summary that insurers send at renewal — it has everything). The `extractFn` targets:
+
+```typescript
+const PolicyExtractionSchema = z.object({
+  insurer:       z.object({ value: z.string(), confidence: z.enum(['high','medium','low']) }),
+  policyNumber:  z.object({ value: z.string(), confidence: z.enum(['high','medium','low']) }),
+  policyType:    z.object({ value: z.string(), confidence: z.enum(['high','medium','low']) }),
+  effectiveDate: z.object({ value: z.string(), confidence: z.enum(['high','medium','low']) }),
+  renewalDate:   z.object({ value: z.string(), confidence: z.enum(['high','medium','low']) }),
+  annualPremium: z.object({ value: z.string(), confidence: z.enum(['high','medium','low']) }),
+  dwelling:      z.object({ value: z.string(), confidence: z.enum(['high','medium','low']) }).optional(),
+  liability:     z.object({ value: z.string(), confidence: z.enum(['high','medium','low']) }).optional(),
+  deductible:    z.object({ value: z.string(), confidence: z.enum(['high','medium','low']) }).optional(),
+  agentName:     z.object({ value: z.string(), confidence: z.enum(['high','medium','low']) }).optional(),
+  agentPhone:    z.object({ value: z.string(), confidence: z.enum(['high','medium','low']) }).optional(),
+})
+```
+
+All fields remain manually editable below. A user can also just scan the declarations page at renewal time each year to update values — the capture flow is fast enough to make annual updates practical.
 
 **Routes:** `/insurance` as a standalone screen, or co-located with Permits under a `/documents` parent route with sub-tabs.
 
@@ -728,7 +842,9 @@ src/
 
 ### Acceptance Criteria
 
-- [ ] Policy record saves with all fields including coverage amounts and agent contact
+- [ ] Policy form shows Capture and Upload buttons at the top per the standard pattern
+- [ ] Photographing a declarations page populates insurer, policy number, dates, premium, and coverage amounts with confidence badges
+- [ ] All fields remain editable regardless of AI extraction state
 - [ ] PDF upload links policy to Drive document
 - [ ] Coverage gap checklist correctly identifies missing coverage types for property type
 - [ ] Policies renewing within 30 days show renewal alert on InsuranceScreen
@@ -807,21 +923,24 @@ src/
   types/
     utilities.ts
   screens/
-    UtilitiesScreen.tsx               // per-account view with upload + chart
+    UtilitiesScreen.tsx               // per-account view with bill entry + chart
     UtilityAccountListScreen.tsx      // all accounts across both properties
   components/
     utilities/
       UtilityConsumptionChart.tsx     // monthly bar/line chart, 12-month rolling window
       YearOverYearChart.tsx           // current month vs. same month last year comparison
       UtilityBillRow.tsx              // bill ledger entry: period, usage, cost
-      UtilityUploadCard.tsx           // PDF upload area + AI extraction status
       UtilityDashboardWidget.tsx      // current month vs. LY for dashboard
       UtilityAccountForm.tsx          // add/edit account (provider, type, account#)
+    capture/
+      DocumentCaptureCard.tsx         // shared — see Standard Document Input Pattern
 ```
 
 ### Implementation Notes
 
-**PDF → image → AI:** Drive already handles PDF uploads. For extraction, convert the first page of the PDF to a base64 image before sending to OpenRouter. Two approaches:
+**Input pattern:** Bill entry uses `DocumentCaptureCard` at the top of the add-bill form. "📷 Capture" (phone camera on a paper bill) and "📄 Upload" (PDF from email) both feed the same extraction pipeline. Manual fields below are always editable — the user can skip capture entirely and type the numbers in directly.
+
+**PDF → image → AI:** For extraction, convert the first page of the PDF to a base64 image before sending to OpenRouter. Two approaches:
 1. Use `pdf.js` (`pdfjs-dist`) to render the first PDF page to a canvas, then `canvas.toDataURL('image/jpeg')`. This works entirely in-browser with no server required.
 2. If the PDF is text-based (not scanned), extract text directly via `pdfjs-dist` page text content and send as text input to Claude rather than a vision call. More reliable and cheaper.
 
@@ -917,11 +1036,30 @@ src/
       TaxInstallmentCard.tsx          // upcoming payment alert card
       CountyAuditorLinkHelper.tsx     // side-by-side workflow helper
       AssessmentTrendChart.tsx        // assessed value trend over years (inline SVG)
+    capture/
+      DocumentCaptureCard.tsx         // shared — see Standard Document Input Pattern
 ```
 
 ### Implementation Notes
 
-**Data entry strategy — manual with county auditor workflow:** No scraping, no paid API. The right approach for personal use is a guided side-by-side workflow:
+**Input pattern:** Both the assessment entry form and the payment entry form use `DocumentCaptureCard` at the top. Wayne County mails paper notices for both assessment changes and tax bills — photographing the notice is the fastest path to entry.
+
+For assessment notices, the `extractFn` targets:
+```typescript
+const TaxAssessmentExtractionSchema = z.object({
+  year:                        z.object({ value: z.string(), confidence: z.enum(['high','medium','low']) }),
+  parcelNumber:                z.object({ value: z.string(), confidence: z.enum(['high','medium','low']) }),
+  assessedLandValue:           z.object({ value: z.string(), confidence: z.enum(['high','medium','low']) }),
+  assessedImprovementValue:    z.object({ value: z.string(), confidence: z.enum(['high','medium','low']) }),
+  assessedTotalValue:          z.object({ value: z.string(), confidence: z.enum(['high','medium','low']) }),
+  marketValue:                 z.object({ value: z.string(), confidence: z.enum(['high','medium','low']) }).optional(),
+  annualTaxBill:               z.object({ value: z.string(), confidence: z.enum(['high','medium','low']) }).optional(),
+})
+```
+
+For tax payment receipts, the `extractFn` targets `year`, `installment` (1 or 2), `amount`, `dueDate`, `paidDate`, and `parcelNumber`.
+
+**County auditor side-by-side workflow:** As a complement to photo capture (for when the user doesn't have the paper notice handy):
 
 1. "Sync from County" button opens the Wayne County Auditor parcel search (`auditor.waynecountyohio.gov`) in a new tab alongside the app
 2. App shows a split-panel helper on desktop: left = county auditor web page (iFrame if CORS allows, otherwise just a launch button), right = the app's data entry form pre-filled with the parcel number
@@ -941,6 +1079,9 @@ src/
 
 ### Acceptance Criteria
 
+- [ ] Assessment form shows Capture and Upload buttons per the standard pattern
+- [ ] Photographing a county assessment notice populates assessed values and parcel number with confidence badges
+- [ ] All fields remain editable regardless of AI extraction state
 - [ ] Assessment record can be entered for any year with all value fields
 - [ ] "Sync from County" launches correct Wayne County Auditor URL for the property's parcel number
 - [ ] Tax installment schedule auto-generates Feb 10 / Jul 10 due dates from annual bill
@@ -1014,9 +1155,31 @@ src/
       ExtraPaymentSimulator.tsx       // slider: extra $/mo → new payoff date + interest saved
       EquitySummaryCard.tsx           // market value minus balance = equity, across all properties
       PayoffProgressBar.tsx           // % paid down with payoff date
+    capture/
+      DocumentCaptureCard.tsx         // shared — see Standard Document Input Pattern
 ```
 
 ### Implementation Notes
+
+**Input pattern:** Both the initial mortgage setup form and the monthly statement entry form use `DocumentCaptureCard`. Lenders send paper statements (or PDF emails) monthly with the current balance, payment breakdown, and escrow detail. Photographing the statement is the fast path to keeping the ledger current.
+
+For the mortgage setup form, the `extractFn` targets:
+```typescript
+const MortgageSetupExtractionSchema = z.object({
+  lender:          z.object({ value: z.string(), confidence: z.enum(['high','medium','low']) }),
+  accountNumber:   z.object({ value: z.string(), confidence: z.enum(['high','medium','low']) }),
+  originalBalance: z.object({ value: z.string(), confidence: z.enum(['high','medium','low']) }),
+  interestRate:    z.object({ value: z.string(), confidence: z.enum(['high','medium','low']) }),
+  termMonths:      z.object({ value: z.string(), confidence: z.enum(['high','medium','low']) }),
+  startDate:       z.object({ value: z.string(), confidence: z.enum(['high','medium','low']) }),
+  monthlyPayment:  z.object({ value: z.string(), confidence: z.enum(['high','medium','low']) }),
+  escrowAmount:    z.object({ value: z.string(), confidence: z.enum(['high','medium','low']) }).optional(),
+})
+```
+
+For monthly statement entry, the `extractFn` targets `currentBalance`, `principal`, `interest`, `escrow`, `paidDate`, and `nextPaymentDue`.
+
+All fields always editable below the capture card.
 
 **`amortization.ts` — pure client-side calculation:**
 
@@ -1067,6 +1230,10 @@ All pure functions — no state, no side effects. The amortization algorithm: `m
 
 ### Acceptance Criteria
 
+- [ ] Mortgage setup form shows Capture and Upload buttons per the standard pattern
+- [ ] Photographing a mortgage statement or closing disclosure populates loan fields with confidence badges
+- [ ] Monthly statement capture extracts current balance, payment breakdown, and escrow with confidence badges
+- [ ] All fields remain editable regardless of AI extraction state
 - [ ] Mortgage can be entered with all fields; amortization schedule generates immediately
 - [ ] Amortization schedule shows correct principal/interest split for every payment
 - [ ] Extra payment simulator re-computes payoff date and interest saved as slider moves

@@ -895,16 +895,36 @@ src/
       RoomCard.tsx                    // room thumbnail + item count + last updated
       RoomForm.tsx                    // add/edit room
       InventoryItemRow.tsx            // item in list: description, value, review badge
-      InventoryItemForm.tsx           // add/edit item manually
+      InventoryItemForm.tsx           // add/edit item manually (three-mode input)
       AiParseResultReview.tsx         // review AI-parsed items before accepting
       ContentsExportButton.tsx        // generate + upload PDF
       TotalValueSummary.tsx           // sum of estimated replacement values by room
       StaleInventoryBanner.tsx        // "Last updated 90 days ago" reminder
+    capture/
+      DocumentCaptureCard.tsx         // shared — from Phase 2 Standard Input Pattern
 ```
 
 ### Implementation Notes
 
-**AI parsing flow:**
+**Input pattern:** Two capture contexts in this feature, both follow the standard three-mode pattern from Phase 2:
+
+1. **Room-level photo parse** (`InventoryRoomScreen`): "📷 Capture" and "📄 Upload" at the top of the room view. Captures a wide photo of the whole room or a cluster of items. One API call returns multiple parsed items. Leads to `AiParseResultReview` before saving.
+
+2. **Single item entry** (`InventoryItemForm`): Uses `DocumentCaptureCard` for photographing or uploading an individual item (e.g., a TV, appliance, or piece of jewelry). The `extractFn` targets a single-item schema (description, brand, model, serial, estimated value, condition). Fields pre-populated with confidence badges and always editable below — user can skip capture and type directly.
+
+```typescript
+const SingleItemExtractionSchema = z.object({
+  description:               z.object({ value: z.string(), confidence: z.enum(['high','medium','low']) }),
+  category:                  z.object({ value: z.string(), confidence: z.enum(['high','medium','low']) }),
+  brand:                     z.object({ value: z.string(), confidence: z.enum(['high','medium','low']) }).optional(),
+  model:                     z.object({ value: z.string(), confidence: z.enum(['high','medium','low']) }).optional(),
+  serialNumber:              z.object({ value: z.string(), confidence: z.enum(['high','medium','low']) }).optional(),
+  estimatedReplacementValue: z.object({ value: z.string(), confidence: z.enum(['high','medium','low']) }).optional(),
+  condition:                 z.object({ value: z.string(), confidence: z.enum(['high','medium','low']) }),
+})
+```
+
+**AI parsing flow (room-level):**
 
 ```typescript
 async function parseRoomPhoto(
@@ -963,7 +983,10 @@ Load the full `inventory.json` on `ContentsInventoryScreen` mount. Write on ever
 ### Acceptance Criteria
 
 - [ ] Room can be added, edited, and deleted per property
-- [ ] Photo capture triggers AI parsing with progress indicator
+- [ ] Room-level Capture and Upload buttons follow the standard three-mode input pattern
+- [ ] Single item entry form shows Capture and Upload buttons; extracted fields populate with confidence badges
+- [ ] All item fields remain editable regardless of AI extraction state
+- [ ] Room-level photo capture triggers AI parsing with progress indicator; returns multiple items
 - [ ] AI returns structured item list with descriptions, categories, and estimated values
 - [ ] Review screen shows all AI-parsed items; user can edit, delete, or add items before saving
 - [ ] Low-confidence items flagged with review badge; badge clears on user confirmation
