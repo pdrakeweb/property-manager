@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Camera, Wrench, BarChart3, MessageSquare, AlertTriangle,
@@ -75,7 +75,7 @@ function SectionHeader({ title, action, onAction }: {
   )
 }
 
-function Card({ children, className }: { children: React.ReactNode; className?: string }) {
+function Card({ children, className }: { children: ReactNode; className?: string }) {
   return (
     <div className={cn('bg-white rounded-2xl border border-slate-200 shadow-sm', className)}>
       {children}
