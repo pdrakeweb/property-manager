@@ -25,6 +25,7 @@ export interface IndexRecord {
   driveFileId?: string
   driveEtag?: string          // ETag from last Drive fetch/write
   conflictWithId?: string     // set when this record is a v2 conflict copy
+  calendarEventId?: string    // Google Calendar event ID after successful createEvent
   localUpdatedAt: string
   driveUpdatedAt?: string
   deletedAt?: string
@@ -76,6 +77,13 @@ export const localIndex = {
     const index = load()
     if (!index[id]) return
     index[id] = { ...index[id], syncState: 'synced', driveFileId, driveUpdatedAt, ...(driveEtag ? { driveEtag } : {}) }
+    save(index)
+  },
+
+  markCalendarSynced(id: string, calendarEventId: string): void {
+    const index = load()
+    if (!index[id]) return
+    index[id] = { ...index[id], calendarEventId }
     save(index)
   },
 
