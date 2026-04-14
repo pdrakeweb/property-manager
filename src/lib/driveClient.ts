@@ -29,6 +29,25 @@ export interface DriveFile {
   webViewLink?: string
 }
 
+export interface DriveFileWithContent {
+  id:      string
+  name:    string
+  content: string
+  etag:    string
+}
+
+/** Thrown when Drive returns 412 Precondition Failed (ETag mismatch). */
+export class ETagConflictError extends Error {
+  constructor(
+    public readonly fileId:        string,
+    public readonly latestEtag:    string,
+    public readonly latestContent: string,
+  ) {
+    super('ETag conflict: file modified by another client')
+    this.name = 'ETagConflictError'
+  }
+}
+
 // ── Internal helpers ─────────────────────────────────────────────────────────
 
 function authHeaders(token: string): HeadersInit {
@@ -94,14 +113,44 @@ export const DriveClient = {
     return files ?? []
   },
 
-  /** Upload a file using multipart form (metadata + content in one request) */
+  /**
+   * Download a file's content and return it along with the ETag.
+   * The ETag is used for optimistic concurrency on subsequent uploads.
+   */
+  async downloadFile(token: string, fileId: string): Promise<DriveFileWithContent> {
+    // Fetch metadata (name) + ETag
+    const metaResp = await fetch(
+      `${DRIVE_API}/files/${fileId}?fields=id,name`,
+      { headers: authHeaders(token) },
+    )
+    if (!metaResp.ok) throw new Error(`Drive downloadFile metadata failed: ${metaResp.status}`)
+    const meta = await metaResp.json() as DriveFile
+    const etag = metaResp.headers.get('ETag') ?? metaResp.headers.get('etag') ?? ''
+
+    // Fetch content
+    const contentResp = await fetch(
+      `${DRIVE_API}/files/${fileId}?alt=media`,
+      { headers: authHeaders(token) },
+    )
+    if (!contentResp.ok) throw new Error(`Drive downloadFile content failed: ${contentResp.status}`)
+    const content = await contentResp.text()
+
+    return { id: fileId, name: meta.name, content, etag }
+  },
+
+  /**
+   * Upload a file using multipart form (metadata + content in one request).
+   * If ifMatchEtag is provided, sends If-Match header for optimistic concurrency.
+   * Throws ETagConflictError on 412 Precondition Failed.
+   */
   async uploadFile(
-    token:    string,
-    folderId: string,
-    filename: string,
-    content:  string | Blob,
-    mimeType: string,
-  ): Promise<DriveFile> {
+    token:        string,
+    folderId:     string,
+    filename:     string,
+    content:      string | Blob,
+    mimeType:     string,
+    ifMatchEtag?: string,
+  ): Promise<DriveFile & { etag: string }> {
     const metadata = JSON.stringify({ name: filename, parents: [folderId] })
 
     const body = content instanceof Blob ? content : new Blob([content], { type: mimeType })
@@ -110,19 +159,45 @@ export const DriveClient = {
     form.append('metadata', new Blob([metadata], { type: 'application/json' }))
     form.append('file',     new Blob([body],     { type: mimeType }))
 
+    const headers: HeadersInit = authHeaders(token) as Record<string, string>
+    if (ifMatchEtag) {
+      (headers as Record<string, string>)['If-Match'] = ifMatchEtag
+    }
+
     const resp = await fetch(
       `${UPLOAD_API}/files?uploadType=multipart&fields=id,name,webViewLink`,
-      {
-        method:  'POST',
-        headers: authHeaders(token),
-        body:    form,
-      },
+      { method: 'POST', headers, body: form },
     )
+
+    // 412 = ETag mismatch — another client wrote this file first
+    if (resp.status === 412) {
+      // Re-fetch the current version to get latest ETag + content
+      const currentEtag    = resp.headers.get('ETag') ?? resp.headers.get('etag') ?? ''
+      // Attempt to find the file by name in the folder to get its ID
+      const listed = await DriveClient.listFiles(token, folderId)
+      const existing = listed.find(f => f.name === filename)
+      let latestContent = ''
+      let latestEtag    = currentEtag
+      if (existing) {
+        try {
+          const dl = await DriveClient.downloadFile(token, existing.id)
+          latestContent = dl.content
+          latestEtag    = dl.etag || latestEtag
+          throw new ETagConflictError(existing.id, latestEtag, latestContent)
+        } catch (e) {
+          if (e instanceof ETagConflictError) throw e
+        }
+      }
+      throw new ETagConflictError('unknown', latestEtag, latestContent)
+    }
+
     if (!resp.ok) {
       const text = await resp.text()
       throw new Error(`Drive upload failed (${resp.status}): ${text}`)
     }
 
-    return resp.json() as Promise<DriveFile>
+    const file = await resp.json() as DriveFile
+    const etag = resp.headers.get('ETag') ?? resp.headers.get('etag') ?? ''
+    return { ...file, etag }
   },
 }
