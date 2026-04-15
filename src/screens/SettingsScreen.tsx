@@ -12,6 +12,8 @@ import { PROPERTIES } from '../data/mockData'
 import {
   hasDevModelOverride, getDevModelOverride,
   getModelForTask, setModelForTask,
+  getSetting, setSetting, clearSetting, SETTINGS,
+  getOpenRouterKey, getHaUrl, getHaToken,
 } from '../store/settings'
 
 const MODELS_BY_TASK = [
@@ -54,29 +56,27 @@ export function SettingsScreen() {
   const [userName]  = useState(() => getUserName())
 
   // ── OpenRouter ──────────────────────────────────────────────────────────────
-  const [openRouterKey, setOpenRouterKey] = useState(
-    () => localStorage.getItem('openrouter_api_key') ?? '',
-  )
+  const [openRouterKey, setOpenRouterKey] = useState(() => getOpenRouterKey())
   const [showKey, setShowKey] = useState(false)
 
   function saveOpenRouterKey() {
     if (openRouterKey.trim()) {
-      localStorage.setItem('openrouter_api_key', openRouterKey.trim())
+      setSetting(SETTINGS.openRouterKey, openRouterKey.trim())
     } else {
-      localStorage.removeItem('openrouter_api_key')
+      clearSetting(SETTINGS.openRouterKey)
     }
   }
 
   // ── Home Assistant ──────────────────────────────────────────────────────────
-  const [haUrl,       setHaUrl]       = useState(() => localStorage.getItem('ha_url')   ?? '')
-  const [haToken,     setHaToken]     = useState(() => localStorage.getItem('ha_token')  ?? '')
+  const [haUrl,       setHaUrl]       = useState(() => getHaUrl())
+  const [haToken,     setHaToken]     = useState(() => getHaToken())
   const [showHaToken, setShowHaToken] = useState(false)
   const [haConnected, setHaConnected] = useState(false)
   const [haTesting,   setHaTesting]   = useState(false)
 
   function saveHaSettings() {
-    localStorage.setItem('ha_url',   haUrl.trim())
-    localStorage.setItem('ha_token', haToken.trim())
+    setSetting(SETTINGS.haUrl, haUrl.trim())
+    setSetting(SETTINGS.haToken, haToken.trim())
   }
 
   async function testHaConnection() {

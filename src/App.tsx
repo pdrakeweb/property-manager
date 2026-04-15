@@ -38,12 +38,13 @@ import {
   handleOAuthCallback,
   getClientId,
 } from './auth/oauth'
+import { getOpenRouterKey, setSetting, SETTINGS } from './store/settings'
 
 // ── Sign-in screen ───────────────────────────────────────────────────────────
 
 function SignInScreen({ onSignIn }: { onSignIn: () => void }) {
   const [openRouterKey, setOpenRouterKey] = useState(
-    () => localStorage.getItem('openrouter_api_key') ?? '',
+    () => getOpenRouterKey(),
   )
   const [clientId,    setClientId]    = useState(() => localStorage.getItem('google_client_id') ?? getClientId())
   const [showOrKey,   setShowOrKey]   = useState(false)
@@ -57,7 +58,7 @@ function SignInScreen({ onSignIn }: { onSignIn: () => void }) {
       return
     }
     if (openRouterKey.trim()) {
-      localStorage.setItem('openrouter_api_key', openRouterKey.trim())
+      setSetting(SETTINGS.openRouterKey, openRouterKey.trim())
     }
     localStorage.setItem('google_client_id', clientId.trim())
     setSigningIn(true)

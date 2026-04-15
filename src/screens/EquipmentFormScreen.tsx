@@ -10,6 +10,7 @@ import { getValidToken } from '../auth/oauth'
 import { DriveClient } from '../lib/driveClient'
 import { formatFileStem, formatRecord } from '../lib/markdownFormatter'
 import { localIndex } from '../lib/localIndex'
+import { getOpenRouterKey } from '../store/settings'
 import { useDocumentExtraction, confidenceRing } from '../hooks/useDocumentExtraction'
 import type { Category } from '../types'
 
@@ -413,7 +414,7 @@ export function EquipmentFormScreen() {
         <div className="p-4">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Photograph Nameplate</h2>
-            {!localStorage.getItem('openrouter_api_key') ? (
+            {!getOpenRouterKey() ? (
               <button
                 onClick={() => navigate('/settings')}
                 className="flex items-center gap-1 text-xs text-amber-600 hover:text-amber-700 font-medium"

@@ -4,6 +4,8 @@
  * Used by DocumentCaptureCard and any screen that needs AI extraction.
  */
 
+import { getOpenRouterKey } from '../store/settings'
+
 export interface ExtractedField {
   value: string
   confidence: 'high' | 'medium' | 'low'
@@ -25,7 +27,7 @@ export async function extractDocument(
   fieldIds: string[],
   prompt: string,
 ): Promise<ExtractionResult> {
-  const apiKey = localStorage.getItem('openrouter_api_key')
+  const apiKey = getOpenRouterKey()
   if (!apiKey) throw new Error('No OpenRouter API key — configure one in Settings')
 
   const base64 = await blobToBase64(blob)
