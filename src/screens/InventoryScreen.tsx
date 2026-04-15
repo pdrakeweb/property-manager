@@ -6,7 +6,6 @@ import {
 } from 'lucide-react'
 import { cn } from '../utils/cn'
 import { CATEGORIES, EQUIPMENT } from '../data/mockData'
-import { localIndex } from '../lib/localIndex'
 
 type FilterMode = 'all' | 'documented' | 'missing'
 
@@ -14,33 +13,14 @@ export function InventoryScreen() {
   const navigate    = useNavigate()
   const [filter, setFilter]   = useState<FilterMode>('all')
   const [search, setSearch]   = useState('')
-  const [, forceUpdate]       = useState(0)
 
-  const activePropertyId = localStorage.getItem('active_property_id') ?? 'tannerville'
-
-  // Count from local index (accurate offline). Falls back to mock seed.
-  function getCount(cat: typeof CATEGORIES[0]): number {
-    const indexed = localIndex.getAll('equipment', activePropertyId)
-      .filter(r => r.categoryId === cat.id).length
-    return indexed > 0 ? indexed : (cat.recordCount ?? 0)
-  }
-
+  const documented   = CATEGORIES.filter(c => c.recordCount && c.recordCount > 0).length
   const total        = CATEGORIES.length
-  const documented   = CATEGORIES.filter(c => getCount(c) > 0).length
   const pct          = Math.round(documented / total * 100)
 
-  // Refresh counts after capture (storage event from same tab won't fire, but
-  // a simple focus listener keeps things fresh when returning from capture)
-  useState(() => {
-    const refresh = () => forceUpdate(n => n + 1)
-    window.addEventListener('focus', refresh)
-    return () => window.removeEventListener('focus', refresh)
-  })
-
   const visibleCategories = CATEGORIES.filter(cat => {
-    const count = getCount(cat)
-    if (filter === 'documented' && count === 0) return false
-    if (filter === 'missing'    && count >  0)  return false
+    if (filter === 'documented' && !(cat.recordCount && cat.recordCount > 0)) return false
+    if (filter === 'missing'    &&  (cat.recordCount && cat.recordCount > 0)) return false
     if (search) {
       const q = search.toLowerCase()
       return cat.label.toLowerCase().includes(q) || cat.description.toLowerCase().includes(q)
@@ -53,32 +33,32 @@ export function InventoryScreen() {
 
       {/* Header */}
       <div>
-        <h1 className="text-xl font-bold text-slate-900">Inventory</h1>
-        <p className="text-sm text-slate-500 mt-0.5">
+        <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">Inventory</h1>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
           {documented} of {total} categories documented
         </p>
       </div>
 
       {/* Progress card */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+      <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 shadow-sm">
         <div className="flex items-center justify-between mb-3">
           <div>
-            <p className="text-2xl font-bold text-slate-900">{pct}%</p>
-            <p className="text-sm text-slate-500">Documentation complete</p>
+            <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">{pct}%</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400">Documentation complete</p>
           </div>
           <div className="text-right">
-            <p className="text-2xl font-bold text-emerald-600">{documented}</p>
-            <p className="text-sm text-slate-500">of {total} systems</p>
+            <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{documented}</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400">of {total} systems</p>
           </div>
         </div>
-        <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
+        <div className="h-3 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
           <div
             className="h-full bg-emerald-500 rounded-full transition-all"
             style={{ width: `${pct}%` }}
           />
         </div>
         {total - documented > 0 && (
-          <p className="text-xs text-slate-500 mt-2 flex items-center gap-1">
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 flex items-center gap-1">
             <AlertTriangle className="w-3 h-3 text-amber-400" />
             {total - documented} systems still need documentation — these represent knowledge gaps
           </p>
@@ -94,7 +74,7 @@ export function InventoryScreen() {
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Search categories…"
-            className="w-full pl-10 pr-4 py-2.5 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-300 focus:border-sky-300 bg-white placeholder:text-slate-400"
+            className="w-full pl-10 pr-4 py-2.5 text-sm border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-300 focus:border-green-300 placeholder:text-slate-400 dark:placeholder:text-slate-500"
           />
         </div>
 
@@ -109,7 +89,9 @@ export function InventoryScreen() {
               onClick={() => setFilter(f.id)}
               className={cn(
                 'text-xs font-medium px-3 py-1.5 rounded-lg transition-colors',
-                filter === f.id ? 'bg-sky-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200',
+                filter === f.id
+                  ? 'bg-green-600 text-white'
+                  : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600',
               )}
             >
               {f.label}
@@ -119,10 +101,9 @@ export function InventoryScreen() {
       </div>
 
       {/* Category list */}
-      <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm divide-y divide-slate-100">
+      <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden shadow-sm divide-y divide-slate-100 dark:divide-slate-700">
         {visibleCategories.map(cat => {
-          const count  = getCount(cat)
-          const isDone = count > 0
+          const isDone = !!(cat.recordCount && cat.recordCount > 0)
           const records = EQUIPMENT.filter(e => e.categoryId === cat.id)
 
           return (
@@ -131,24 +112,24 @@ export function InventoryScreen() {
               <div className="flex items-center gap-3 px-4 py-3.5">
                 {isDone
                   ? <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
-                  : <Circle      className="w-5 h-5 text-slate-300 shrink-0"    />
+                  : <Circle      className="w-5 h-5 text-slate-300 dark:text-slate-600 shrink-0"    />
                 }
                 <span className="text-xl w-7 text-center shrink-0">{cat.icon}</span>
                 <div className="flex-1 min-w-0">
-                  <p className={cn('text-sm font-semibold', isDone ? 'text-slate-800' : 'text-slate-500')}>
+                  <p className={cn('text-sm font-semibold', isDone ? 'text-slate-800 dark:text-slate-200' : 'text-slate-500 dark:text-slate-400')}>
                     {cat.label}
                   </p>
-                  <p className="text-xs text-slate-400 truncate">{cat.description}</p>
+                  <p className="text-xs text-slate-400 dark:text-slate-500 truncate">{cat.description}</p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   {isDone ? (
-                    <span className="text-xs text-emerald-600 font-medium">
-                      {count} record{count > 1 ? 's' : ''}
+                    <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">
+                      {cat.recordCount} record{(cat.recordCount ?? 0) > 1 ? 's' : ''}
                     </span>
                   ) : (
                     <button
                       onClick={() => navigate(`/capture/${cat.id}`)}
-                      className="flex items-center gap-1 text-xs bg-sky-50 text-sky-600 border border-sky-100 rounded-lg px-2.5 py-1.5 font-medium hover:bg-sky-100 transition-colors"
+                      className="flex items-center gap-1 text-xs bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 border border-green-100 dark:border-green-800 rounded-lg px-2.5 py-1.5 font-medium hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors"
                     >
                       <Camera className="w-3 h-3" />
                       Capture
@@ -163,11 +144,11 @@ export function InventoryScreen() {
                   {records.map(eq => (
                     <div
                       key={eq.id}
-                      className="flex items-center gap-2 bg-slate-50 rounded-xl px-3 py-2.5 hover:bg-slate-100 transition-colors cursor-pointer"
+                      className="flex items-center gap-2 bg-slate-50 dark:bg-slate-700/50 rounded-xl px-3 py-2.5 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors cursor-pointer"
                     >
                       <div className="flex-1 min-w-0">
-                        <p className="text-xs font-semibold text-slate-700 truncate">{eq.label}</p>
-                        <p className="text-xs text-slate-400">
+                        <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 truncate">{eq.label}</p>
+                        <p className="text-xs text-slate-400 dark:text-slate-500">
                           {eq.installYear ? `Installed ${eq.installYear}` : ''}
                           {eq.installYear && eq.lastServiceDate ? ' · ' : ''}
                           {eq.lastServiceDate ? `Last svc ${new Date(eq.lastServiceDate).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}` : ''}
@@ -175,17 +156,17 @@ export function InventoryScreen() {
                       </div>
                       <div className="flex items-center gap-1.5">
                         {eq.hasPhotos && (
-                          <span className="text-xs text-slate-400">
+                          <span className="text-xs text-slate-400 dark:text-slate-500">
                             <Camera className="w-3 h-3" />
                           </span>
                         )}
                         <button
                           onClick={() => navigate('/maintenance')}
-                          className="text-slate-300 hover:text-slate-500 transition-colors"
+                          className="text-slate-300 dark:text-slate-600 hover:text-slate-500 dark:hover:text-slate-400 transition-colors"
                         >
                           <Wrench className="w-3.5 h-3.5" />
                         </button>
-                        <ChevronRight className="w-3.5 h-3.5 text-slate-300" />
+                        <ChevronRight className="w-3.5 h-3.5 text-slate-300 dark:text-slate-600" />
                       </div>
                     </div>
                   ))}

@@ -8,9 +8,9 @@ import { SAMPLE_AI_MESSAGES, SUGGESTED_PROMPTS } from '../data/mockData'
 import type { AIMessage } from '../types'
 
 const MODELS = [
-  { id: 'anthropic/claude-opus-4-6',    label: 'Claude Opus 4.6',     badge: 'Best',    badgeColor: 'bg-violet-100 text-violet-700' },
-  { id: 'anthropic/claude-sonnet-4-6',  label: 'Claude Sonnet 4.6',   badge: 'Fast',    badgeColor: 'bg-sky-100 text-sky-700'       },
-  { id: 'google/gemini-flash-1.5',       label: 'Gemini 1.5 Flash',    badge: 'Cheap',   badgeColor: 'bg-emerald-100 text-emerald-700'},
+  { id: 'anthropic/claude-opus-4-6',    label: 'Claude Opus 4.6',     badge: 'Best',    badgeColor: 'bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-400' },
+  { id: 'anthropic/claude-sonnet-4-6',  label: 'Claude Sonnet 4.6',   badge: 'Fast',    badgeColor: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'     },
+  { id: 'google/gemini-flash-1.5',       label: 'Gemini 1.5 Flash',    badge: 'Cheap',   badgeColor: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400'},
   { id: 'openai/gpt-4o',                label: 'GPT-4o',               badge: '',        badgeColor: ''                              },
 ]
 
@@ -24,10 +24,10 @@ function ModelPicker({
     <div className="relative">
       <button
         onClick={() => setOpen(o => !o)}
-        className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 rounded-xl px-3 py-2 transition-colors"
+        className="flex items-center gap-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-xl px-3 py-2 transition-colors"
       >
-        <Sparkles className="w-3.5 h-3.5 text-violet-600" />
-        <span className="text-sm font-medium text-slate-700">{current.label}</span>
+        <Sparkles className="w-3.5 h-3.5 text-violet-600 dark:text-violet-400" />
+        <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{current.label}</span>
         {current.badge && (
           <span className={cn('text-xs px-1.5 py-0.5 rounded-full font-medium', current.badgeColor)}>
             {current.badge}
@@ -39,18 +39,18 @@ function ModelPicker({
       {open && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute left-0 top-full mt-1 w-64 bg-white border border-slate-200 rounded-xl shadow-xl z-20 overflow-hidden">
+          <div className="absolute left-0 top-full mt-1 w-64 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-20 overflow-hidden">
             {MODELS.map(m => (
               <button
                 key={m.id}
                 onClick={() => { onChange(m.id); setOpen(false) }}
                 className={cn(
-                  'flex items-center gap-3 w-full px-4 py-3 text-left hover:bg-slate-50 transition-colors',
-                  m.id === value && 'bg-violet-50',
+                  'flex items-center gap-3 w-full px-4 py-3 text-left hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors',
+                  m.id === value && 'bg-violet-50 dark:bg-violet-900/20',
                 )}
               >
                 <div className="flex-1">
-                  <div className="text-sm font-medium text-slate-800">{m.label}</div>
+                  <div className="text-sm font-medium text-slate-800 dark:text-slate-200">{m.label}</div>
                 </div>
                 {m.badge && (
                   <span className={cn('text-xs px-2 py-0.5 rounded-full font-medium', m.badgeColor)}>
@@ -100,7 +100,7 @@ function MessageBubble({ msg }: { msg: AIMessage }) {
       {/* Avatar */}
       <div className={cn(
         'w-8 h-8 rounded-xl flex items-center justify-center text-xs font-bold shrink-0 mt-0.5',
-        isUser ? 'bg-sky-600 text-white' : 'bg-violet-600 text-white',
+        isUser ? 'bg-green-600 text-white' : 'bg-violet-600 text-white',
       )}>
         {isUser ? 'P' : <Sparkles className="w-4 h-4" />}
       </div>
@@ -110,8 +110,8 @@ function MessageBubble({ msg }: { msg: AIMessage }) {
         <div className={cn(
           'rounded-2xl px-4 py-3 text-sm leading-relaxed',
           isUser
-            ? 'bg-sky-600 text-white rounded-tr-sm'
-            : 'bg-white border border-slate-200 text-slate-800 rounded-tl-sm shadow-sm',
+            ? 'bg-green-600 text-white rounded-tr-sm'
+            : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 rounded-tl-sm shadow-sm',
         )}>
           {renderContent(msg.content)}
         </div>
@@ -121,23 +121,23 @@ function MessageBubble({ msg }: { msg: AIMessage }) {
           <div className="flex items-center gap-1 mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
             <button
               onClick={handleCopy}
-              className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600 px-1.5 py-1 rounded-md hover:bg-slate-100 transition-colors"
+              className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 px-1.5 py-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
             >
               <Copy className="w-3 h-3" />
               {copied ? 'Copied!' : 'Copy'}
             </button>
-            <button className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600 px-1.5 py-1 rounded-md hover:bg-slate-100 transition-colors">
+            <button className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 px-1.5 py-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
               <Save className="w-3 h-3" />
               Save
             </button>
-            <button className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600 px-1.5 py-1 rounded-md hover:bg-slate-100 transition-colors">
+            <button className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 px-1.5 py-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
               <ThumbsUp className="w-3 h-3" />
             </button>
           </div>
         )}
 
         <div className={cn(
-          'text-xs text-slate-400 mt-1',
+          'text-xs text-slate-400 dark:text-slate-500 mt-1',
           isUser ? 'text-right' : 'text-left',
         )}>
           {new Date(msg.timestamp).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
@@ -202,17 +202,17 @@ export function AIAdvisoryScreen() {
     <div className="flex flex-col h-[calc(100vh-8rem)] lg:h-[calc(100vh-5rem)] -mx-4 -my-5 sm:-mx-6 lg:-mx-8">
 
       {/* ── Top bar ────────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between px-4 sm:px-6 py-3 border-b border-slate-200 bg-white shrink-0">
+      <div className="flex items-center justify-between px-4 sm:px-6 py-3 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shrink-0">
         <div className="flex items-center gap-3">
           <ModelPicker value={model} onChange={setModel} />
-          <div className="flex items-center gap-1.5 text-xs text-emerald-600">
+          <div className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400">
             <Database className="w-3 h-3" />
             <span className="hidden sm:inline font-medium">Context loaded</span>
           </div>
         </div>
         <button
           onClick={clearConversation}
-          className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-700 px-2 py-1.5 rounded-lg hover:bg-slate-100 transition-colors"
+          className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 px-2 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
         >
           <RefreshCw className="w-3.5 h-3.5" />
           <span className="hidden sm:inline">New chat</span>
@@ -220,10 +220,10 @@ export function AIAdvisoryScreen() {
       </div>
 
       {/* ── Context pill ────────────────────────────────────────────────── */}
-      <div className="px-4 sm:px-6 py-2 bg-slate-50 border-b border-slate-100 shrink-0">
-        <div className="flex items-center gap-2 text-xs text-slate-500">
+      <div className="px-4 sm:px-6 py-2 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-700 shrink-0">
+        <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
           <Database className="w-3 h-3" />
-          <span>Property context: <strong className="text-slate-700">2392 Tannerville Rd</strong> — equipment records, maintenance history, capital forecast loaded</span>
+          <span>Property context: <strong className="text-slate-700 dark:text-slate-300">2392 Tannerville Rd</strong> — equipment records, maintenance history, capital forecast loaded</span>
         </div>
       </div>
 
@@ -233,11 +233,11 @@ export function AIAdvisoryScreen() {
         {/* Welcome state */}
         {messages.length === 0 && !loading && (
           <div className="flex flex-col items-center justify-center h-full text-center">
-            <div className="w-14 h-14 bg-violet-100 rounded-2xl flex items-center justify-center mb-4">
-              <Sparkles className="w-7 h-7 text-violet-600" />
+            <div className="w-14 h-14 bg-violet-100 dark:bg-violet-900/30 rounded-2xl flex items-center justify-center mb-4">
+              <Sparkles className="w-7 h-7 text-violet-600 dark:text-violet-400" />
             </div>
-            <h2 className="text-lg font-bold text-slate-800 mb-1">Property Advisor</h2>
-            <p className="text-sm text-slate-500 max-w-xs">
+            <h2 className="text-lg font-bold text-slate-800 dark:text-slate-200 mb-1">Property Advisor</h2>
+            <p className="text-sm text-slate-500 dark:text-slate-400 max-w-xs">
               Ask anything about your property — maintenance, repairs, budgets, upgrade decisions.
               Answers are grounded in your actual equipment data.
             </p>
@@ -253,8 +253,8 @@ export function AIAdvisoryScreen() {
             <div className="w-8 h-8 rounded-xl bg-violet-600 flex items-center justify-center shrink-0">
               <Sparkles className="w-4 h-4 text-white" />
             </div>
-            <div className="bg-white border border-slate-200 rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm">
-              <div className="flex items-center gap-2 text-sm text-slate-500">
+            <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm">
+              <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
                 <Loader2 className="w-4 h-4 animate-spin text-violet-500" />
                 Analyzing your property data…
               </div>
@@ -267,14 +267,14 @@ export function AIAdvisoryScreen() {
 
       {/* ── Suggested prompts ───────────────────────────────────────────── */}
       {showSuggestions && (
-        <div className="px-4 sm:px-6 py-3 border-t border-slate-100 bg-slate-50 shrink-0">
-          <p className="text-xs font-medium text-slate-500 mb-2">Suggested questions</p>
+        <div className="px-4 sm:px-6 py-3 border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 shrink-0">
+          <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">Suggested questions</p>
           <div className="flex flex-wrap gap-2">
             {SUGGESTED_PROMPTS.map(prompt => (
               <button
                 key={prompt}
                 onClick={() => handleSend(prompt)}
-                className="text-xs bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-slate-700 hover:border-sky-300 hover:text-sky-700 hover:bg-sky-50 transition-colors"
+                className="text-xs bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl px-3 py-1.5 text-slate-700 dark:text-slate-300 hover:border-green-300 dark:hover:border-green-700 hover:text-green-700 dark:hover:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors"
               >
                 {prompt}
               </button>
@@ -284,13 +284,13 @@ export function AIAdvisoryScreen() {
       )}
 
       {/* ── Input area ──────────────────────────────────────────────────── */}
-      <div className="px-4 sm:px-6 py-3 border-t border-slate-200 bg-white shrink-0">
+      <div className="px-4 sm:px-6 py-3 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shrink-0">
         <div className="flex items-end gap-2">
           <button
             onClick={() => setShowSuggestions(s => !s)}
             className={cn(
               'w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-colors mb-0.5',
-              showSuggestions ? 'bg-sky-100 text-sky-600' : 'bg-slate-100 text-slate-500 hover:bg-slate-200',
+              showSuggestions ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400' : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600',
             )}
           >
             <Sparkles className="w-4 h-4" />
@@ -304,7 +304,7 @@ export function AIAdvisoryScreen() {
               onKeyDown={handleKeyDown}
               placeholder="Ask about your property…"
               rows={1}
-              className="w-full text-sm border border-slate-200 rounded-2xl px-4 py-2.5 pr-12 focus:outline-none focus:ring-2 focus:ring-sky-300 focus:border-sky-300 resize-none placeholder:text-slate-400 max-h-32 overflow-y-auto"
+              className="w-full text-sm border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-2xl px-4 py-2.5 pr-12 focus:outline-none focus:ring-2 focus:ring-green-300 focus:border-green-300 resize-none placeholder:text-slate-400 dark:placeholder:text-slate-500 max-h-32 overflow-y-auto"
               style={{ minHeight: '42px' }}
             />
           </div>
@@ -312,12 +312,12 @@ export function AIAdvisoryScreen() {
           <button
             onClick={() => handleSend()}
             disabled={!input.trim() || loading}
-            className="w-9 h-9 rounded-xl bg-sky-600 text-white flex items-center justify-center shrink-0 hover:bg-sky-700 disabled:bg-slate-200 disabled:text-slate-400 transition-colors mb-0.5"
+            className="w-9 h-9 rounded-xl bg-green-600 text-white flex items-center justify-center shrink-0 hover:bg-green-700 disabled:bg-slate-200 dark:disabled:bg-slate-700 disabled:text-slate-400 transition-colors mb-0.5"
           >
             <Send className="w-4 h-4" />
           </button>
         </div>
-        <p className="text-xs text-slate-400 mt-1.5 text-center">
+        <p className="text-xs text-slate-400 dark:text-slate-500 mt-1.5 text-center">
           Enter to send · Shift+Enter for new line
         </p>
       </div>

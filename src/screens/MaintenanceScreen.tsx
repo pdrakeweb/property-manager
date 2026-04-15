@@ -1,781 +1,198 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState } from 'react'
 import {
   CheckCircle2, Clock, AlertTriangle, Zap, ChevronDown,
-  ChevronUp, Calendar, DollarSign, User, RepeatIcon, X, Camera,
-  ImageIcon, Wrench, Plus, CalendarPlus, Loader2, RefreshCw,
+  ChevronUp, Calendar, DollarSign, User, RepeatIcon,
 } from 'lucide-react'
 import { cn } from '../utils/cn'
-import { SERVICE_RECORDS } from '../data/mockData'
-import { costStore, getYTDSpend } from '../lib/costStore'
-import { VendorSelector } from '../components/VendorSelector'
-import { useAppStore } from '../store/AppStoreContext'
-import {
-  customTaskStore,
-  getActiveTasks,
-  setTaskDelay,
-  setTaskRecurrence,
-} from '../lib/maintenanceStore'
-import { localIndex } from '../lib/localIndex'
-import { syncAllToCalendar } from '../lib/calendarClient'
-import type { DryRunResult } from '../lib/calendarClient'
-import { DryRunModal } from '../components/DryRunModal'
-import { TaskCalendarChip } from '../components/TaskCalendarChip'
-import { getValidToken, isDev } from '../auth/oauth'
-import { PROPERTIES } from '../data/mockData'
+import { MAINTENANCE_TASKS, SERVICE_RECORDS } from '../data/mockData'
 import type { MaintenanceTask, Priority } from '../types'
-import type { EventPhoto } from '../schemas'
 
 type Tab = 'due' | 'upcoming' | 'history'
 
 function priorityConfig(p: Priority) {
   return {
-    critical: { label: 'Critical', bg: 'bg-red-100',    text: 'text-red-700',    dot: 'bg-red-500'    },
-    high:     { label: 'High',     bg: 'bg-orange-100', text: 'text-orange-700', dot: 'bg-orange-500' },
-    medium:   { label: 'Medium',   bg: 'bg-amber-100',  text: 'text-amber-700',  dot: 'bg-amber-400'  },
-    low:      { label: 'Low',      bg: 'bg-slate-100',  text: 'text-slate-600',  dot: 'bg-slate-300'  },
+    critical: { label: 'Critical', bg: 'bg-red-100 dark:bg-red-900/30',    text: 'text-red-700 dark:text-red-400',    dot: 'bg-red-500'    },
+    high:     { label: 'High',     bg: 'bg-orange-100 dark:bg-orange-900/30', text: 'text-orange-700 dark:text-orange-400', dot: 'bg-orange-500' },
+    medium:   { label: 'Medium',   bg: 'bg-amber-100 dark:bg-amber-900/30',  text: 'text-amber-700 dark:text-amber-400',  dot: 'bg-amber-400'  },
+    low:      { label: 'Low',      bg: 'bg-slate-100 dark:bg-slate-700',     text: 'text-slate-600 dark:text-slate-400',  dot: 'bg-slate-300 dark:bg-slate-500' },
   }[p]
 }
 
 function sourceLabel(s: MaintenanceTask['source']) {
   return {
-    'ha-trigger':   { label: 'HA Usage', icon: Zap,   color: 'text-sky-600 bg-sky-50 border-sky-100'          },
-    'manufacturer': { label: 'Mfr.',     icon: Clock,  color: 'text-slate-600 bg-slate-50 border-slate-100'    },
-    'ai-suggested': { label: 'AI',       icon: Zap,    color: 'text-violet-600 bg-violet-50 border-violet-100' },
-    'manual':       { label: 'Manual',   icon: User,   color: 'text-slate-500 bg-slate-50 border-slate-100'    },
+    'ha-trigger':   { label: 'HA Usage', icon: Zap,   color: 'text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 border-green-100 dark:border-green-800'       },
+    'manufacturer': { label: 'Mfr.',     icon: Clock,  color: 'text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-700 border-slate-100 dark:border-slate-600' },
+    'ai-suggested': { label: 'AI',       icon: Zap,    color: 'text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/20 border-violet-100 dark:border-violet-800' },
+    'manual':       { label: 'Manual',   icon: User,   color: 'text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-700 border-slate-100 dark:border-slate-600' },
   }[s]
 }
 
-const PAYMENT_METHODS = [
-  { value: 'cash',  label: 'Cash'             },
-  { value: 'check', label: 'Check'            },
-  { value: 'card',  label: 'Card/Credit'      },
-  { value: 'ach',   label: 'ACH/Bank Transfer'},
-] as const
-
-const RECURRENCE_OPTIONS = [
-  { value: '',           label: 'None (one-time)'  },
-  { value: 'Weekly',     label: 'Weekly'           },
-  { value: 'Monthly',    label: 'Monthly'          },
-  { value: 'Quarterly',  label: 'Quarterly'        },
-  { value: 'Annually',   label: 'Annually'         },
-  { value: 'Every 90 days', label: 'Every 90 days' },
-  { value: 'Semi-annual',   label: 'Semi-annual'   },
-]
-
-const inp = 'w-full text-sm border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-sky-300 bg-white'
-
-// ── Photo role helpers ────────────────────────────────────────────────────────
-
-function photoRoleStyle(role: EventPhoto['role']) {
-  return {
-    before:  'bg-sky-600 text-white border-sky-600',
-    after:   'bg-emerald-600 text-white border-emerald-600',
-    general: 'bg-slate-500 text-white border-slate-500',
-  }[role]
-}
-
-function photoRoleBadge(role: EventPhoto['role']) {
-  return {
-    before:  'bg-sky-600/80 text-white',
-    after:   'bg-emerald-600/80 text-white',
-    general: 'bg-slate-600/70 text-white',
-  }[role]
-}
-
-// ── Mark Done Modal ───────────────────────────────────────────────────────────
-
-interface DoneModalProps {
-  task: MaintenanceTask
-  propertyId: string
-  onConfirm: () => void
-  onClose: () => void
-}
-
-function DoneModal({ task, propertyId, onConfirm, onClose }: DoneModalProps) {
-  const [completionDate,      setCompletionDate]      = useState(new Date().toISOString().split('T')[0])
-  const [actualCost,          setActualCost]          = useState('')
-  const [paymentMethod,       setPaymentMethod]       = useState('')
-  const [invoiceRef,          setInvoiceRef]          = useState('')
-  const [selectedVendorId,    setSelectedVendorId]    = useState('')
-  const [doneContractor,      setDoneContractor]      = useState(task.contractor ?? '')
-  const [laborWarrantyExpiry, setLaborWarrantyExpiry] = useState('')
-  const [doneNotes,           setDoneNotes]           = useState('')
-  const [photos,              setPhotos]              = useState<EventPhoto[]>([])
-  const [photoRole,           setPhotoRole]           = useState<EventPhoto['role']>('after')
-  const photoInputRef = useRef<HTMLInputElement>(null)
-
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose() }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [onClose])
-
-  function handlePhotoFiles(e: React.ChangeEvent<HTMLInputElement>) {
-    Array.from(e.target.files ?? []).forEach(file => {
-      const reader = new FileReader()
-      reader.onload = ev => {
-        setPhotos(prev => [...prev, {
-          id: crypto.randomUUID(), role: photoRole,
-          localDataUrl: ev.target!.result as string,
-        }])
-      }
-      reader.readAsDataURL(file)
-    })
-    e.target.value = ''
-  }
-
-  function handleConfirm() {
-    costStore.add({
-      id: crypto.randomUUID(),
-      taskId: task.id,
-      taskTitle: task.title,
-      categoryId: task.categoryId,
-      propertyId: task.propertyId,
-      completionDate,
-      cost: actualCost ? Number(actualCost) : undefined,
-      paymentMethod: (paymentMethod as 'cash' | 'check' | 'card' | 'ach') || undefined,
-      invoiceRef: invoiceRef || undefined,
-      vendorId: selectedVendorId || undefined,
-      contractor: doneContractor || undefined,
-      laborWarrantyExpiry: laborWarrantyExpiry || undefined,
-      notes: doneNotes || undefined,
-      photos: photos.length > 0 ? photos : undefined,
-    })
-    onConfirm()
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 px-4 pb-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-5 space-y-4 max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between">
-          <h2 className="text-base font-semibold text-slate-900">Mark Complete</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"><X className="w-5 h-5" /></button>
-        </div>
-        <p className="text-sm text-slate-600 leading-relaxed"><span className="font-medium">{task.title}</span></p>
-        <div className="space-y-3">
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Completion Date</label>
-            <input type="date" value={completionDate} onChange={e => setCompletionDate(e.target.value)} className={inp} />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Actual Cost ($)</label>
-            <input type="number" min="0" step="0.01" value={actualCost} onChange={e => setActualCost(e.target.value)} placeholder="0.00" className={inp} />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Contractor / Company</label>
-            <input value={doneContractor} onChange={e => setDoneContractor(e.target.value)} placeholder="Name or company" className={inp} />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Payment Method</label>
-            <select value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)} className={inp}>
-              <option value="">Select…</option>
-              {PAYMENT_METHODS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Invoice / Reference #</label>
-            <input value={invoiceRef} onChange={e => setInvoiceRef(e.target.value)} placeholder="INV-2024-0042" className={inp} />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Vendor (from directory)</label>
-            <VendorSelector value={selectedVendorId} onChange={setSelectedVendorId} propertyId={propertyId} />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Labor Warranty Expires</label>
-            <input type="date" value={laborWarrantyExpiry} onChange={e => setLaborWarrantyExpiry(e.target.value)} className={inp} />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Notes</label>
-            <textarea value={doneNotes} onChange={e => setDoneNotes(e.target.value)} rows={2} placeholder="Any notes about the work done…" className={cn(inp, 'resize-none')} />
-          </div>
-          {/* Photos */}
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1.5">Photos</label>
-            <div className="flex gap-1 mb-2">
-              {(['before', 'after', 'general'] as const).map(role => (
-                <button key={role} type="button" onClick={() => setPhotoRole(role)}
-                  className={cn('flex-1 py-1.5 text-xs font-medium rounded-lg border capitalize transition-colors',
-                    photoRole === role ? photoRoleStyle(role) : 'text-slate-600 border-slate-200 hover:border-sky-300 bg-white'
-                  )}>
-                  {role}
-                </button>
-              ))}
-            </div>
-            <input ref={photoInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handlePhotoFiles} />
-            <button type="button" onClick={() => photoInputRef.current?.click()}
-              className="w-full py-2.5 border border-dashed border-slate-300 rounded-xl text-sm text-slate-500 hover:border-sky-300 hover:text-sky-600 hover:bg-sky-50 transition-colors flex items-center justify-center gap-2">
-              <Camera className="w-4 h-4" />Add {photoRole} photo
-            </button>
-            {photos.length > 0 && (
-              <div className="grid grid-cols-3 gap-2 mt-2">
-                {photos.map(p => (
-                  <div key={p.id} className="relative rounded-xl overflow-hidden aspect-square">
-                    <img src={p.localDataUrl} alt={p.role} className="w-full h-full object-cover" />
-                    <div className={cn('absolute bottom-0 inset-x-0 text-[10px] font-semibold text-center py-0.5 capitalize', photoRoleBadge(p.role))}>{p.role}</div>
-                    <button type="button" onClick={() => setPhotos(prev => prev.filter(ph => ph.id !== p.id))}
-                      className="absolute top-1 right-1 w-5 h-5 bg-black/60 text-white rounded-full flex items-center justify-center hover:bg-black/80">
-                      <X className="w-3 h-3" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-        <div className="flex gap-3 pt-2">
-          <button onClick={onClose} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl px-4 py-2.5 text-sm font-medium">Cancel</button>
-          <button onClick={handleConfirm} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl px-4 py-2.5 text-sm font-medium">Mark Complete</button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ── Delay Modal ───────────────────────────────────────────────────────────────
-
-interface DelayModalProps {
-  task: MaintenanceTask
-  onSaved: () => void
-  onClose: () => void
-}
-
-function DelayModal({ task, onSaved, onClose }: DelayModalProps) {
-  const today = new Date().toISOString().slice(0, 10)
-  const [customDate, setCustomDate] = useState('')
-
-  function applyDelay(newDate: string) {
-    setTaskDelay(task.id, newDate)
-    onSaved()
-    onClose()
-  }
-
-  function addDays(n: number): string {
-    return new Date(Date.now() + n * 86_400_000).toISOString().slice(0, 10)
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 px-4 pb-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-5 space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-base font-semibold text-slate-900">Delay Task</h2>
-          <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-600 rounded-lg"><X className="w-5 h-5" /></button>
-        </div>
-        <p className="text-sm font-medium text-slate-700 leading-snug">{task.title}</p>
-        <p className="text-xs text-slate-500">Current due date: {new Date(task.dueDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
-        {/* Quick buttons */}
-        <div className="grid grid-cols-3 gap-2">
-          {[
-            { label: '+3 days', days: 3 },
-            { label: '+1 week', days: 7 },
-            { label: '+1 month', days: 30 },
-          ].map(({ label, days }) => (
-            <button key={days} onClick={() => applyDelay(addDays(days))}
-              className="py-2.5 text-sm font-medium bg-slate-100 hover:bg-sky-100 hover:text-sky-700 rounded-xl transition-colors">
-              {label}
-            </button>
-          ))}
-        </div>
-        {/* Custom date */}
-        <div>
-          <label className="block text-xs font-medium text-slate-600 mb-1">Or pick a date</label>
-          <div className="flex gap-2">
-            <input type="date" value={customDate} min={today} onChange={e => setCustomDate(e.target.value)} className={cn(inp, 'flex-1')} />
-            <button onClick={() => customDate && applyDelay(customDate)} disabled={!customDate}
-              className="px-4 py-2.5 bg-sky-600 text-white rounded-xl text-sm font-medium disabled:bg-sky-200 hover:bg-sky-700 transition-colors">
-              Set
-            </button>
-          </div>
-        </div>
-        <button onClick={onClose} className="w-full py-2.5 text-sm text-slate-500 hover:text-slate-700">Cancel</button>
-      </div>
-    </div>
-  )
-}
-
-// ── Schedule Modal (recurrence editor) ───────────────────────────────────────
-
-interface ScheduleModalProps {
-  task: MaintenanceTask
-  onSaved: () => void
-  onClose: () => void
-}
-
-function ScheduleModal({ task, onSaved, onClose }: ScheduleModalProps) {
-  const [dueDate,    setDueDate]    = useState(task.dueDate)
-  const [recurrence, setRecurrence] = useState(task.recurrence ?? '')
-
-  function save() {
-    setTaskDelay(task.id, dueDate)
-    setTaskRecurrence(task.id, recurrence)
-    onSaved()
-    onClose()
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 px-4 pb-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-5 space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-base font-semibold text-slate-900">Schedule Task</h2>
-          <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-600 rounded-lg"><X className="w-5 h-5" /></button>
-        </div>
-        <p className="text-sm font-medium text-slate-700 leading-snug">{task.title}</p>
-        <div className="space-y-3">
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Due Date</label>
-            <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className={inp} />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Recurrence</label>
-            <select value={recurrence} onChange={e => setRecurrence(e.target.value)} className={inp}>
-              {RECURRENCE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
-          </div>
-        </div>
-        <div className="flex gap-3 pt-1">
-          <button onClick={onClose} className="flex-1 bg-slate-100 text-slate-700 rounded-xl py-2.5 text-sm font-medium hover:bg-slate-200">Cancel</button>
-          <button onClick={save} className="flex-1 bg-sky-600 text-white rounded-xl py-2.5 text-sm font-medium hover:bg-sky-700">Save Schedule</button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ── Add Task Modal ────────────────────────────────────────────────────────────
-
-interface AddTaskModalProps {
-  propertyId: string
-  onSaved: () => void
-  onClose: () => void
-}
-
-function AddTaskModal({ propertyId, onSaved, onClose }: AddTaskModalProps) {
-  const [title,      setTitle]      = useState('')
-  const [system,     setSystem]     = useState('')
-  const [dueDate,    setDueDate]    = useState(new Date().toISOString().slice(0, 10))
-  const [priority,   setPriority]   = useState<Priority>('medium')
-  const [estCost,    setEstCost]    = useState('')
-  const [recurrence, setRecurrence] = useState('')
-  const [notes,      setNotes]      = useState('')
-
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose() }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [onClose])
-
-  function save() {
-    if (!title.trim()) return
-    customTaskStore.add({
-      id:            `task_${Date.now()}`,
-      propertyId,
-      title:         title.trim(),
-      systemLabel:   system.trim() || 'General',
-      categoryId:    'service_record',
-      dueDate,
-      priority,
-      status:        'upcoming',
-      source:        'manual',
-      estimatedCost: estCost ? Number(estCost) : undefined,
-      recurrence:    recurrence || undefined,
-      notes:         notes.trim() || undefined,
-    })
-    onSaved()
-    onClose()
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 px-4 pb-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-5 space-y-4 max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between">
-          <h2 className="text-base font-semibold text-slate-900">Add Maintenance Task</h2>
-          <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-600 rounded-lg"><X className="w-5 h-5" /></button>
-        </div>
-        <div className="space-y-3">
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Title *</label>
-            <input value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Clean gutters" className={inp} autoFocus />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">System / Category</label>
-            <input value={system} onChange={e => setSystem(e.target.value)} placeholder="HVAC, Generator, Roof…" className={inp} />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Due Date</label>
-            <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className={inp} />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Priority</label>
-            <select value={priority} onChange={e => setPriority(e.target.value as Priority)} className={inp}>
-              <option value="critical">Critical</option>
-              <option value="high">High</option>
-              <option value="medium">Medium</option>
-              <option value="low">Low</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Estimated Cost ($)</label>
-            <input type="number" min="0" step="1" value={estCost} onChange={e => setEstCost(e.target.value)} placeholder="0" className={inp} />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Recurrence</label>
-            <select value={recurrence} onChange={e => setRecurrence(e.target.value)} className={inp}>
-              {RECURRENCE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Notes</label>
-            <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} placeholder="Any relevant notes…" className={cn(inp, 'resize-none')} />
-          </div>
-        </div>
-        <div className="flex gap-3 pt-1">
-          <button onClick={onClose} className="flex-1 bg-slate-100 text-slate-700 rounded-xl py-2.5 text-sm font-medium">Cancel</button>
-          <button onClick={save} disabled={!title.trim()}
-            className="flex-1 bg-sky-600 text-white rounded-xl py-2.5 text-sm font-medium disabled:bg-sky-300 hover:bg-sky-700">
-            Add Task
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ── Event History Card ────────────────────────────────────────────────────────
-
-function EventHistoryCard({ event }: { event: ReturnType<typeof costStore.getAll>[number] }) {
+function TaskCard({ task }: { task: MaintenanceTask }) {
   const [expanded, setExpanded] = useState(false)
-  const beforePhotos  = event.photos?.filter(p => p.role === 'before')  ?? []
-  const afterPhotos   = event.photos?.filter(p => p.role === 'after')   ?? []
-  const generalPhotos = event.photos?.filter(p => p.role === 'general') ?? []
-  const hasPhotos = (event.photos?.length ?? 0) > 0
-
-  return (
-    <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-      <div className="px-4 py-4">
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex-1">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs bg-slate-100 text-slate-600 rounded-md px-2 py-0.5">{event.categoryId.replace(/_/g, ' ')}</span>
-              <span className="text-xs text-slate-400">
-                {new Date(event.completionDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-              </span>
-              {hasPhotos && (
-                <span className="flex items-center gap-0.5 text-xs text-sky-600">
-                  <ImageIcon className="w-3 h-3" />{event.photos!.length}
-                </span>
-              )}
-            </div>
-            <p className="text-sm font-semibold text-slate-800 mt-1.5">{event.taskTitle}</p>
-            {event.contractor && <p className="text-xs text-slate-400 mt-0.5">by {event.contractor}</p>}
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            {event.cost !== undefined && (
-              <span className="text-sm font-semibold text-slate-700">${event.cost.toLocaleString()}</span>
-            )}
-            {hasPhotos && (
-              <button onClick={() => setExpanded(e => !e)} className="text-slate-400 hover:text-slate-600 p-2 -m-1 rounded-lg">
-                {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-              </button>
-            )}
-          </div>
-        </div>
-        {event.notes && <p className="text-xs text-slate-500 mt-2 leading-relaxed">{event.notes}</p>}
-      </div>
-
-      {expanded && hasPhotos && (
-        <div className="border-t border-slate-100 px-4 py-4 space-y-4">
-          {(beforePhotos.length > 0 || afterPhotos.length > 0) && (
-            <div>
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Before / After</p>
-              <div className="grid grid-cols-2 gap-3">
-                {[
-                  { label: 'Before', photos: beforePhotos, cls: 'text-sky-600', border: 'border-sky-200' },
-                  { label: 'After',  photos: afterPhotos,  cls: 'text-emerald-600', border: 'border-emerald-200' },
-                ].map(({ label, photos, cls, border }) => (
-                  <div key={label}>
-                    <p className={cn('text-[11px] font-semibold mb-1.5 uppercase tracking-wide', cls)}>{label}</p>
-                    {photos.length > 0
-                      ? photos.map(p => (
-                          <div key={p.id} className={cn('rounded-xl overflow-hidden border mb-2', border)}>
-                            <img src={p.localDataUrl} alt={label} className="w-full object-cover" />
-                          </div>
-                        ))
-                      : <div className="aspect-square rounded-xl bg-slate-100 flex items-center justify-center text-slate-300">
-                          <ImageIcon className="w-6 h-6" />
-                        </div>
-                    }
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-          {generalPhotos.length > 0 && (
-            <div>
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">General</p>
-              <div className="grid grid-cols-3 gap-2">
-                {generalPhotos.map(p => (
-                  <div key={p.id} className="rounded-xl overflow-hidden border border-slate-200">
-                    <img src={p.localDataUrl} alt="General" className="w-full aspect-square object-cover" />
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ── Task Card ─────────────────────────────────────────────────────────────────
-
-// Bridges MaintenanceTask (legacy type) to the IndexRecord-based TaskCalendarChip
-function TaskCalendarChipWrapper({ task, propertyId }: { task: MaintenanceTask; propertyId: string }) {
-  const record = localIndex.getById(task.id)
-  if (!record) return null
-  return <TaskCalendarChip task={record} propertyId={propertyId} />
-}
-
-interface TaskCardProps {
-  task: MaintenanceTask
-  propertyId: string
-  onMutate: () => void
-}
-
-function TaskCard({ task, propertyId, onMutate }: TaskCardProps) {
-  const [expanded,       setExpanded]       = useState(false)
-  const [done,           setDone]           = useState(false)
-  const [showDoneModal,  setShowDoneModal]  = useState(false)
-  const [showDelayModal, setShowDelayModal] = useState(false)
-  const [showSchedModal, setShowSchedModal] = useState(false)
-  const pconf   = priorityConfig(task.priority)
-  const src     = sourceLabel(task.source)
+  const [done,     setDone]     = useState(false)
+  const pconf = priorityConfig(task.priority)
+  const src   = sourceLabel(task.source)
   const SrcIcon = src.icon
 
   if (done) {
     return (
-      <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 opacity-60">
+      <div className="flex items-center gap-3 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-2xl px-4 py-3 opacity-60">
         <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
-        <span className="text-sm text-slate-600 line-through flex-1">{task.title}</span>
-        <button onClick={() => setDone(false)} className="text-xs text-slate-400 hover:text-slate-600">Undo</button>
+        <span className="text-sm text-slate-600 dark:text-slate-400 line-through flex-1">{task.title}</span>
+        <button onClick={() => setDone(false)} className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">Undo</button>
       </div>
     )
   }
 
   return (
-    <>
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-        <div className="px-4 py-4">
-          <div className="flex items-start gap-3">
-            <div className={cn('w-2 h-2 rounded-full mt-2 shrink-0', pconf.dot)} />
-            <div className="flex-1 min-w-0">
-              <div className="flex items-start justify-between gap-2">
-                <p className="text-sm font-semibold text-slate-800 leading-tight">{task.title}</p>
-                <button onClick={() => setExpanded(e => !e)}
-                  className="shrink-0 p-2 -m-1 flex items-center justify-center text-slate-400 hover:text-slate-600 rounded-lg">
-                  {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                </button>
-              </div>
-              <div className="flex flex-wrap items-center gap-2 mt-2">
-                <span className="text-xs text-slate-500 bg-slate-100 rounded-md px-2 py-0.5">{task.systemLabel}</span>
-                <span className={cn('text-xs font-medium rounded-md px-2 py-0.5', pconf.bg, pconf.text)}>{pconf.label}</span>
-                <span className={cn('text-xs font-medium border rounded-full px-2 py-0.5 flex items-center gap-1', src.color)}>
-                  <SrcIcon className="w-2.5 h-2.5" />{src.label}
-                </span>
-              </div>
-              <div className="flex flex-wrap gap-3 mt-2.5 text-xs text-slate-500">
+    <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-sm overflow-hidden">
+      <div className="px-4 py-4">
+        <div className="flex items-start gap-3">
+          <div className={cn('w-2 h-2 rounded-full mt-2 shrink-0', pconf.dot)} />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-start justify-between gap-2">
+              <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 leading-tight">{task.title}</p>
+              <button
+                onClick={() => setExpanded(e => !e)}
+                className="shrink-0 w-6 h-6 flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+              >
+                {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              </button>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 mt-2">
+              {/* System badge */}
+              <span className="text-xs text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 rounded-md px-2 py-0.5">
+                {task.systemLabel}
+              </span>
+              {/* Priority badge */}
+              <span className={cn('text-xs font-medium rounded-md px-2 py-0.5', pconf.bg, pconf.text)}>
+                {pconf.label}
+              </span>
+              {/* Source badge */}
+              <span className={cn('text-xs font-medium border rounded-full px-2 py-0.5 flex items-center gap-1', src.color)}>
+                <SrcIcon className="w-2.5 h-2.5" />
+                {src.label}
+              </span>
+            </div>
+
+            {/* Key info line */}
+            <div className="flex flex-wrap gap-3 mt-2.5 text-xs text-slate-500 dark:text-slate-400">
+              <span className="flex items-center gap-1">
+                <Calendar className="w-3 h-3" />
+                Due {new Date(task.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+              </span>
+              {task.estimatedCost !== undefined && task.estimatedCost > 0 && (
                 <span className="flex items-center gap-1">
-                  <Calendar className="w-3 h-3" />
-                  Due {new Date(task.dueDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                  <DollarSign className="w-3 h-3" />
+                  Est. ${task.estimatedCost.toLocaleString()}
                 </span>
-                {task.estimatedCost !== undefined && task.estimatedCost > 0 && (
-                  <span className="flex items-center gap-1">
-                    <DollarSign className="w-3 h-3" />Est. ${task.estimatedCost.toLocaleString()}
-                  </span>
-                )}
-                {task.recurrence && (
-                  <span className="flex items-center gap-1">
-                    <RepeatIcon className="w-3 h-3" />{task.recurrence}
-                  </span>
-                )}
-              </div>
-              <div className="mt-2">
-                <TaskCalendarChipWrapper task={task} propertyId={propertyId} />
-              </div>
+              )}
+              {task.recurrence && (
+                <span className="flex items-center gap-1">
+                  <RepeatIcon className="w-3 h-3" />
+                  {task.recurrence}
+                </span>
+              )}
             </div>
           </div>
-          {expanded && (task.contractor || task.notes) && (
-            <div className="mt-3 pt-3 border-t border-slate-100 space-y-2 ml-5">
-              {task.contractor && <p className="text-xs text-slate-600"><span className="font-medium">Contractor:</span> {task.contractor}</p>}
-              {task.notes && <p className="text-xs text-slate-600"><span className="font-medium">Notes:</span> {task.notes}</p>}
-            </div>
-          )}
         </div>
 
-        <div className="border-t border-slate-100 flex">
-          <button onClick={() => setShowDoneModal(true)}
-            className="flex-1 py-3 text-sm font-medium text-emerald-600 hover:bg-emerald-50 transition-colors flex items-center justify-center gap-1.5">
-            <CheckCircle2 className="w-4 h-4" />Mark Done
-          </button>
-          <div className="w-px bg-slate-100" />
-          <button onClick={() => setShowDelayModal(true)}
-            className="flex-1 py-3 text-sm font-medium text-slate-500 hover:bg-slate-50 transition-colors">
-            Delay
-          </button>
-          <div className="w-px bg-slate-100" />
-          <button onClick={() => setShowSchedModal(true)}
-            className="flex-1 py-3 text-sm font-medium text-slate-500 hover:bg-slate-50 transition-colors">
-            Schedule
-          </button>
-        </div>
+        {/* Expanded detail */}
+        {expanded && (
+          <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700 space-y-2 ml-5">
+            {task.contractor && (
+              <p className="text-xs text-slate-600 dark:text-slate-400">
+                <span className="font-medium">Contractor:</span> {task.contractor}
+              </p>
+            )}
+            {task.notes && (
+              <p className="text-xs text-slate-600 dark:text-slate-400">
+                <span className="font-medium">Notes:</span> {task.notes}
+              </p>
+            )}
+          </div>
+        )}
       </div>
 
-      {showDoneModal && (
-        <DoneModal
-          task={task}
-          propertyId={propertyId}
-          onConfirm={() => { setDone(true); setShowDoneModal(false); onMutate() }}
-          onClose={() => setShowDoneModal(false)}
-        />
-      )}
-      {showDelayModal && (
-        <DelayModal
-          task={task}
-          onSaved={onMutate}
-          onClose={() => setShowDelayModal(false)}
-        />
-      )}
-      {showSchedModal && (
-        <ScheduleModal
-          task={task}
-          onSaved={onMutate}
-          onClose={() => setShowSchedModal(false)}
-        />
-      )}
-    </>
+      {/* Action row */}
+      <div className="border-t border-slate-100 dark:border-slate-700 flex">
+        <button
+          onClick={() => setDone(true)}
+          className="flex-1 py-3 text-sm font-medium text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors flex items-center justify-center gap-1.5"
+        >
+          <CheckCircle2 className="w-4 h-4" />
+          Mark Done
+        </button>
+        <div className="w-px bg-slate-100 dark:bg-slate-700" />
+        <button className="flex-1 py-3 text-sm font-medium text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+          Delay
+        </button>
+        <div className="w-px bg-slate-100 dark:bg-slate-700" />
+        <button className="flex-1 py-3 text-sm font-medium text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+          Schedule
+        </button>
+      </div>
+    </div>
   )
 }
 
-// ── Main Screen ───────────────────────────────────────────────────────────────
-
 export function MaintenanceScreen() {
-  const { activePropertyId } = useAppStore()
-  const [tab,           setTab]           = useState<Tab>('due')
-  const [tick,          setTick]          = useState(0)
-  const [showAddTask,   setShowAddTask]   = useState(false)
-  const [calSyncing,    setCalSyncing]    = useState(false)
-  const [dryRunResult,  setDryRunResult]  = useState<DryRunResult | null>(null)
+  const [tab, setTab] = useState<Tab>('due')
 
-  function onMutate() { setTick(t => t + 1) }
-
-  async function handleCalendarSync() {
-    const propertyName = PROPERTIES.find(p => p.id === activePropertyId)?.name ?? activePropertyId
-    if (isDev()) {
-      setCalSyncing(true)
-      try {
-        const result = await syncAllToCalendar('dev_token', activePropertyId, propertyName, true)
-        setDryRunResult(result as DryRunResult)
-      } finally {
-        setCalSyncing(false)
-      }
-      return
-    }
-    setCalSyncing(true)
-    try {
-      const token = await getValidToken()
-      if (!token) return
-      await syncAllToCalendar(token, activePropertyId, propertyName)
-    } finally {
-      setCalSyncing(false)
-    }
-  }
-
-  const ytdSpend = getYTDSpend(activePropertyId)
-
-  // Use getActiveTasks so overrides and recalculated statuses are applied
-  const allActive  = getActiveTasks(activePropertyId)
-  const overdue    = allActive.filter(t => t.status === 'overdue')
-  const due        = allActive.filter(t => t.status === 'due')
-  const upcoming   = allActive.filter(t => t.status === 'upcoming')
+  const overdue  = MAINTENANCE_TASKS.filter(t => t.status === 'overdue')
+  const due      = MAINTENANCE_TASKS.filter(t => t.status === 'due')
+  const upcoming = MAINTENANCE_TASKS.filter(t => t.status === 'upcoming')
 
   const dueTasks      = [...overdue, ...due]
   const upcomingTasks = upcoming
   const totalCostDue  = dueTasks.reduce((s, t) => s + (t.estimatedCost ?? 0), 0)
 
-  // Completed events from store (most recent first), filtered by property
-  const completedEvents = costStore
-    .getAll()
-    .filter(e => e.propertyId === activePropertyId)
-    .sort((a, b) => b.completionDate.localeCompare(a.completionDate))
-
-  // SERVICE_RECORDS also filtered by property
-  const serviceRecords = SERVICE_RECORDS.filter(r => r.propertyId === activePropertyId)
-  const historyCount   = serviceRecords.length + completedEvents.length
-
   const tabs: { id: Tab; label: string; count: number }[] = [
-    { id: 'due',      label: 'Due Now',  count: dueTasks.length      },
+    { id: 'due',      label: 'Due Now',  count: dueTasks.length       },
     { id: 'upcoming', label: 'Upcoming', count: upcomingTasks.length  },
-    { id: 'history',  label: 'History',  count: historyCount          },
+    { id: 'history',  label: 'History',  count: SERVICE_RECORDS.length},
   ]
 
   return (
-    <div className="space-y-5" key={tick}>
+    <div className="space-y-5">
 
       {/* Header */}
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold text-slate-900">Maintenance</h1>
-          <p className="text-sm text-slate-500 mt-0.5">
-            {dueTasks.length} tasks due · ${totalCostDue.toLocaleString()} estimated cost
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={handleCalendarSync}
-          disabled={calSyncing}
-          title={isDev() ? 'Preview calendar sync (dev mode)' : 'Sync all tasks to Google Calendar'}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium border transition-colors shrink-0 bg-white border-slate-200 text-slate-600 hover:border-sky-300 hover:text-sky-700 hover:bg-sky-50 disabled:opacity-50"
-        >
-          {calSyncing
-            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            : isDev()
-              ? <CalendarPlus className="w-3.5 h-3.5" />
-              : <RefreshCw className="w-3.5 h-3.5" />
-          }
-          {isDev() ? 'Preview Calendar' : 'Sync Calendar'}
-        </button>
+      <div>
+        <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">Maintenance</h1>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+          {dueTasks.length} tasks due · ${totalCostDue.toLocaleString()} estimated cost
+        </p>
       </div>
-      {dryRunResult && <DryRunModal result={dryRunResult} onClose={() => setDryRunResult(null)} />}
-
-      {/* YTD Spend */}
-      {ytdSpend > 0 && (
-        <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3 flex items-center justify-between">
-          <div>
-            <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wide">YTD Maintenance Spend</p>
-            <p className="text-xl font-bold text-emerald-800">${ytdSpend.toLocaleString()}</p>
-          </div>
-          <p className="text-xs text-emerald-600">{new Date().getFullYear()}</p>
-        </div>
-      )}
 
       {/* Alert: overdue items */}
       {overdue.length > 0 && (
-        <div className="flex items-center gap-2.5 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+        <div className="flex items-center gap-2.5 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl px-4 py-3">
           <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
-          <span className="text-sm text-red-700">
+          <span className="text-sm text-red-700 dark:text-red-400">
             {overdue.length} overdue {overdue.length === 1 ? 'task' : 'tasks'} — {overdue.map(t => t.title).join(', ')}
           </span>
         </div>
       )}
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-slate-100 rounded-xl p-1">
+      <div className="flex gap-1 bg-slate-100 dark:bg-slate-800 rounded-xl p-1">
         {tabs.map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)}
-            className={cn('flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-sm font-medium transition-colors',
-              tab === t.id ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700')}>
+          <button
+            key={t.id}
+            onClick={() => setTab(t.id)}
+            className={cn(
+              'flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-sm font-medium transition-colors',
+              tab === t.id
+                ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm'
+                : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300',
+            )}
+          >
             {t.label}
-            <span className={cn('text-xs px-1.5 py-0.5 rounded-full font-semibold',
-              tab === t.id ? 'bg-sky-100 text-sky-700' : 'bg-slate-200 text-slate-500')}>
+            <span className={cn(
+              'text-xs px-1.5 py-0.5 rounded-full font-semibold',
+              tab === t.id ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' : 'bg-slate-200 dark:bg-slate-600 text-slate-500 dark:text-slate-400',
+            )}>
               {t.count}
             </span>
           </button>
@@ -785,10 +202,16 @@ export function MaintenanceScreen() {
       {/* Tab content */}
       {tab === 'due' && (
         <div className="space-y-3">
-          {overdue.length > 0 && <p className="text-xs font-semibold uppercase text-red-500 tracking-wide">Overdue</p>}
-          {overdue.map(task => <TaskCard key={task.id} task={task} propertyId={activePropertyId} onMutate={onMutate} />)}
-          {due.length > 0 && <p className="text-xs font-semibold uppercase text-orange-500 tracking-wide mt-4">Due Soon</p>}
-          {due.map(task => <TaskCard key={task.id} task={task} propertyId={activePropertyId} onMutate={onMutate} />)}
+          {overdue.length > 0 && (
+            <p className="text-xs font-semibold uppercase text-red-500 dark:text-red-400 tracking-wide">Overdue</p>
+          )}
+          {overdue.map(task => <TaskCard key={task.id} task={task} />)}
+
+          {due.length > 0 && (
+            <p className="text-xs font-semibold uppercase text-orange-500 tracking-wide mt-4">Due Soon</p>
+          )}
+          {due.map(task => <TaskCard key={task.id} task={task} />)}
+
           {dueTasks.length === 0 && (
             <div className="text-center py-12 text-slate-400">
               <CheckCircle2 className="w-10 h-10 mx-auto mb-2 text-emerald-300" />
@@ -800,73 +223,45 @@ export function MaintenanceScreen() {
 
       {tab === 'upcoming' && (
         <div className="space-y-3">
-          {upcomingTasks.length === 0 && (
-            <div className="text-center py-12 text-slate-400">
-              <Calendar className="w-10 h-10 mx-auto mb-2 text-slate-200" />
-              <p className="text-sm font-medium">No upcoming tasks scheduled.</p>
-            </div>
-          )}
-          {upcomingTasks.map(task => <TaskCard key={task.id} task={task} propertyId={activePropertyId} onMutate={onMutate} />)}
+          {upcomingTasks.map(task => <TaskCard key={task.id} task={task} />)}
         </div>
       )}
 
       {tab === 'history' && (
         <div className="space-y-3">
-          {historyCount === 0 && (
-            <div className="text-center py-12 text-slate-400">
-              <Wrench className="w-10 h-10 mx-auto mb-2 text-slate-200" />
-              <p className="text-sm font-medium">No service history yet.</p>
-              <p className="text-xs mt-1">Mark tasks as done to build your history.</p>
-            </div>
-          )}
-
-          {completedEvents.length > 0 && (
-            <>
-              <p className="text-xs font-semibold uppercase text-emerald-600 tracking-wide">Completed ({completedEvents.length})</p>
-              {completedEvents.map(event => <EventHistoryCard key={event.id} event={event} />)}
-            </>
-          )}
-
-          {serviceRecords.length > 0 && (
-            <>
-              <p className="text-xs font-semibold uppercase text-slate-400 tracking-wide mt-2">Service Records</p>
-              {serviceRecords.map(record => (
-                <div key={record.id} className="bg-white border border-slate-200 rounded-2xl px-4 py-4 shadow-sm">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs bg-slate-100 text-slate-600 rounded-md px-2 py-0.5">{record.systemLabel}</span>
-                        <span className="text-xs text-slate-400">
-                          {new Date(record.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                        </span>
-                      </div>
-                      <p className="text-sm text-slate-700 mt-1.5">{record.workDescription}</p>
-                      {record.contractor && <p className="text-xs text-slate-400 mt-1">by {record.contractor}</p>}
-                    </div>
-                    {record.totalCost !== undefined && (
-                      <span className="text-sm font-semibold text-slate-700 shrink-0">${record.totalCost.toLocaleString()}</span>
-                    )}
+          {SERVICE_RECORDS.map(record => (
+            <div key={record.id} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl px-4 py-4 shadow-sm">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 rounded-md px-2 py-0.5">
+                      {record.systemLabel}
+                    </span>
+                    <span className="text-xs text-slate-400 dark:text-slate-500">
+                      {new Date(record.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </span>
                   </div>
+                  <p className="text-sm text-slate-700 dark:text-slate-300 mt-1.5">{record.workDescription}</p>
+                  {record.contractor && (
+                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">by {record.contractor}</p>
+                  )}
                 </div>
-              ))}
-            </>
-          )}
+                {record.totalCost !== undefined && (
+                  <span className="text-sm font-semibold text-slate-700 dark:text-slate-300 shrink-0">
+                    ${record.totalCost.toLocaleString()}
+                  </span>
+                )}
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
-      {/* Add task */}
-      <button onClick={() => setShowAddTask(true)}
-        className="w-full py-3.5 rounded-2xl border border-dashed border-slate-300 text-sm font-medium text-slate-500 hover:border-sky-300 hover:text-sky-600 hover:bg-sky-50 transition-colors flex items-center justify-center gap-2">
-        <Plus className="w-4 h-4" />Add maintenance task
+      {/* Add task button */}
+      <button className="w-full py-3.5 rounded-2xl border border-dashed border-slate-300 dark:border-slate-600 text-sm font-medium text-slate-500 dark:text-slate-400 hover:border-green-300 dark:hover:border-green-700 hover:text-green-600 dark:hover:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/10 transition-colors">
+        + Add maintenance task
       </button>
 
-      {showAddTask && (
-        <AddTaskModal
-          propertyId={activePropertyId}
-          onSaved={onMutate}
-          onClose={() => setShowAddTask(false)}
-        />
-      )}
     </div>
   )
 }

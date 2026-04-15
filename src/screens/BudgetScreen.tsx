@@ -1,41 +1,25 @@
 import { useState } from 'react'
-import {
-  TrendingUp, Plus, Info, AlertTriangle, CheckCircle2,
-  ArrowLeft, Trash2, ChevronDown, ChevronUp, AlertCircle,
-} from 'lucide-react'
+import { TrendingUp, Plus, Info, AlertTriangle, CheckCircle2 } from 'lucide-react'
 import { cn } from '../utils/cn'
 import { CAPITAL_ITEMS, SERVICE_RECORDS } from '../data/mockData'
-import type { Priority, CapitalItem, CapitalTransaction } from '../types'
-import {
-  capitalTransactionStore,
-  capitalItemOverrideStore,
-  getTransactionsForItem,
-  spentToDate,
-  getOverride,
-  setOverride,
-} from '../lib/capitalStore'
+import type { Priority } from '../types'
 
 type Horizon = '1yr' | '3yr' | '10yr'
 
 function priorityConfig(p: Priority) {
   return {
-    critical: { label: 'Critical', bar: 'bg-red-500',    badge: 'text-red-700 bg-red-50 border-red-200'         },
-    high:     { label: 'High',     bar: 'bg-orange-500', badge: 'text-orange-700 bg-orange-50 border-orange-200' },
-    medium:   { label: 'Medium',   bar: 'bg-amber-400',  badge: 'text-amber-700 bg-amber-50 border-amber-200'   },
-    low:      { label: 'Low',      bar: 'bg-slate-300',  badge: 'text-slate-600 bg-slate-50 border-slate-200'   },
+    critical: { label: 'Critical', bar: 'bg-red-500',    badge: 'text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-800'       },
+    high:     { label: 'High',     bar: 'bg-orange-500', badge: 'text-orange-700 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/30 border-orange-200 dark:border-orange-800' },
+    medium:   { label: 'Medium',   bar: 'bg-amber-400',  badge: 'text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 border-amber-200 dark:border-amber-800'  },
+    low:      { label: 'Low',      bar: 'bg-slate-300 dark:bg-slate-500',  badge: 'text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-700 border-slate-200 dark:border-slate-600'  },
   }[p]
-}
-
-const STATUS_LABELS: Record<string, string> = {
-  planned: 'Planned',
-  'in-progress': 'In Progress',
-  complete: 'Complete',
 }
 
 const CURRENT_YEAR = 2026
 
-function groupByYear(items: CapitalItem[], maxYear: number) {
-  const grouped: Record<number, CapitalItem[]> = {}
+// Group capital items by year
+function groupByYear(items: typeof CAPITAL_ITEMS, maxYear: number) {
+  const grouped: Record<number, typeof CAPITAL_ITEMS> = {}
   items
     .filter(i => i.estimatedYear <= maxYear)
     .forEach(item => {
@@ -45,350 +29,24 @@ function groupByYear(items: CapitalItem[], maxYear: number) {
   return grouped
 }
 
-function yearTotal(items: CapitalItem[]) {
+function yearTotal(items: typeof CAPITAL_ITEMS) {
   return {
     low:  items.reduce((s, i) => s + i.costLow,  0),
     high: items.reduce((s, i) => s + i.costHigh, 0),
   }
 }
 
-// ── Capital Item Detail View ────────────────────────────────────────────────
-
-interface TxFormState {
-  date: string
-  amount: string
-  invoiceRef: string
-  notes: string
-}
-
-const emptyTxForm = (): TxFormState => ({
-  date: new Date().toISOString().slice(0, 10),
-  amount: '',
-  invoiceRef: '',
-  notes: '',
-})
-
-function CapitalItemDetail({
-  item,
-  onBack,
-  onMutate,
-}: {
-  item: CapitalItem
-  onBack: () => void
-  onMutate: () => void
-}) {
-  const [tick, setTick] = useState(0)
-  const [showAddTx, setShowAddTx] = useState(false)
-  const [editingTx, setEditingTx] = useState<CapitalTransaction | null>(null)
-  const [txForm, setTxForm] = useState<TxFormState>(emptyTxForm())
-
-  const refresh = () => { setTick(t => t + 1); onMutate() }
-
-  const transactions = getTransactionsForItem(item.id)
-  const spent = spentToDate(item.id)
-  const override = getOverride(item.id)
-  const status = override?.status ?? 'planned'
-  const pctComplete = override?.percentComplete ?? Math.min(100, Math.round(spent / item.costHigh * 100))
-  const overBudget = spent > item.costHigh
-  const pconf = priorityConfig(item.priority)
-
-  // Progress bar colour
-  const barColor = overBudget ? 'bg-red-500' : spent > item.costLow ? 'bg-amber-400' : 'bg-emerald-500'
-
-  function saveTx() {
-    const amount = parseFloat(txForm.amount)
-    if (!txForm.date || isNaN(amount) || amount <= 0) return
-    if (editingTx) {
-      capitalTransactionStore.update({ ...editingTx, date: txForm.date, amount, invoiceRef: txForm.invoiceRef || undefined, notes: txForm.notes || undefined })
-    } else {
-      capitalTransactionStore.add({
-        id: crypto.randomUUID(),
-        capitalItemId: item.id,
-        date: txForm.date,
-        amount,
-        invoiceRef: txForm.invoiceRef || undefined,
-        notes: txForm.notes || undefined,
-      })
-    }
-    setShowAddTx(false)
-    setEditingTx(null)
-    setTxForm(emptyTxForm())
-    refresh()
-  }
-
-  function deleteTx(id: string) {
-    capitalTransactionStore.remove(id)
-    refresh()
-  }
-
-  function startEdit(tx: CapitalTransaction) {
-    setEditingTx(tx)
-    setTxForm({ date: tx.date, amount: String(tx.amount), invoiceRef: tx.invoiceRef ?? '', notes: tx.notes ?? '' })
-    setShowAddTx(true)
-  }
-
-  function cancelTx() {
-    setShowAddTx(false)
-    setEditingTx(null)
-    setTxForm(emptyTxForm())
-  }
-
-  // Suppress tick-only lint warning
-  void tick
-
-  return (
-    <div className="space-y-5">
-
-      {/* Back + title */}
-      <div>
-        <button
-          onClick={onBack}
-          className="flex items-center gap-1.5 text-sm text-sky-600 hover:text-sky-800 mb-3 -ml-0.5"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Back to budget
-        </button>
-        <div className="flex items-start gap-2">
-          <div className="flex-1">
-            <h1 className="text-xl font-bold text-slate-900 leading-tight">{item.title}</h1>
-            <p className="text-sm text-slate-500 mt-0.5">
-              {item.installYear ? `Installed ${item.installYear} (${item.ageYears} yrs)` : `Planned ${item.estimatedYear}`}
-            </p>
-          </div>
-          <span className={cn('text-xs font-medium px-2 py-0.5 rounded-full border mt-1', pconf.badge)}>
-            {pconf.label}
-          </span>
-        </div>
-      </div>
-
-      {/* Budget vs Actual card */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm space-y-3">
-        <div className="flex items-center justify-between">
-          <span className="text-sm font-semibold text-slate-700">Budget vs. Actual</span>
-          {overBudget && (
-            <span className="flex items-center gap-1 text-xs font-semibold text-red-600">
-              <AlertCircle className="w-3.5 h-3.5" />
-              Over budget
-            </span>
-          )}
-        </div>
-
-        <div className="grid grid-cols-3 gap-3 text-center">
-          <div>
-            <p className="text-xs text-slate-500 mb-0.5">Budget (low)</p>
-            <p className="text-base font-bold text-slate-800">${item.costLow.toLocaleString()}</p>
-          </div>
-          <div>
-            <p className="text-xs text-slate-500 mb-0.5">Budget (high)</p>
-            <p className="text-base font-bold text-slate-800">${item.costHigh.toLocaleString()}</p>
-          </div>
-          <div>
-            <p className="text-xs text-slate-500 mb-0.5">Spent</p>
-            <p className={cn('text-base font-bold', overBudget ? 'text-red-600' : 'text-slate-800')}>
-              ${spent.toLocaleString()}
-            </p>
-          </div>
-        </div>
-
-        {/* Progress bar */}
-        <div>
-          <div className="flex justify-between text-xs text-slate-500 mb-1">
-            <span>Progress</span>
-            <span>{pctComplete}%</span>
-          </div>
-          <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
-            <div
-              className={cn('h-full rounded-full transition-all', barColor)}
-              style={{ width: `${Math.min(pctComplete, 100)}%` }}
-            />
-          </div>
-          {overBudget && (
-            <p className="text-xs text-red-600 mt-1">
-              ${(spent - item.costHigh).toLocaleString()} over high estimate
-            </p>
-          )}
-        </div>
-
-        {/* Status + manual % complete */}
-        <div className="flex gap-3 pt-1">
-          <div className="flex-1">
-            <label className="text-xs text-slate-500 block mb-1">Status</label>
-            <select
-              value={status}
-              onChange={e => { setOverride(item.id, { status: e.target.value as 'planned' | 'in-progress' | 'complete' }); refresh() }}
-              className="w-full text-sm border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white"
-            >
-              <option value="planned">Planned</option>
-              <option value="in-progress">In Progress</option>
-              <option value="complete">Complete</option>
-            </select>
-          </div>
-          <div className="w-28">
-            <label className="text-xs text-slate-500 block mb-1">% Complete</label>
-            <input
-              type="number"
-              min={0}
-              max={100}
-              value={pctComplete}
-              onChange={e => { setOverride(item.id, { percentComplete: Math.min(100, Math.max(0, Number(e.target.value))) }); refresh() }}
-              className="w-full text-sm border border-slate-200 rounded-lg px-2.5 py-1.5"
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Transaction ledger */}
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold text-slate-700 uppercase tracking-wide">Transaction Ledger</h2>
-          {!showAddTx && (
-            <button
-              onClick={() => setShowAddTx(true)}
-              className="flex items-center gap-1.5 text-xs font-medium text-sky-600 hover:text-sky-800"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              Add
-            </button>
-          )}
-        </div>
-
-        {/* Add / Edit form */}
-        {showAddTx && (
-          <div className="bg-sky-50 border border-sky-200 rounded-2xl p-4 mb-3 space-y-3">
-            <p className="text-sm font-semibold text-sky-800">{editingTx ? 'Edit transaction' : 'New transaction'}</p>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs text-slate-600 block mb-1">Date *</label>
-                <input
-                  type="date"
-                  value={txForm.date}
-                  onChange={e => setTxForm(f => ({ ...f, date: e.target.value }))}
-                  className="w-full text-sm border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-slate-600 block mb-1">Amount ($) *</label>
-                <input
-                  type="number"
-                  min={0}
-                  placeholder="0.00"
-                  value={txForm.amount}
-                  onChange={e => setTxForm(f => ({ ...f, amount: e.target.value }))}
-                  className="w-full text-sm border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white"
-                />
-              </div>
-            </div>
-            <div>
-              <label className="text-xs text-slate-600 block mb-1">Invoice / Ref</label>
-              <input
-                type="text"
-                placeholder="Invoice #, check #, etc."
-                value={txForm.invoiceRef}
-                onChange={e => setTxForm(f => ({ ...f, invoiceRef: e.target.value }))}
-                className="w-full text-sm border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white"
-              />
-            </div>
-            <div>
-              <label className="text-xs text-slate-600 block mb-1">Notes</label>
-              <input
-                type="text"
-                placeholder="Vendor, work description…"
-                value={txForm.notes}
-                onChange={e => setTxForm(f => ({ ...f, notes: e.target.value }))}
-                className="w-full text-sm border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white"
-              />
-            </div>
-            <div className="flex gap-2 pt-1">
-              <button
-                onClick={saveTx}
-                className="flex-1 bg-sky-600 text-white text-sm font-medium py-2 rounded-xl hover:bg-sky-700"
-              >
-                {editingTx ? 'Save changes' : 'Add transaction'}
-              </button>
-              <button
-                onClick={cancelTx}
-                className="px-4 text-sm text-slate-600 hover:text-slate-800"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Ledger rows */}
-        {transactions.length > 0 ? (
-          <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-            {transactions.map(tx => (
-              <div key={tx.id} className="flex items-start gap-3 px-4 py-3 border-b border-slate-100 last:border-0">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-sm font-semibold text-slate-800">${tx.amount.toLocaleString()}</span>
-                    <span className="text-xs text-slate-500">
-                      {new Date(tx.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                    </span>
-                  </div>
-                  {tx.invoiceRef && <p className="text-xs text-slate-500 mt-0.5">{tx.invoiceRef}</p>}
-                  {tx.notes && <p className="text-xs text-slate-400 mt-0.5">{tx.notes}</p>}
-                </div>
-                <div className="flex gap-2 shrink-0 mt-0.5">
-                  <button
-                    onClick={() => startEdit(tx)}
-                    className="text-xs text-sky-600 hover:text-sky-800 font-medium"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => deleteTx(tx.id)}
-                    className="text-slate-400 hover:text-red-500"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-            ))}
-            <div className="flex items-center justify-between px-4 py-3 bg-slate-50 border-t border-slate-100">
-              <span className="text-sm font-semibold text-slate-700">Total spent</span>
-              <span className={cn('text-sm font-bold', overBudget ? 'text-red-600' : 'text-slate-800')}>
-                ${spent.toLocaleString()}
-              </span>
-            </div>
-          </div>
-        ) : (
-          <div className="text-center py-8 text-slate-400">
-            <p className="text-sm">No transactions yet</p>
-            <p className="text-xs mt-1">Tap Add to record a payment or invoice</p>
-          </div>
-        )}
-      </div>
-
-      {/* Notes */}
-      {item.notes && (
-        <div className="bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3.5">
-          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Notes</p>
-          <p className="text-sm text-slate-700 leading-relaxed">{item.notes}</p>
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ── Year row (list view) ────────────────────────────────────────────────────
-
+// CSS bar chart row for a single year
 function YearRow({
   year,
   items,
   maxTotal,
-  onSelectItem,
 }: {
   year: number
-  items: CapitalItem[]
+  items: typeof CAPITAL_ITEMS
   maxTotal: number
-  onSelectItem: (id: string) => void
 }) {
   const [expanded, setExpanded] = useState(year === CURRENT_YEAR)
-  const [tick] = useState(0)
-  void tick
-
   const total = yearTotal(items)
   const pct   = Math.round(total.high / maxTotal * 100)
   const topPriority = items.some(i => i.priority === 'critical') ? 'critical' :
@@ -397,78 +55,63 @@ function YearRow({
   const pconf = priorityConfig(topPriority)
 
   return (
-    <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+    <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden shadow-sm">
       <button
         onClick={() => setExpanded(e => !e)}
         className="w-full px-4 pt-4 pb-3 text-left"
       >
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
-            <span className="text-base font-bold text-slate-800">{year}</span>
+            <span className="text-base font-bold text-slate-800 dark:text-slate-200">{year}</span>
             <span className={cn('text-xs font-medium px-2 py-0.5 rounded-full border', pconf.badge)}>
               {pconf.label}
             </span>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-bold text-slate-800">
+          <div className="text-right">
+            <span className="text-sm font-bold text-slate-800 dark:text-slate-200">
               ${total.low.toLocaleString()}–${total.high.toLocaleString()}
             </span>
-            {expanded ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
           </div>
         </div>
 
         {/* Bar */}
-        <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
+        <div className="h-3 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
           <div
             className={cn('h-full rounded-full transition-all', pconf.bar)}
             style={{ width: `${Math.max(pct, 4)}%` }}
           />
         </div>
 
-        <p className="text-xs text-slate-500 mt-1.5">
+        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5">
           {items.length} item{items.length !== 1 ? 's' : ''}
+          {' — tap to '}
+          {expanded ? 'collapse' : 'expand'}
         </p>
       </button>
 
       {expanded && (
-        <div className="border-t border-slate-100">
+        <div className="border-t border-slate-100 dark:border-slate-700">
           {items.map(item => {
             const iconf = priorityConfig(item.priority)
-            const spent = spentToDate(item.id)
-            const override = getOverride(item.id)
-            const status = override?.status ?? 'planned'
-            const pctComplete = override?.percentComplete ?? Math.min(100, Math.round(spent / item.costHigh * 100))
-            const overBudget = spent > item.costHigh
-
             return (
-              <button
-                key={item.id}
-                onClick={() => onSelectItem(item.id)}
-                className="flex items-start gap-3 px-4 py-3.5 border-b border-slate-50 last:border-0 hover:bg-slate-50 transition-colors w-full text-left"
-              >
+              <div key={item.id} className="flex items-start gap-3 px-4 py-3.5 border-b border-slate-50 dark:border-slate-700/50 last:border-0 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
                 <div className={cn('w-1.5 h-1.5 rounded-full mt-2 shrink-0', iconf.bar)} />
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-slate-800">{item.title}</p>
-                  <p className="text-xs text-slate-500 mt-0.5">
+                  <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">{item.title}</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                     {item.installYear ? `Installed ${item.installYear} (${item.ageYears} yrs)` : `Planned ${item.estimatedYear}`}
-                    {' · '}
-                    <span className="capitalize">{STATUS_LABELS[status] ?? status}</span>
                   </p>
-                  {/* Budget vs spent mini row */}
-                  <div className="flex items-center gap-3 mt-1.5">
-                    <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                      <div
-                        className={cn('h-full rounded-full', overBudget ? 'bg-red-500' : 'bg-emerald-500')}
-                        style={{ width: `${Math.min(pctComplete, 100)}%` }}
-                      />
-                    </div>
-                    <span className={cn('text-xs font-medium shrink-0', overBudget ? 'text-red-600' : 'text-slate-500')}>
-                      {spent > 0 ? `$${spent.toLocaleString()} spent` : `$${item.costLow.toLocaleString()}–$${item.costHigh.toLocaleString()}`}
-                    </span>
-                  </div>
+                  {item.notes && (
+                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 leading-relaxed">{item.notes}</p>
+                  )}
                 </div>
-                {overBudget && <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-1" />}
-              </button>
+                <div className="text-right shrink-0">
+                  <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                    ${item.costLow.toLocaleString()}
+                  </p>
+                  <p className="text-xs text-slate-400 dark:text-slate-500">–${item.costHigh.toLocaleString()}</p>
+                </div>
+              </div>
             )
           })}
         </div>
@@ -477,13 +120,8 @@ function YearRow({
   )
 }
 
-// ── Main BudgetScreen ───────────────────────────────────────────────────────
-
 export function BudgetScreen() {
   const [horizon, setHorizon] = useState<Horizon>('3yr')
-  const [selectedItemId, setSelectedItemId] = useState<string | null>(null)
-  const [tick, setTick] = useState(0)
-  void tick
 
   const maxYear = horizon === '1yr' ? CURRENT_YEAR : horizon === '3yr' ? CURRENT_YEAR + 2 : CURRENT_YEAR + 9
   const grouped = groupByYear(CAPITAL_ITEMS, maxYear)
@@ -495,22 +133,10 @@ export function BudgetScreen() {
   const maxYearTotal = Math.max(...years.map(y => yearTotal(grouped[y]).high), 1)
 
   const annualReserve = Math.round(totalHigh / (maxYear - CURRENT_YEAR + 1) / 12)
-  const totalHistoricalSpend = SERVICE_RECORDS.reduce((s, r) => s + (r.totalCost ?? 0), 0)
-  const annualAvgSpend = Math.round(totalHistoricalSpend / 2)
 
-  // Detail view
-  if (selectedItemId) {
-    const item = CAPITAL_ITEMS.find(i => i.id === selectedItemId)
-    if (item) {
-      return (
-        <CapitalItemDetail
-          item={item}
-          onBack={() => setSelectedItemId(null)}
-          onMutate={() => setTick(t => t + 1)}
-        />
-      )
-    }
-  }
+  // Historical spend
+  const totalHistoricalSpend = SERVICE_RECORDS.reduce((s, r) => s + (r.totalCost ?? 0), 0)
+  const annualAvgSpend = Math.round(totalHistoricalSpend / 2) // ~2 years of records
 
   const horizons: { id: Horizon; label: string }[] = [
     { id: '1yr',  label: '1 Year'  },
@@ -518,27 +144,26 @@ export function BudgetScreen() {
     { id: '10yr', label: '10 Years'},
   ]
 
-  // Suppress unused store import warnings by referencing them
-  void capitalItemOverrideStore
-
   return (
     <div className="space-y-5">
 
       {/* Header */}
       <div>
-        <h1 className="text-xl font-bold text-slate-900">Budget & Capital</h1>
-        <p className="text-sm text-slate-500 mt-0.5">Forecast based on equipment ages and known replacement needs</p>
+        <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">Budget & Capital</h1>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Forecast based on equipment ages and known replacement needs</p>
       </div>
 
       {/* Horizon selector */}
-      <div className="flex gap-1 bg-slate-100 rounded-xl p-1">
+      <div className="flex gap-1 bg-slate-100 dark:bg-slate-800 rounded-xl p-1">
         {horizons.map(h => (
           <button
             key={h.id}
             onClick={() => setHorizon(h.id)}
             className={cn(
               'flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors',
-              horizon === h.id ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700',
+              horizon === h.id
+                ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm'
+                : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300',
             )}
           >
             {h.label}
@@ -549,27 +174,27 @@ export function BudgetScreen() {
       {/* Summary cards */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {[
-          { label: 'Est. Total',       value: `$${Math.round(totalLow/1000)}k–$${Math.round(totalHigh/1000)}k`, icon: TrendingUp,   color: 'text-sky-600 bg-sky-50'         },
-          { label: 'Monthly Reserve',  value: `$${annualReserve}/mo`,                                            icon: CheckCircle2, color: 'text-emerald-600 bg-emerald-50' },
-          { label: 'Items Planned',    value: `${allItems.length}`,                                               icon: AlertTriangle, color: 'text-orange-500 bg-orange-50' },
-          { label: 'Avg Annual Spend', value: `$${annualAvgSpend.toLocaleString()}`,                              icon: Info,         color: 'text-violet-600 bg-violet-50'  },
+          { label: 'Est. Total',       value: `$${Math.round(totalLow/1000)}k–$${Math.round(totalHigh/1000)}k`, icon: TrendingUp,    color: 'text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20'     },
+          { label: 'Monthly Reserve',  value: `$${annualReserve}/mo`,                                            icon: CheckCircle2,  color: 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20' },
+          { label: 'Items Planned',    value: `${allItems.length}`,                                               icon: AlertTriangle, color: 'text-orange-500 bg-orange-50 dark:bg-orange-900/20'                        },
+          { label: 'Avg Annual Spend', value: `$${annualAvgSpend.toLocaleString()}`,                              icon: Info,          color: 'text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/20' },
         ].map(({ label, value, icon: Icon, color }) => (
-          <div key={label} className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+          <div key={label} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 shadow-sm">
             <div className={cn('w-8 h-8 rounded-xl flex items-center justify-center mb-3', color)}>
               <Icon className="w-4 h-4" />
             </div>
-            <div className="text-lg font-bold text-slate-800 leading-tight">{value}</div>
-            <div className="text-xs text-slate-500 mt-0.5">{label}</div>
+            <div className="text-lg font-bold text-slate-800 dark:text-slate-200 leading-tight">{value}</div>
+            <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{label}</div>
           </div>
         ))}
       </div>
 
       {/* Reserve recommendation banner */}
-      <div className="bg-sky-50 border border-sky-200 rounded-2xl px-4 py-3.5 flex items-start gap-3">
-        <Info className="w-4 h-4 text-sky-600 mt-0.5 shrink-0" />
+      <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-2xl px-4 py-3.5 flex items-start gap-3">
+        <Info className="w-4 h-4 text-green-600 dark:text-green-400 mt-0.5 shrink-0" />
         <div>
-          <p className="text-sm font-semibold text-sky-800">Reserve Recommendation</p>
-          <p className="text-sm text-sky-700 mt-0.5">
+          <p className="text-sm font-semibold text-green-800 dark:text-green-300">Reserve Recommendation</p>
+          <p className="text-sm text-green-700 dark:text-green-400 mt-0.5">
             Set aside <strong>${annualReserve}/month</strong> to cover the {horizon} capital forecast of{' '}
             ${totalLow.toLocaleString()}–${totalHigh.toLocaleString()}.
             This is AI-estimated — actual costs may vary; get contractor quotes before budgeting firmly.
@@ -579,8 +204,7 @@ export function BudgetScreen() {
 
       {/* Year-by-year breakdown */}
       <div>
-        <h2 className="text-sm font-semibold text-slate-700 uppercase tracking-wide mb-3">Year-by-Year</h2>
-        <p className="text-xs text-slate-400 mb-3">Tap an item to track budget vs. actual and log transactions</p>
+        <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide mb-3">Year-by-Year</h2>
         <div className="space-y-3">
           {years.map(year => (
             <YearRow
@@ -588,7 +212,6 @@ export function BudgetScreen() {
               year={year}
               items={grouped[year]}
               maxTotal={maxYearTotal}
-              onSelectItem={setSelectedItemId}
             />
           ))}
           {years.length === 0 && (
@@ -602,13 +225,13 @@ export function BudgetScreen() {
 
       {/* Historical Spend */}
       <div>
-        <h2 className="text-sm font-semibold text-slate-700 uppercase tracking-wide mb-3">Historical Spend</h2>
-        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+        <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide mb-3">Historical Spend</h2>
+        <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-sm overflow-hidden">
           {SERVICE_RECORDS.map(r => (
-            <div key={r.id} className="flex items-center gap-3 px-4 py-3 border-b border-slate-100 last:border-0">
+            <div key={r.id} className="flex items-center gap-3 px-4 py-3 border-b border-slate-100 dark:border-slate-700 last:border-0">
               <div className="flex-1 min-w-0">
-                <p className="text-sm text-slate-700 truncate">{r.workDescription}</p>
-                <p className="text-xs text-slate-400 mt-0.5">
+                <p className="text-sm text-slate-700 dark:text-slate-300 truncate">{r.workDescription}</p>
+                <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
                   {r.systemLabel}
                   {r.contractor ? ` · ${r.contractor}` : ''}
                   {' · '}
@@ -616,21 +239,21 @@ export function BudgetScreen() {
                 </p>
               </div>
               {r.totalCost !== undefined && (
-                <span className="text-sm font-semibold text-slate-700 shrink-0">
+                <span className="text-sm font-semibold text-slate-700 dark:text-slate-300 shrink-0">
                   ${r.totalCost.toLocaleString()}
                 </span>
               )}
             </div>
           ))}
-          <div className="flex items-center justify-between px-4 py-3 bg-slate-50">
-            <span className="text-sm font-semibold text-slate-700">Total recorded</span>
-            <span className="text-sm font-bold text-slate-800">${totalHistoricalSpend.toLocaleString()}</span>
+          <div className="flex items-center justify-between px-4 py-3 bg-slate-50 dark:bg-slate-700/50">
+            <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">Total recorded</span>
+            <span className="text-sm font-bold text-slate-800 dark:text-slate-200">${totalHistoricalSpend.toLocaleString()}</span>
           </div>
         </div>
       </div>
 
       {/* Add capital item */}
-      <button className="w-full py-3.5 rounded-2xl border border-dashed border-slate-300 text-sm font-medium text-slate-500 hover:border-sky-300 hover:text-sky-600 hover:bg-sky-50 transition-colors flex items-center justify-center gap-2">
+      <button className="w-full py-3.5 rounded-2xl border border-dashed border-slate-300 dark:border-slate-600 text-sm font-medium text-slate-500 dark:text-slate-400 hover:border-green-300 dark:hover:border-green-700 hover:text-green-600 dark:hover:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/10 transition-colors flex items-center justify-center gap-2">
         <Plus className="w-4 h-4" />
         Add capital item
       </button>
