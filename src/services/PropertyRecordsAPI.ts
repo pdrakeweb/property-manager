@@ -10,14 +10,15 @@ import {
   SERVICE_RECORDS, HA_STATUS, CATEGORIES,
 } from '../data/mockData'
 import { getActiveTasks } from '../lib/maintenanceStore'
-import { localIndex } from '../lib/localIndex'
+// localIndex reserved for future direct index queries
+// import { localIndex } from '../lib/localIndex'
 import { getGeneratorsForProperty } from '../lib/generatorStore'
 import { getPoliciesForProperty } from '../lib/insuranceStore'
 import { getPermitsForProperty } from '../lib/permitStore'
 import { getRoadEventsForProperty } from '../lib/roadStore'
 import { getDeliveriesForProperty } from '../lib/fuelStore'
-import { getAccountsForProperty, getBillsForProperty } from '../lib/utilityStore'
-import { getAssessmentsForProperty, getPaymentsForProperty } from '../lib/taxStore'
+import { getAccountsForProperty } from '../lib/utilityStore'
+import { getAssessmentsForProperty } from '../lib/taxStore'
 import { getMortgagesForProperty } from '../lib/mortgageStore'
 import { getYTDSpend } from '../lib/costStore'
 import { getUpcomingExpiries } from '../lib/expiryStore'
@@ -164,7 +165,7 @@ export class PropertyRecordsAPI {
     if (generators.length > 0) {
       lines.push(`GENERATORS: ${generators.length} tracked`)
       for (const g of generators) {
-        lines.push(`- ${g.label}: ${g.totalHours ?? 0}hrs total`)
+        lines.push(`- ${g.name}: ${g.cumulativeHours ?? 0}hrs total`)
       }
     }
 
@@ -173,7 +174,7 @@ export class PropertyRecordsAPI {
     if (policies.length > 0) {
       lines.push(`INSURANCE: ${policies.length} policies`)
       for (const p of policies) {
-        lines.push(`- ${p.type}: ${p.carrier}, renewal ${p.renewalDate}`)
+        lines.push(`- ${p.type}: ${p.insurer}, renewal ${p.renewalDate}`)
       }
     }
 
@@ -182,7 +183,7 @@ export class PropertyRecordsAPI {
     if (permits.length > 0) {
       lines.push(`PERMITS: ${permits.length} tracked`)
       for (const p of permits) {
-        lines.push(`- ${p.type}: ${p.status}, expires ${p.expirationDate ?? 'N/A'}`)
+        lines.push(`- ${p.type}: ${p.status}, expires ${p.expiryDate ?? 'N/A'}`)
       }
     }
 
@@ -195,7 +196,7 @@ export class PropertyRecordsAPI {
     // Utilities
     const accounts = getAccountsForProperty(pid)
     if (accounts.length > 0) {
-      lines.push(`UTILITY ACCOUNTS: ${accounts.map(a => a.utilityType).join(', ')}`)
+      lines.push(`UTILITY ACCOUNTS: ${accounts.map(a => a.type).join(', ')}`)
     }
 
     // Tax
@@ -305,9 +306,8 @@ export class PropertyRecordsAPI {
     }
     try {
       const { DriveClient } = await import('../lib/driveClient')
-      const client = new DriveClient(this.driveToken)
-      const content = await client.downloadFile(fileId)
-      return typeof content === 'string' ? content : '[Binary file — cannot display]'
+      const result = await DriveClient.downloadFile(this.driveToken, fileId)
+      return typeof result.content === 'string' ? result.content : '[Binary file — cannot display]'
     } catch (err) {
       return `[Error reading file: ${err instanceof Error ? err.message : String(err)}]`
     }

@@ -1,7 +1,11 @@
-import { makeStore } from './localStore'
+import { makeSyncedStore } from './syncedStore'
+import { formatGenerator, generatorFilename } from './domainMarkdown'
 import type { GeneratorRecord, GeneratorRuntimeEntry } from '../types/generator'
 
-export const generatorStore = makeStore<GeneratorRecord>('pm_generators')
+export const generatorStore = makeSyncedStore<GeneratorRecord>(
+  'pm_generators', 'generator_log', 'generator_log',
+  formatGenerator, generatorFilename,
+)
 
 export function getGeneratorsForProperty(propertyId: string): GeneratorRecord[] {
   return generatorStore.getAll().filter(g => g.propertyId === propertyId)

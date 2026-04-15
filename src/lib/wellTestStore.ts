@@ -1,6 +1,11 @@
-import { makeStore } from './localStore'
+import { makeSyncedStore } from './syncedStore'
+import { formatWellTest, wellTestFilename } from './domainMarkdown'
 import type { WellTest } from '../schemas'
-export const wellTestStore = makeStore<WellTest>('pm_well_tests')
+
+export const wellTestStore = makeSyncedStore<WellTest>(
+  'pm_well_tests', 'well_test', 'well_test',
+  formatWellTest, wellTestFilename,
+)
 
 export function getTestsForProperty(propertyId: string): WellTest[] {
   return wellTestStore.getAll()

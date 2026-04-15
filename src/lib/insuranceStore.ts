@@ -1,7 +1,11 @@
-import { makeStore } from './localStore'
+import { makeSyncedStore } from './syncedStore'
+import { formatInsurance, insuranceFilename } from './domainMarkdown'
 import type { InsurancePolicy } from '../types/insurance'
 
-export const insuranceStore = makeStore<InsurancePolicy>('pm_insurance_policies')
+export const insuranceStore = makeSyncedStore<InsurancePolicy>(
+  'pm_insurance_policies', 'insurance', 'insurance',
+  formatInsurance, insuranceFilename,
+)
 
 export function getPoliciesForProperty(propertyId: string): InsurancePolicy[] {
   return insuranceStore.getAll().filter(p => p.propertyId === propertyId)

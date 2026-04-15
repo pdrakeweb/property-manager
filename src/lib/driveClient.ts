@@ -21,6 +21,19 @@ export const CATEGORY_FOLDER_NAMES: Record<string, string> = {
   surveillance:  'Surveillance',
   forestry_cauv: 'Forestry CAUV',
   service_record: 'Service Records',
+  // Domain store folders
+  vendor:             'Vendors',
+  completed_event:    'Service History',
+  capital_transaction:'Capital',
+  fuel_delivery:      'Fuel Deliveries',
+  tax:                'Tax Records',
+  mortgage:           'Mortgage',
+  utility:            'Utilities',
+  insurance:          'Insurance',
+  permit:             'Permits',
+  road:               'Road Maintenance',
+  generator_log:      'Generator',
+  task:               'Maintenance Tasks',
 }
 
 export interface DriveFile {

@@ -1,8 +1,16 @@
-import { makeStore } from './localStore'
+import { makeSyncedStore } from './syncedStore'
+import { formatTaxAssessment, taxAssessmentFilename, formatTaxPayment, taxPaymentFilename } from './domainMarkdown'
 import type { TaxAssessment, TaxPayment } from '../schemas'
 
-export const taxAssessmentStore = makeStore<TaxAssessment>('pm_tax_assessments')
-export const taxPaymentStore    = makeStore<TaxPayment>('pm_tax_payments')
+export const taxAssessmentStore = makeSyncedStore<TaxAssessment>(
+  'pm_tax_assessments', 'tax_assessment', 'tax',
+  formatTaxAssessment, taxAssessmentFilename,
+)
+
+export const taxPaymentStore = makeSyncedStore<TaxPayment>(
+  'pm_tax_payments', 'tax_payment', 'tax',
+  formatTaxPayment, taxPaymentFilename,
+)
 
 export function getAssessmentsForProperty(propertyId: string): TaxAssessment[] {
   return taxAssessmentStore.getAll().filter(a => a.propertyId === propertyId)

@@ -1,5 +1,7 @@
 import { localIndex } from './localIndex'
 import { seedTasksForProperty } from './syncEngine'
+import { formatMaintenanceTask, taskFilename } from './domainMarkdown'
+import { PROPERTIES } from '../data/mockData'
 import type { MaintenanceTask } from '../types'
 
 // ── Status recalculation ──────────────────────────────────────────────────────
@@ -37,45 +39,45 @@ export function setTaskDelay(taskId: string, newDueDate: string): void {
   if (!record) return
   const task    = { ...(record.data as unknown as MaintenanceTask), dueDate: newDueDate }
   task.status   = recalcStatus(task)
-  localIndex.upsert({
-    ...record,
-    data:      task as unknown as Record<string, unknown>,
-    syncState: record.syncState === 'local_only' ? 'local_only' : 'pending_upload',
-  })
+  addToIndex(task, record.syncState === 'local_only' ? 'local_only' : 'pending_upload')
 }
 
 export function setTaskRecurrence(taskId: string, recurrence: string): void {
   const record = localIndex.getById(taskId)
   if (!record) return
-  localIndex.upsert({
-    ...record,
-    data:      { ...(record.data as object), recurrence } as Record<string, unknown>,
-    syncState: record.syncState === 'local_only' ? 'local_only' : 'pending_upload',
-  })
+  const task = { ...(record.data as unknown as MaintenanceTask), recurrence }
+  addToIndex(task, record.syncState === 'local_only' ? 'local_only' : 'pending_upload')
 }
 
 export function markTaskDone(taskId: string): void {
   const record = localIndex.getById(taskId)
   if (!record) return
   const task = { ...(record.data as unknown as MaintenanceTask), status: 'completed' as const }
-  localIndex.upsert({
-    ...record,
-    data:      task as unknown as Record<string, unknown>,
-    syncState: record.syncState === 'local_only' ? 'local_only' : 'pending_upload',
-  })
+  addToIndex(task, 'pending_upload')
 }
 
-// ── Add task (writes to local index) ─────────────────────────────────────────
+// ── Add task (writes to local index with Drive sync metadata) ─────────────────
 
-function addToIndex(task: MaintenanceTask): void {
+function addToIndex(task: MaintenanceTask, syncState: 'pending_upload' | 'local_only' = 'pending_upload'): void {
+  const property = PROPERTIES.find(p => p.id === task.propertyId)
+  const rootFolderId = property?.driveRootFolderId ?? ''
+  const mdContent = formatMaintenanceTask(task)
+  const filename = taskFilename(task)
+
   localIndex.upsert({
     id:         task.id,
     type:       'task',
     categoryId: task.categoryId,
     propertyId: task.propertyId,
     title:      task.title,
-    data:       task as unknown as Record<string, unknown>,
-    syncState:  'pending_upload',
+    data: {
+      ...(task as unknown as Record<string, unknown>),
+      mdContent,
+      filename,
+      rootFolderId,
+      categoryId: task.categoryId,
+    },
+    syncState,
   })
 }
 

@@ -1,8 +1,16 @@
-import { makeStore } from './localStore'
+import { makeSyncedStore } from './syncedStore'
+import { formatMortgage, mortgageFilename, formatMortgagePayment, mortgagePaymentFilename } from './domainMarkdown'
 import type { Mortgage, MortgagePayment } from '../schemas'
 
-export const mortgageStore        = makeStore<Mortgage>('pm_mortgages')
-export const mortgagePaymentStore = makeStore<MortgagePayment>('pm_mortgage_payments')
+export const mortgageStore = makeSyncedStore<Mortgage>(
+  'pm_mortgages', 'mortgage', 'mortgage',
+  formatMortgage, mortgageFilename,
+)
+
+export const mortgagePaymentStore = makeSyncedStore<MortgagePayment>(
+  'pm_mortgage_payments', 'mortgage_payment', 'mortgage',
+  formatMortgagePayment, mortgagePaymentFilename,
+)
 
 export function getMortgagesForProperty(propertyId: string): Mortgage[] {
   return mortgageStore.getAll().filter(m => m.propertyId === propertyId)

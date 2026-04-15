@@ -1,7 +1,11 @@
-import { makeStore } from './localStore'
+import { makeSyncedStore } from './syncedStore'
+import { formatPermit, permitFilename } from './domainMarkdown'
 import type { Permit } from '../types/permits'
 
-export const permitStore = makeStore<Permit>('pm_permits')
+export const permitStore = makeSyncedStore<Permit>(
+  'pm_permits', 'permit', 'permit',
+  formatPermit, permitFilename,
+)
 
 export function getPermitsForProperty(propertyId: string): Permit[] {
   return permitStore.getAll().filter(p => p.propertyId === propertyId)

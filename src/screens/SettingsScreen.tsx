@@ -12,7 +12,7 @@ import { PROPERTIES } from '../data/mockData'
 import {
   hasDevModelOverride, getDevModelOverride,
   getModelForTask, setModelForTask,
-  getSetting, setSetting, clearSetting, SETTINGS,
+  setSetting, clearSetting, SETTINGS,
   getOpenRouterKey, getHaUrl, getHaToken,
 } from '../store/settings'
 

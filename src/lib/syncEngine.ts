@@ -3,6 +3,7 @@ import { localDriveAdapter } from './localDriveAdapter'
 import { localIndex } from './localIndex'
 import type { IndexRecord } from './localIndex'
 import { MAINTENANCE_TASKS, PROPERTIES, CATEGORIES } from '../data/mockData'
+import { formatMaintenanceTask, taskFilename } from './domainMarkdown'
 import type { MaintenanceTask } from '../types'
 
 /** Returns the real DriveClient in production, or the localStorage adapter in dev bypass mode */
@@ -265,6 +266,20 @@ export function seedTasksForProperty(propertyId: string): void {
     return 'upcoming'
   }
 
+  const property = PROPERTIES.find(p => p.id === propertyId)
+  const rootFolderId = property?.driveRootFolderId ?? ''
+
+  function buildTaskData(task: MaintenanceTask, status: MaintenanceTask['status']): Record<string, unknown> {
+    const withStatus = { ...task, status }
+    return {
+      ...withStatus,
+      mdContent: formatMaintenanceTask(withStatus),
+      filename: taskFilename(withStatus),
+      rootFolderId,
+      categoryId: task.categoryId,
+    } as unknown as Record<string, unknown>
+  }
+
   // Seed static mock tasks
   for (const task of MAINTENANCE_TASKS.filter(t => t.propertyId === propertyId)) {
     const status = calcStatus(task)
@@ -274,7 +289,7 @@ export function seedTasksForProperty(propertyId: string): void {
       categoryId: task.categoryId,
       propertyId: task.propertyId,
       title:      task.title,
-      data:       { ...task, status } as unknown as Record<string, unknown>,
+      data:       buildTaskData(task, status),
       syncState:  'local_only',
     })
   }
@@ -293,8 +308,8 @@ export function seedTasksForProperty(propertyId: string): void {
           categoryId: task.categoryId,
           propertyId: task.propertyId,
           title:      task.title,
-          data:       { ...task, status } as unknown as Record<string, unknown>,
-          syncState:  'local_only',   // migrated — no Drive file yet
+          data:       buildTaskData(task, status),
+          syncState:  'pending_upload',   // migrated — queue for Drive upload
         })
       }
     } catch {
