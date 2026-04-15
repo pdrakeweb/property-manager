@@ -11,19 +11,19 @@ type Tab = 'due' | 'upcoming' | 'history'
 
 function priorityConfig(p: Priority) {
   return {
-    critical: { label: 'Critical', bg: 'bg-red-100',    text: 'text-red-700',    dot: 'bg-red-500'    },
-    high:     { label: 'High',     bg: 'bg-orange-100', text: 'text-orange-700', dot: 'bg-orange-500' },
-    medium:   { label: 'Medium',   bg: 'bg-amber-100',  text: 'text-amber-700',  dot: 'bg-amber-400'  },
-    low:      { label: 'Low',      bg: 'bg-slate-100',  text: 'text-slate-600',  dot: 'bg-slate-300'  },
+    critical: { label: 'Critical', bg: 'bg-red-100 dark:bg-red-900/30',    text: 'text-red-700 dark:text-red-400',    dot: 'bg-red-500'    },
+    high:     { label: 'High',     bg: 'bg-orange-100 dark:bg-orange-900/30', text: 'text-orange-700 dark:text-orange-400', dot: 'bg-orange-500' },
+    medium:   { label: 'Medium',   bg: 'bg-amber-100 dark:bg-amber-900/30',  text: 'text-amber-700 dark:text-amber-400',  dot: 'bg-amber-400'  },
+    low:      { label: 'Low',      bg: 'bg-slate-100 dark:bg-slate-700',     text: 'text-slate-600 dark:text-slate-400',  dot: 'bg-slate-300 dark:bg-slate-500' },
   }[p]
 }
 
 function sourceLabel(s: MaintenanceTask['source']) {
   return {
-    'ha-trigger':   { label: 'HA Usage', icon: Zap,         color: 'text-sky-600 bg-sky-50 border-sky-100'       },
-    'manufacturer': { label: 'Mfr.',     icon: Clock,        color: 'text-slate-600 bg-slate-50 border-slate-100' },
-    'ai-suggested': { label: 'AI',       icon: Zap,          color: 'text-violet-600 bg-violet-50 border-violet-100' },
-    'manual':       { label: 'Manual',   icon: User,         color: 'text-slate-500 bg-slate-50 border-slate-100' },
+    'ha-trigger':   { label: 'HA Usage', icon: Zap,   color: 'text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 border-green-100 dark:border-green-800'       },
+    'manufacturer': { label: 'Mfr.',     icon: Clock,  color: 'text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-700 border-slate-100 dark:border-slate-600' },
+    'ai-suggested': { label: 'AI',       icon: Zap,    color: 'text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/20 border-violet-100 dark:border-violet-800' },
+    'manual':       { label: 'Manual',   icon: User,   color: 'text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-700 border-slate-100 dark:border-slate-600' },
   }[s]
 }
 
@@ -36,25 +36,25 @@ function TaskCard({ task }: { task: MaintenanceTask }) {
 
   if (done) {
     return (
-      <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 opacity-60">
+      <div className="flex items-center gap-3 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-2xl px-4 py-3 opacity-60">
         <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
-        <span className="text-sm text-slate-600 line-through flex-1">{task.title}</span>
-        <button onClick={() => setDone(false)} className="text-xs text-slate-400 hover:text-slate-600">Undo</button>
+        <span className="text-sm text-slate-600 dark:text-slate-400 line-through flex-1">{task.title}</span>
+        <button onClick={() => setDone(false)} className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">Undo</button>
       </div>
     )
   }
 
   return (
-    <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+    <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-sm overflow-hidden">
       <div className="px-4 py-4">
         <div className="flex items-start gap-3">
           <div className={cn('w-2 h-2 rounded-full mt-2 shrink-0', pconf.dot)} />
           <div className="flex-1 min-w-0">
             <div className="flex items-start justify-between gap-2">
-              <p className="text-sm font-semibold text-slate-800 leading-tight">{task.title}</p>
+              <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 leading-tight">{task.title}</p>
               <button
                 onClick={() => setExpanded(e => !e)}
-                className="shrink-0 w-6 h-6 flex items-center justify-center text-slate-400 hover:text-slate-600"
+                className="shrink-0 w-6 h-6 flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
               >
                 {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
               </button>
@@ -62,7 +62,7 @@ function TaskCard({ task }: { task: MaintenanceTask }) {
 
             <div className="flex flex-wrap items-center gap-2 mt-2">
               {/* System badge */}
-              <span className="text-xs text-slate-500 bg-slate-100 rounded-md px-2 py-0.5">
+              <span className="text-xs text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 rounded-md px-2 py-0.5">
                 {task.systemLabel}
               </span>
               {/* Priority badge */}
@@ -77,7 +77,7 @@ function TaskCard({ task }: { task: MaintenanceTask }) {
             </div>
 
             {/* Key info line */}
-            <div className="flex flex-wrap gap-3 mt-2.5 text-xs text-slate-500">
+            <div className="flex flex-wrap gap-3 mt-2.5 text-xs text-slate-500 dark:text-slate-400">
               <span className="flex items-center gap-1">
                 <Calendar className="w-3 h-3" />
                 Due {new Date(task.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
@@ -100,14 +100,14 @@ function TaskCard({ task }: { task: MaintenanceTask }) {
 
         {/* Expanded detail */}
         {expanded && (
-          <div className="mt-3 pt-3 border-t border-slate-100 space-y-2 ml-5">
+          <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700 space-y-2 ml-5">
             {task.contractor && (
-              <p className="text-xs text-slate-600">
+              <p className="text-xs text-slate-600 dark:text-slate-400">
                 <span className="font-medium">Contractor:</span> {task.contractor}
               </p>
             )}
             {task.notes && (
-              <p className="text-xs text-slate-600">
+              <p className="text-xs text-slate-600 dark:text-slate-400">
                 <span className="font-medium">Notes:</span> {task.notes}
               </p>
             )}
@@ -116,20 +116,20 @@ function TaskCard({ task }: { task: MaintenanceTask }) {
       </div>
 
       {/* Action row */}
-      <div className="border-t border-slate-100 flex">
+      <div className="border-t border-slate-100 dark:border-slate-700 flex">
         <button
           onClick={() => setDone(true)}
-          className="flex-1 py-3 text-sm font-medium text-emerald-600 hover:bg-emerald-50 transition-colors flex items-center justify-center gap-1.5"
+          className="flex-1 py-3 text-sm font-medium text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors flex items-center justify-center gap-1.5"
         >
           <CheckCircle2 className="w-4 h-4" />
           Mark Done
         </button>
-        <div className="w-px bg-slate-100" />
-        <button className="flex-1 py-3 text-sm font-medium text-slate-500 hover:bg-slate-50 transition-colors">
+        <div className="w-px bg-slate-100 dark:bg-slate-700" />
+        <button className="flex-1 py-3 text-sm font-medium text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
           Delay
         </button>
-        <div className="w-px bg-slate-100" />
-        <button className="flex-1 py-3 text-sm font-medium text-slate-500 hover:bg-slate-50 transition-colors">
+        <div className="w-px bg-slate-100 dark:bg-slate-700" />
+        <button className="flex-1 py-3 text-sm font-medium text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
           Schedule
         </button>
       </div>
@@ -149,7 +149,7 @@ export function MaintenanceScreen() {
   const totalCostDue  = dueTasks.reduce((s, t) => s + (t.estimatedCost ?? 0), 0)
 
   const tabs: { id: Tab; label: string; count: number }[] = [
-    { id: 'due',      label: 'Due Now',  count: dueTasks.length      },
+    { id: 'due',      label: 'Due Now',  count: dueTasks.length       },
     { id: 'upcoming', label: 'Upcoming', count: upcomingTasks.length  },
     { id: 'history',  label: 'History',  count: SERVICE_RECORDS.length},
   ]
@@ -159,24 +159,24 @@ export function MaintenanceScreen() {
 
       {/* Header */}
       <div>
-        <h1 className="text-xl font-bold text-slate-900">Maintenance</h1>
-        <p className="text-sm text-slate-500 mt-0.5">
+        <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">Maintenance</h1>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
           {dueTasks.length} tasks due · ${totalCostDue.toLocaleString()} estimated cost
         </p>
       </div>
 
       {/* Alert: overdue items */}
       {overdue.length > 0 && (
-        <div className="flex items-center gap-2.5 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+        <div className="flex items-center gap-2.5 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl px-4 py-3">
           <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
-          <span className="text-sm text-red-700">
+          <span className="text-sm text-red-700 dark:text-red-400">
             {overdue.length} overdue {overdue.length === 1 ? 'task' : 'tasks'} — {overdue.map(t => t.title).join(', ')}
           </span>
         </div>
       )}
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-slate-100 rounded-xl p-1">
+      <div className="flex gap-1 bg-slate-100 dark:bg-slate-800 rounded-xl p-1">
         {tabs.map(t => (
           <button
             key={t.id}
@@ -184,14 +184,14 @@ export function MaintenanceScreen() {
             className={cn(
               'flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-sm font-medium transition-colors',
               tab === t.id
-                ? 'bg-white text-slate-900 shadow-sm'
-                : 'text-slate-500 hover:text-slate-700',
+                ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm'
+                : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300',
             )}
           >
             {t.label}
             <span className={cn(
               'text-xs px-1.5 py-0.5 rounded-full font-semibold',
-              tab === t.id ? 'bg-sky-100 text-sky-700' : 'bg-slate-200 text-slate-500',
+              tab === t.id ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' : 'bg-slate-200 dark:bg-slate-600 text-slate-500 dark:text-slate-400',
             )}>
               {t.count}
             </span>
@@ -203,7 +203,7 @@ export function MaintenanceScreen() {
       {tab === 'due' && (
         <div className="space-y-3">
           {overdue.length > 0 && (
-            <p className="text-xs font-semibold uppercase text-red-500 tracking-wide">Overdue</p>
+            <p className="text-xs font-semibold uppercase text-red-500 dark:text-red-400 tracking-wide">Overdue</p>
           )}
           {overdue.map(task => <TaskCard key={task.id} task={task} />)}
 
@@ -230,24 +230,24 @@ export function MaintenanceScreen() {
       {tab === 'history' && (
         <div className="space-y-3">
           {SERVICE_RECORDS.map(record => (
-            <div key={record.id} className="bg-white border border-slate-200 rounded-2xl px-4 py-4 shadow-sm">
+            <div key={record.id} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl px-4 py-4 shadow-sm">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs bg-slate-100 text-slate-600 rounded-md px-2 py-0.5">
+                    <span className="text-xs bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 rounded-md px-2 py-0.5">
                       {record.systemLabel}
                     </span>
-                    <span className="text-xs text-slate-400">
+                    <span className="text-xs text-slate-400 dark:text-slate-500">
                       {new Date(record.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                     </span>
                   </div>
-                  <p className="text-sm text-slate-700 mt-1.5">{record.workDescription}</p>
+                  <p className="text-sm text-slate-700 dark:text-slate-300 mt-1.5">{record.workDescription}</p>
                   {record.contractor && (
-                    <p className="text-xs text-slate-400 mt-1">by {record.contractor}</p>
+                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">by {record.contractor}</p>
                   )}
                 </div>
                 {record.totalCost !== undefined && (
-                  <span className="text-sm font-semibold text-slate-700 shrink-0">
+                  <span className="text-sm font-semibold text-slate-700 dark:text-slate-300 shrink-0">
                     ${record.totalCost.toLocaleString()}
                   </span>
                 )}
@@ -258,7 +258,7 @@ export function MaintenanceScreen() {
       )}
 
       {/* Add task button */}
-      <button className="w-full py-3.5 rounded-2xl border border-dashed border-slate-300 text-sm font-medium text-slate-500 hover:border-sky-300 hover:text-sky-600 hover:bg-sky-50 transition-colors">
+      <button className="w-full py-3.5 rounded-2xl border border-dashed border-slate-300 dark:border-slate-600 text-sm font-medium text-slate-500 dark:text-slate-400 hover:border-green-300 dark:hover:border-green-700 hover:text-green-600 dark:hover:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/10 transition-colors">
         + Add maintenance task
       </button>
 

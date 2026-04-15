@@ -117,26 +117,26 @@ export function EquipmentFormScreen() {
   if (saveState === 'saved') {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4">
-        <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mb-4">
-          <CheckCircle2 className="w-8 h-8 text-emerald-600" />
+        <div className="w-16 h-16 bg-emerald-100 dark:bg-emerald-900/30 rounded-full flex items-center justify-center mb-4">
+          <CheckCircle2 className="w-8 h-8 text-emerald-600 dark:text-emerald-400" />
         </div>
-        <h2 className="text-xl font-bold text-slate-900 mb-2">Saved to Drive</h2>
-        <p className="text-sm text-slate-500 mb-1">
+        <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100 mb-2">Saved to Drive</h2>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">
           Record uploaded to {category?.label ?? categoryId} folder
         </p>
-        <p className="text-xs text-slate-400 mb-6">
+        <p className="text-xs text-slate-400 dark:text-slate-500 mb-6">
           {category?.icon} {values.brand || 'Equipment'} {values.model || ''} · {new Date().toLocaleDateString()}
         </p>
         <div className="flex gap-3">
           <button
             onClick={() => navigate('/capture')}
-            className="px-4 py-2 rounded-xl bg-sky-600 text-white text-sm font-medium hover:bg-sky-700 transition-colors"
+            className="px-4 py-2 rounded-xl bg-green-600 text-white text-sm font-medium hover:bg-green-700 transition-colors"
           >
             Capture another
           </button>
           <button
             onClick={() => navigate('/')}
-            className="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 text-sm font-medium hover:bg-slate-200 transition-colors"
+            className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-sm font-medium hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
           >
             Dashboard
           </button>
@@ -152,25 +152,25 @@ export function EquipmentFormScreen() {
       <div className="flex items-center gap-3">
         <button
           onClick={() => navigate('/capture')}
-          className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 flex items-center justify-center transition-colors"
+          className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 flex items-center justify-center transition-colors"
         >
-          <ChevronLeft className="w-4 h-4 text-slate-600" />
+          <ChevronLeft className="w-4 h-4 text-slate-600 dark:text-slate-400" />
         </button>
         <div>
-          <h1 className="text-lg font-bold text-slate-900">
+          <h1 className="text-lg font-bold text-slate-900 dark:text-slate-100">
             {category?.icon} {category?.label ?? categoryId}
           </h1>
-          <p className="text-xs text-slate-500">New equipment record</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400">New equipment record</p>
         </div>
       </div>
 
       {/* Photo Capture Card */}
-      <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+      <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden shadow-sm">
         <div className="p-4">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-semibold text-slate-700">Photograph Nameplate</h2>
+            <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Photograph Nameplate</h2>
             {category?.hasAIExtraction && (
-              <span className="flex items-center gap-1 text-xs text-sky-600">
+              <span className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
                 <Sparkles className="w-3 h-3" />
                 AI extraction
               </span>
@@ -182,12 +182,12 @@ export function EquipmentFormScreen() {
             <button
               onClick={simulateExtraction}
               disabled={aiState === 'extracting'}
-              className="flex items-center justify-center gap-2 bg-sky-600 hover:bg-sky-700 disabled:bg-sky-400 text-white text-sm font-medium rounded-xl px-4 py-3 transition-colors"
+              className="flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white text-sm font-medium rounded-xl px-4 py-3 transition-colors"
             >
               <Camera className="w-4 h-4" />
               Camera
             </button>
-            <button className="flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium rounded-xl px-4 py-3 transition-colors">
+            <button className="flex items-center justify-center gap-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 text-sm font-medium rounded-xl px-4 py-3 transition-colors">
               <Upload className="w-4 h-4" />
               Upload
             </button>
@@ -197,9 +197,9 @@ export function EquipmentFormScreen() {
           {aiState !== 'idle' && (
             <div className={cn(
               'flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm',
-              aiState === 'extracting' && 'bg-sky-50 text-sky-700',
-              aiState === 'done'       && 'bg-emerald-50 text-emerald-700',
-              aiState === 'error'      && 'bg-red-50 text-red-700',
+              aiState === 'extracting' && 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400',
+              aiState === 'done'       && 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400',
+              aiState === 'error'      && 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400',
             )}>
               {aiState === 'extracting' && <Loader2 className="w-4 h-4 animate-spin" />}
               {aiState === 'done'       && <CheckCircle2 className="w-4 h-4" />}
@@ -218,10 +218,10 @@ export function EquipmentFormScreen() {
               {photos.map((p, i) => (
                 <div
                   key={i}
-                  className="relative w-16 h-16 bg-slate-100 rounded-lg border border-slate-200 flex items-center justify-center group"
+                  className="relative w-16 h-16 bg-slate-100 dark:bg-slate-700 rounded-lg border border-slate-200 dark:border-slate-600 flex items-center justify-center group"
                 >
                   <ImageIcon className="w-6 h-6 text-slate-400" />
-                  <span className="absolute bottom-1 left-1 right-1 text-center text-[10px] text-slate-500 truncate px-0.5">{p}.jpg</span>
+                  <span className="absolute bottom-1 left-1 right-1 text-center text-[10px] text-slate-500 dark:text-slate-400 truncate px-0.5">{p}.jpg</span>
                   <button
                     onClick={() => setPhotos(prev => prev.filter((_, j) => j !== i))}
                     className="absolute -top-1 -right-1 w-4 h-4 bg-slate-700 text-white rounded-full items-center justify-center hidden group-hover:flex"
@@ -232,7 +232,7 @@ export function EquipmentFormScreen() {
               ))}
               <button
                 onClick={() => setPhotos(prev => [...prev, `photo_${prev.length + 1}`])}
-                className="w-16 h-16 bg-slate-50 rounded-lg border border-dashed border-slate-300 flex items-center justify-center text-slate-400 hover:text-slate-600 hover:border-slate-400 transition-colors"
+                className="w-16 h-16 bg-slate-50 dark:bg-slate-700/50 rounded-lg border border-dashed border-slate-300 dark:border-slate-600 flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:border-slate-400 transition-colors"
               >
                 <span className="text-xl">+</span>
               </button>
@@ -242,23 +242,28 @@ export function EquipmentFormScreen() {
       </div>
 
       {/* Form Fields */}
-      <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-        <div className="p-4 border-b border-slate-100">
-          <h2 className="text-sm font-semibold text-slate-700">Equipment Details</h2>
+      <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden shadow-sm">
+        <div className="p-4 border-b border-slate-100 dark:border-slate-700">
+          <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Equipment Details</h2>
           {aiState === 'done' && (
-            <p className="text-xs text-slate-500 mt-0.5">Fields highlighted in blue were filled by AI — please verify.</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Fields highlighted in green were filled by AI — please verify.</p>
           )}
         </div>
         <div className="p-4 space-y-4">
           {fields.map(field => {
             const val      = values[field.id] ?? ''
             const aiFilledStyle = aiState === 'done' && val
-              ? 'ring-2 ring-sky-200 border-sky-300'
+              ? 'ring-2 ring-green-200 dark:ring-green-800 border-green-300 dark:border-green-700'
               : ''
+
+            const inputClass = cn(
+              'w-full text-sm border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-green-300 focus:border-green-300 transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500',
+              aiFilledStyle,
+            )
 
             return (
               <div key={field.id}>
-                <label className="block text-xs font-medium text-slate-600 mb-1.5">
+                <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5">
                   {field.label}
                   {field.unit && <span className="text-slate-400 font-normal ml-1">({field.unit})</span>}
                 </label>
@@ -269,19 +274,13 @@ export function EquipmentFormScreen() {
                     value={val}
                     placeholder={field.placeholder}
                     onChange={e => setValues(prev => ({ ...prev, [field.id]: e.target.value }))}
-                    className={cn(
-                      'w-full text-sm border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-sky-300 focus:border-sky-300 resize-none transition-all placeholder:text-slate-400',
-                      aiFilledStyle,
-                    )}
+                    className={cn(inputClass, 'resize-none')}
                   />
                 ) : field.type === 'select' ? (
                   <select
                     value={val}
                     onChange={e => setValues(prev => ({ ...prev, [field.id]: e.target.value }))}
-                    className={cn(
-                      'w-full text-sm border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-sky-300 focus:border-sky-300 bg-white transition-all',
-                      aiFilledStyle,
-                    )}
+                    className={inputClass}
                   >
                     <option value="">Select…</option>
                     {field.options?.map(o => <option key={o} value={o}>{o}</option>)}
@@ -292,9 +291,9 @@ export function EquipmentFormScreen() {
                       type="checkbox"
                       checked={val === 'true'}
                       onChange={e => setValues(prev => ({ ...prev, [field.id]: e.target.checked ? 'true' : 'false' }))}
-                      className="w-4 h-4 rounded border-slate-300 text-sky-600 focus:ring-sky-300"
+                      className="w-4 h-4 rounded border-slate-300 dark:border-slate-600 text-green-600 focus:ring-green-300"
                     />
-                    <span className="text-sm text-slate-600">Yes</span>
+                    <span className="text-sm text-slate-600 dark:text-slate-400">Yes</span>
                   </label>
                 ) : (
                   <input
@@ -302,10 +301,7 @@ export function EquipmentFormScreen() {
                     value={val}
                     placeholder={field.placeholder}
                     onChange={e => setValues(prev => ({ ...prev, [field.id]: e.target.value }))}
-                    className={cn(
-                      'w-full text-sm border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-sky-300 focus:border-sky-300 transition-all placeholder:text-slate-400',
-                      aiFilledStyle,
-                    )}
+                    className={inputClass}
                   />
                 )}
               </div>
@@ -318,14 +314,14 @@ export function EquipmentFormScreen() {
       <div className="flex gap-3 pb-4">
         <button
           onClick={() => navigate('/capture')}
-          className="flex-1 py-3.5 rounded-2xl bg-slate-100 text-slate-700 text-sm font-semibold hover:bg-slate-200 transition-colors"
+          className="flex-1 py-3.5 rounded-2xl bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-sm font-semibold hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
         >
           Cancel
         </button>
         <button
           onClick={handleSave}
           disabled={saveState === 'saving'}
-          className="flex-[2] py-3.5 rounded-2xl bg-sky-600 text-white text-sm font-semibold hover:bg-sky-700 disabled:bg-sky-400 transition-colors flex items-center justify-center gap-2"
+          className="flex-[2] py-3.5 rounded-2xl bg-green-600 text-white text-sm font-semibold hover:bg-green-700 disabled:bg-green-400 transition-colors flex items-center justify-center gap-2"
         >
           {saveState === 'saving' ? (
             <><Loader2 className="w-4 h-4 animate-spin" /> Saving…</>
