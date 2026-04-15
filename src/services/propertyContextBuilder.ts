@@ -20,6 +20,13 @@ export function buildPropertyContext(propertyId: string, driveToken?: string | n
   }
   lines.push('')
 
+  // ── Narrative (owner-provided context) ──────────────────────────────────
+  const narrative = api.getNarrative()
+  if (narrative) {
+    lines.push(narrative)
+    lines.push('')
+  }
+
   // ── Equipment ────────────────────────────────────────────────────────────
   const equipment = api.getEquipment()
   if (Array.isArray(equipment) && equipment.length > 0) {
