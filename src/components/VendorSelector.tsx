@@ -53,7 +53,7 @@ export function VendorSelector({ value, onChange, propertyId }: VendorSelectorPr
         type="button"
         onClick={() => setOpen(o => !o)}
         className={cn(
-          'w-full flex items-center justify-between text-sm border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-sky-300 bg-white text-left',
+          'w-full flex items-center justify-between text-sm input-surface rounded-xl px-3 py-2.5 text-left',
           open && 'ring-2 ring-sky-300 border-sky-300',
         )}
       >
@@ -75,7 +75,7 @@ export function VendorSelector({ value, onChange, propertyId }: VendorSelectorPr
       </button>
 
       {open && (
-        <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden">
+        <div className="absolute left-0 right-0 top-full mt-1 modal-surface border border-slate-200 dark:border-slate-700 rounded-xl z-50 overflow-hidden">
           {/* Search */}
           <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-100">
             <Search className="w-3.5 h-3.5 text-slate-400 shrink-0" />

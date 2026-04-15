@@ -70,7 +70,7 @@ export function DocumentCaptureCard({
           type="button"
           onClick={() => cameraRef.current?.click()}
           disabled={disabled || cardState === 'extracting'}
-          className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 transition-colors"
+          className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl card-surface text-sm font-medium text-primary hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 transition-colors"
         >
           <Camera className="w-4 h-4" />
           Capture
@@ -79,7 +79,7 @@ export function DocumentCaptureCard({
           type="button"
           onClick={() => uploadRef.current?.click()}
           disabled={disabled || cardState === 'extracting'}
-          className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 transition-colors"
+          className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl card-surface text-sm font-medium text-primary hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 transition-colors"
         >
           <Upload className="w-4 h-4" />
           Upload

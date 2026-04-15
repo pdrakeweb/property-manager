@@ -191,11 +191,11 @@ function AddModal({ propertyId, onSave, onClose }: AddModalProps) {
     })
   }
 
-  const inputCls = 'w-full text-sm border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-sky-300'
+  const inputCls = 'w-full text-sm input-surface rounded-xl px-3 py-2.5'
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 px-4 pb-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-5 space-y-4 max-h-[90vh] overflow-y-auto">
+      <div className="modal-surface rounded-2xl w-full max-w-sm p-5 space-y-4 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between">
           <h2 className="text-base font-semibold text-slate-900">Add Delivery</h2>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
@@ -214,7 +214,7 @@ function AddModal({ propertyId, onSave, onClose }: AddModalProps) {
               <select
                 value={fuelType}
                 onChange={e => setFuelType(e.target.value as FuelType)}
-                className={cn(inputCls, 'bg-white')}
+                className={inputCls}
               >
                 {FUEL_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
               </select>
@@ -299,7 +299,7 @@ function AnnualSummary({ deliveries }: { deliveries: FuelDelivery[] }) {
   if (entries.length === 0) return null
 
   return (
-    <div className="bg-white border border-slate-200 rounded-2xl shadow-sm px-4 py-4">
+    <div className="card-surface rounded-2xl shadow-sm px-4 py-4">
       <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">{year} Annual Totals</p>
       <div className="space-y-2">
         {entries.map(([type, totals]) => (
@@ -364,7 +364,7 @@ export function FuelScreen() {
               onClick={() => setTab(t)}
               className={cn(
                 'flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors',
-                tab === t ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700',
+                tab === t ? 'toggle-active' : 'toggle-inactive',
               )}
             >
               {t.charAt(0).toUpperCase() + t.slice(1)}
@@ -389,7 +389,7 @@ export function FuelScreen() {
               {deliveries.map(d => {
                 const vendor = d.vendorId ? vendorStore.getById(d.vendorId) : undefined
                 return (
-                  <div key={d.id} className="bg-white border border-slate-200 rounded-2xl shadow-sm px-4 py-4">
+                  <div key={d.id} className="card-surface rounded-2xl shadow-sm px-4 py-4">
                     <div className="flex items-start gap-3">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
@@ -428,7 +428,7 @@ export function FuelScreen() {
                 <select
                   value={chartFuelType}
                   onChange={e => setChartFuelType(e.target.value as FuelType)}
-                  className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-sky-300 bg-white"
+                  className="w-full text-sm input-surface rounded-xl px-3 py-2.5"
                 >
                   {FUEL_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                 </select>
@@ -442,7 +442,7 @@ export function FuelScreen() {
                       onClick={() => setChartMode(m)}
                       className={cn(
                         'flex-1 py-2 px-2 rounded-lg text-xs font-medium transition-colors',
-                        chartMode === m ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500',
+                        chartMode === m ? 'toggle-active' : 'toggle-inactive',
                       )}
                     >
                       {m === 'gallons' ? 'Volume' : 'Price'}
@@ -454,7 +454,7 @@ export function FuelScreen() {
 
             {/* Gallons bar chart */}
             {chartMode === 'gallons' && (
-              <div className="bg-white border border-slate-200 rounded-2xl shadow-sm px-4 py-4">
+              <div className="card-surface rounded-2xl shadow-sm px-4 py-4">
                 <p className="text-sm font-semibold text-slate-700 mb-3">Gallons per Month — {fuelLabel(chartFuelType)}</p>
                 <GallonsBarChart deliveries={deliveries} fuelType={chartFuelType} />
               </div>
@@ -462,7 +462,7 @@ export function FuelScreen() {
 
             {/* Price trend line chart */}
             {chartMode === 'price' && (
-              <div className="bg-white border border-slate-200 rounded-2xl shadow-sm px-4 py-4">
+              <div className="card-surface rounded-2xl shadow-sm px-4 py-4">
                 <p className="text-sm font-semibold text-slate-700 mb-3">Price Trend — {fuelLabel(chartFuelType)} ($/gal)</p>
                 <PriceTrendChart deliveries={chartDeliveries} />
               </div>

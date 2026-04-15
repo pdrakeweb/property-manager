@@ -87,7 +87,7 @@ export function TaskCalendarChip({ task, propertyId }: TaskCalendarChipProps) {
           'flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border transition-colors',
           hasEvent
             ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'
-            : 'bg-white border-sky-200 text-sky-700 hover:bg-sky-50',
+            : 'bg-white dark:bg-slate-800 border-sky-200 dark:border-sky-800 text-sky-700 dark:text-sky-400 hover:bg-sky-50 dark:hover:bg-sky-900/30',
         )}
       >
         {hasEvent ? (

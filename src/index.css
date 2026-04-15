@@ -11,6 +11,66 @@
   }
 }
 
+/* ── Core dark-mode-aware component classes ──────────────────────────────────
+   Use these instead of raw bg-white / border-slate-200 / bg-slate-50 etc.
+   They automatically adapt to dark mode so individual screens don't need
+   to repeat dark: variants on every element.
+────────────────────────────────────────────────────────────────────────────── */
+@layer components {
+  /* Card / panel surface */
+  .card-surface {
+    @apply bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700;
+  }
+
+  /* Modal / dialog overlay surface */
+  .modal-surface {
+    @apply bg-white dark:bg-slate-800 shadow-xl;
+  }
+
+  /* Input / select / textarea */
+  .input-surface {
+    @apply bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600
+           text-slate-900 dark:text-slate-100
+           placeholder-slate-400 dark:placeholder-slate-500
+           focus:outline-none focus:ring-2 focus:ring-green-400 dark:focus:ring-green-500;
+  }
+
+  /* Muted/subtle background (e.g. table headers, toggle backgrounds) */
+  .muted-surface {
+    @apply bg-slate-50 dark:bg-slate-700/50;
+  }
+
+  /* Active toggle / tab pill */
+  .toggle-active {
+    @apply bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 shadow-sm;
+  }
+
+  /* Inactive toggle / tab pill */
+  .toggle-inactive {
+    @apply text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300;
+  }
+
+  /* Divider lines within cards */
+  .card-divider {
+    @apply divide-slate-100 dark:divide-slate-700;
+  }
+
+  /* Section label / muted text */
+  .text-muted {
+    @apply text-slate-500 dark:text-slate-400;
+  }
+
+  /* Primary text */
+  .text-primary {
+    @apply text-slate-800 dark:text-slate-200;
+  }
+
+  /* Subtle/secondary text */
+  .text-subtle {
+    @apply text-slate-400 dark:text-slate-500;
+  }
+}
+
 @layer utilities {
   .safe-bottom {
     padding-bottom: env(safe-area-inset-bottom);

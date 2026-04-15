@@ -81,7 +81,7 @@ function AddModal({ propertyId, initial, onSave, onClose }: AddModalProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 px-4 pb-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-5 space-y-4 max-h-[90vh] overflow-y-auto">
+      <div className="modal-surface rounded-2xl w-full max-w-sm p-5 space-y-4 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between">
           <h2 className="text-base font-semibold text-slate-900">{initial ? 'Edit Record' : 'Add Expiry Record'}</h2>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
@@ -96,7 +96,7 @@ function AddModal({ propertyId, initial, onSave, onClose }: AddModalProps) {
               value={form.filename}
               onChange={e => set('filename', e.target.value)}
               placeholder="e.g. Roof Warranty 2022"
-              className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-sky-300"
+              className="w-full text-sm input-surface rounded-xl px-3 py-2.5"
             />
           </div>
 
@@ -106,7 +106,7 @@ function AddModal({ propertyId, initial, onSave, onClose }: AddModalProps) {
               type="date"
               value={form.expiryDate}
               onChange={e => set('expiryDate', e.target.value)}
-              className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-sky-300"
+              className="w-full text-sm input-surface rounded-xl px-3 py-2.5"
             />
           </div>
 
@@ -115,7 +115,7 @@ function AddModal({ propertyId, initial, onSave, onClose }: AddModalProps) {
             <select
               value={form.expiryType}
               onChange={e => set('expiryType', e.target.value as ExpiryType)}
-              className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-sky-300 bg-white"
+              className="w-full text-sm input-surface rounded-xl px-3 py-2.5"
             >
               {EXPIRY_TYPES.map(t => (
                 <option key={t.value} value={t.value}>{t.label}</option>
@@ -129,7 +129,7 @@ function AddModal({ propertyId, initial, onSave, onClose }: AddModalProps) {
               value={form.driveFileId}
               onChange={e => set('driveFileId', e.target.value)}
               placeholder="Google Drive file ID"
-              className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-sky-300 font-mono text-xs"
+              className="w-full text-sm input-surface rounded-xl px-3 py-2.5 font-mono text-xs"
             />
           </div>
 
@@ -140,7 +140,7 @@ function AddModal({ propertyId, initial, onSave, onClose }: AddModalProps) {
               onChange={e => set('notes', e.target.value)}
               rows={2}
               placeholder="Any notes about this document…"
-              className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-sky-300 resize-none"
+              className="w-full text-sm input-surface rounded-xl px-3 py-2.5 resize-none"
             />
           </div>
         </div>
@@ -230,7 +230,7 @@ export function ExpiryManageScreen() {
             const days = Math.ceil((new Date(d.expiryDate).getTime() - now) / 86400000)
             const expired = days < 0
             const urgent = days >= 0 && days < 30
-            const rowColor = expired ? 'border-red-200 bg-red-50' : urgent ? 'border-amber-200 bg-amber-50' : 'border-slate-200 bg-white'
+            const rowColor = expired ? 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20' : urgent ? 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20' : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800'
             const daysText = expired ? `Expired ${Math.abs(days)}d ago` : days === 0 ? 'Expires today' : `${days}d remaining`
             const daysColor = expired ? 'text-red-600' : urgent ? 'text-amber-600' : 'text-slate-500'
 

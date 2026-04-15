@@ -19,7 +19,7 @@ export function DryRunModal({ result, onClose }: DryRunModalProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 px-4 pb-4">
-      <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-xl w-full sm:max-w-md max-h-[85vh] overflow-y-auto">
+      <div className="modal-surface rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md max-h-[85vh] overflow-y-auto">
 
         {/* Header */}
         <div className="sticky top-0 bg-sky-600 rounded-t-2xl px-5 py-4 flex items-start justify-between gap-3">

@@ -84,7 +84,7 @@ export function MiniCalendar({ propertyId }: MiniCalendarProps) {
   })
 
   return (
-    <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+    <div className="card-surface rounded-2xl p-4 shadow-sm">
 
       {/* Header */}
       <div className="flex items-center justify-between mb-3">

@@ -183,7 +183,7 @@ function EditMode({ card, onSave, onCancel }: {
     setTimeout(() => setSaved(false), 2000)
   }
 
-  const inputCls = 'w-full text-sm border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-sky-300'
+  const inputCls = 'w-full text-sm input-surface rounded-xl px-3 py-2.5'
 
   return (
     <div className="space-y-6">
@@ -218,7 +218,7 @@ function EditMode({ card, onSave, onCancel }: {
         </div>
         <div className="space-y-4">
           {shutoffs.map((s, i) => (
-            <div key={s.id} className="bg-white border border-slate-200 rounded-xl p-4 space-y-2">
+            <div key={s.id} className="card-surface rounded-xl p-4 space-y-2">
               <div className="flex items-center justify-between mb-1">
                 <span className="text-xs font-semibold text-slate-500">Shutoff {i + 1}</span>
                 <button onClick={() => removeShutoff(s.id)} className="text-slate-400 hover:text-red-500 p-0.5 rounded">
@@ -267,7 +267,7 @@ function EditMode({ card, onSave, onCancel }: {
         </div>
         <div className="space-y-4">
           {contacts.map((c, i) => (
-            <div key={c.id} className="bg-white border border-slate-200 rounded-xl p-4 space-y-2">
+            <div key={c.id} className="card-surface rounded-xl p-4 space-y-2">
               <div className="flex items-center justify-between mb-1">
                 <span className="text-xs font-semibold text-slate-500">Contact {i + 1}</span>
                 <button onClick={() => removeContact(c.id)} className="text-slate-400 hover:text-red-500 p-0.5 rounded">
