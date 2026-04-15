@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import {
   Send, Sparkles, ChevronDown, Database, Loader2,
   Copy, ThumbsUp, Save, RefreshCw, AlertCircle, Settings, Wrench,
+  FileText, X,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { cn } from '../utils/cn'
@@ -12,6 +13,7 @@ import { chatWithTools, OpenRouterError } from '../services/openRouterClient'
 import { PropertyRecordsAPI } from '../services/PropertyRecordsAPI'
 import { buildPropertyContext } from '../services/propertyContextBuilder'
 import { AI_TOOLS, createToolExecutor } from '../services/aiTools'
+import { AISessionLogger } from '../services/aiLogger'
 import type { AIMessage } from '../types'
 import type { ChatMessage } from '../services/openRouterClient'
 
@@ -192,9 +194,12 @@ export function AIAdvisoryScreen() {
   const [toolStatus, setToolStatus] = useState<string | null>(null)
   const [error,    setError]    = useState<string | null>(null)
   const [showSuggestions, setShowSuggestions] = useState(false)
+  const [showLog,  setShowLog]  = useState(false)
+  const [logTick,  setLogTick]  = useState(0) // force re-render of log panel
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef  = useRef<HTMLTextAreaElement>(null)
   const prevPropertyRef = useRef(activePropertyId)
+  const loggerRef = useRef(new AISessionLogger())
 
   // Clear conversation when property changes
   useEffect(() => {
@@ -204,6 +209,8 @@ export function AIAdvisoryScreen() {
       setStreamingContent('')
       setError(null)
       setToolStatus(null)
+      loggerRef.current.clear()
+      loggerRef.current.log('info', 'system', `Switched to property: ${activePropertyId}`)
     }
   }, [activePropertyId])
 
@@ -247,10 +254,13 @@ export function AIAdvisoryScreen() {
 
   async function handleSend(text = input.trim()) {
     if (!text || loading) return
+    const logger = loggerRef.current
     setInput('')
     setShowSuggestions(false)
     setError(null)
     setToolStatus(null)
+
+    logger.logUserMessage(text)
 
     const userMsg: AIMessage = {
       id: `msg-${Date.now()}`,
@@ -275,6 +285,10 @@ export function AIAdvisoryScreen() {
 
     try {
       const chatMessages = buildChatHistory(text)
+      logger.logSystemPrompt(buildSystemPrompt())
+
+      const streamStart = Date.now()
+      let streamChars = 0
 
       await chatWithTools(
         {
@@ -282,14 +296,20 @@ export function AIAdvisoryScreen() {
           model,
           messages: chatMessages,
           tools: AI_TOOLS,
+          logger,
         },
         toolExecutor,
         {
           onToken: (token) => {
+            if (streamChars === 0) logger.logStreamStart()
+            streamChars += token.length
             setToolStatus(null)
             setStreamingContent(prev => prev + token)
           },
           onDone: (fullText) => {
+            if (streamChars > 0) logger.logStreamEnd(streamChars, Date.now() - streamStart)
+            logger.logAssistantMessage(fullText)
+            setLogTick(t => t + 1)
             const aiMsg: AIMessage = {
               id: `msg-${Date.now()}-ai`,
               role: 'assistant',
@@ -302,7 +322,8 @@ export function AIAdvisoryScreen() {
             setLoading(false)
           },
           onError: (err) => {
-            console.error('[AI Advisory] Error:', err)
+            logger.logError(`API error: ${err.message}`, err)
+            setLogTick(t => t + 1)
             if (err.isUnauthorized) {
               setError('Invalid API key. Check your OpenRouter key in Settings.')
             } else if (err.isRateLimited) {
@@ -315,10 +336,14 @@ export function AIAdvisoryScreen() {
             setLoading(false)
           },
         },
-        (status) => setToolStatus(status),
+        (status) => {
+          logger.log('info', 'tool_call', status)
+          setToolStatus(status)
+        },
       )
     } catch (err) {
-      console.error('[AI Advisory] Request error:', err)
+      logger.logError('Request failed', err)
+      setLogTick(t => t + 1)
       const message = err instanceof OpenRouterError
         ? err.isUnauthorized
           ? 'Invalid API key. Check your OpenRouter key in Settings.'
@@ -359,13 +384,30 @@ export function AIAdvisoryScreen() {
             </div>
           )}
         </div>
-        <button
-          onClick={clearConversation}
-          className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 px-2 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
-        >
-          <RefreshCw className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">New chat</span>
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => { setShowLog(s => !s); setLogTick(t => t + 1) }}
+            className={cn(
+              'flex items-center gap-1.5 text-xs px-2 py-1.5 rounded-lg transition-colors',
+              showLog
+                ? 'bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-400'
+                : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700',
+            )}
+          >
+            <FileText className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Log</span>
+            {loggerRef.current.getEntries().filter(e => e.level === 'error').length > 0 && (
+              <span className="w-1.5 h-1.5 bg-red-500 rounded-full" />
+            )}
+          </button>
+          <button
+            onClick={clearConversation}
+            className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 px-2 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">New chat</span>
+          </button>
+        </div>
       </div>
 
       {/* ── API key warning ─────────────────────────────────────────────── */}
@@ -550,6 +592,33 @@ export function AIAdvisoryScreen() {
           Enter to send · Shift+Enter for new line
         </p>
       </div>
+
+      {/* ── Log Panel (slide-over) ──────────────────────────────────────── */}
+      {showLog && (
+        <div className="fixed inset-y-0 right-0 z-50 w-full sm:w-[480px] flex flex-col bg-slate-900 text-slate-100 shadow-2xl">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700 shrink-0">
+            <div className="flex items-center gap-2">
+              <FileText className="w-4 h-4 text-violet-400" />
+              <h3 className="text-sm font-semibold">AI Session Log</h3>
+              <span className="text-xs text-slate-500">
+                {loggerRef.current.getEntries().length} entries · {Math.round(loggerRef.current.getSessionDurationMs() / 1000)}s
+              </span>
+            </div>
+            <button
+              onClick={() => setShowLog(false)}
+              className="w-7 h-7 rounded-lg hover:bg-slate-700 flex items-center justify-center transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <pre
+            className="flex-1 overflow-y-auto px-4 py-3 text-xs font-mono leading-relaxed whitespace-pre-wrap"
+            /* logTick forces re-read */ data-tick={logTick}
+          >
+            {loggerRef.current.formatForDisplay() || 'No log entries yet.'}
+          </pre>
+        </div>
+      )}
 
     </div>
   )

@@ -45,6 +45,7 @@ export interface ChatCompletionOptions {
   maxTokens?: number
   temperature?: number
   tools?: ChatTool[]
+  logger?: import('./aiLogger').AISessionLogger
 }
 
 export interface ChatCompletionResult {
@@ -121,6 +122,10 @@ function buildHeaders(apiKey: string) {
 // ─── Non-streaming completions ─────────────────────────────────────────────────
 
 export async function chatCompletion(opts: ChatCompletionOptions): Promise<ChatCompletionResult> {
+  const log = opts.logger
+  const start = Date.now()
+  log?.logApiRequest(opts.model, opts.messages.length, !!(opts.tools?.length))
+
   const response = await fetch(`${OPENROUTER_BASE}/chat/completions`, {
     method: 'POST',
     headers: buildHeaders(opts.apiKey),
@@ -129,6 +134,7 @@ export async function chatCompletion(opts: ChatCompletionOptions): Promise<ChatC
 
   if (!response.ok) {
     const errText = await response.text()
+    log?.logError(`API ${response.status}: ${errText.slice(0, 300)}`)
     throw new OpenRouterError(
       `OpenRouter request failed (${response.status}): ${errText}`,
       response.status,
@@ -137,6 +143,13 @@ export async function chatCompletion(opts: ChatCompletionOptions): Promise<ChatC
 
   const data = await response.json()
   const choice = data.choices?.[0]
+  log?.logApiResponse(response.status, Date.now() - start, choice?.finish_reason)
+
+  if (choice?.message?.tool_calls?.length) {
+    for (const tc of choice.message.tool_calls) {
+      log?.logToolCall(tc.function.name, JSON.parse(tc.function.arguments || '{}'))
+    }
+  }
 
   return {
     content: choice?.message?.content ?? '',
@@ -298,19 +311,25 @@ export async function chatWithTools(
 
       // Execute each tool call and add results
       for (const tc of result.toolCalls) {
-        onToolStatus?.(`Using tool: ${tc.function.name}...`)
+        const toolName = tc.function.name
+        onToolStatus?.(`Using tool: ${toolName}...`)
+        const toolStart = Date.now()
         try {
           const args = JSON.parse(tc.function.arguments)
-          const toolResult = await executeToolCall(tc.function.name, args)
+          opts.logger?.logToolCall(toolName, args)
+          const toolResult = await executeToolCall(toolName, args)
+          opts.logger?.logToolResult(toolName, toolResult, Date.now() - toolStart)
           messages.push({
             role: 'tool',
             content: toolResult,
             tool_call_id: tc.id,
           })
         } catch (err) {
+          const errMsg = err instanceof Error ? err.message : String(err)
+          opts.logger?.logToolError(toolName, errMsg)
           messages.push({
             role: 'tool',
-            content: `[Tool error: ${err instanceof Error ? err.message : String(err)}]`,
+            content: `[Tool error: ${errMsg}]`,
             tool_call_id: tc.id,
           })
         }
