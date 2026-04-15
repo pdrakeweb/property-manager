@@ -1,12 +1,17 @@
 import { useNavigate } from 'react-router-dom'
 import { CheckCircle2, ChevronRight, Sparkles } from 'lucide-react'
-import { CATEGORIES } from '../data/mockData'
+import { CATEGORIES, PROPERTIES } from '../data/mockData'
+import { useAppStore } from '../store/AppStoreContext'
 
 export function CaptureSelectScreen() {
   const navigate = useNavigate()
+  const { activePropertyId } = useAppStore()
 
-  const withRecords    = CATEGORIES.filter(c => c.recordCount && c.recordCount > 0)
-  const withoutRecords = CATEGORIES.filter(c => !c.recordCount || c.recordCount === 0)
+  const activeProperty = PROPERTIES.find(p => p.id === activePropertyId) ?? PROPERTIES[0]
+  const propertyCategories = CATEGORIES.filter(c => c.propertyTypes.includes(activeProperty.type))
+
+  const withRecords    = propertyCategories.filter(c => c.recordCount && c.recordCount > 0)
+  const withoutRecords = propertyCategories.filter(c => !c.recordCount || c.recordCount === 0)
 
   return (
     <div className="space-y-6">

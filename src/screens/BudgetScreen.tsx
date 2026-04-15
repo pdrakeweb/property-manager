@@ -5,6 +5,7 @@ import {
 } from 'lucide-react'
 import { cn } from '../utils/cn'
 import { CAPITAL_ITEMS, SERVICE_RECORDS } from '../data/mockData'
+import { useAppStore } from '../store/AppStoreContext'
 import type { Priority, CapitalItem, CapitalTransaction } from '../types'
 import {
   capitalTransactionStore,
@@ -480,27 +481,31 @@ function YearRow({
 // ── Main BudgetScreen ───────────────────────────────────────────────────────
 
 export function BudgetScreen() {
+  const { activePropertyId } = useAppStore()
   const [horizon, setHorizon] = useState<Horizon>('3yr')
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null)
   const [tick, setTick] = useState(0)
   void tick
 
+  const propertyCapitalItems  = CAPITAL_ITEMS.filter(i => i.propertyId === activePropertyId)
+  const propertyServiceRecords = SERVICE_RECORDS.filter(r => r.propertyId === activePropertyId)
+
   const maxYear = horizon === '1yr' ? CURRENT_YEAR : horizon === '3yr' ? CURRENT_YEAR + 2 : CURRENT_YEAR + 9
-  const grouped = groupByYear(CAPITAL_ITEMS, maxYear)
+  const grouped = groupByYear(propertyCapitalItems, maxYear)
   const years   = Object.keys(grouped).map(Number).sort()
 
-  const allItems = CAPITAL_ITEMS.filter(i => i.estimatedYear <= maxYear)
+  const allItems = propertyCapitalItems.filter(i => i.estimatedYear <= maxYear)
   const totalLow  = allItems.reduce((s, i) => s + i.costLow,  0)
   const totalHigh = allItems.reduce((s, i) => s + i.costHigh, 0)
   const maxYearTotal = Math.max(...years.map(y => yearTotal(grouped[y]).high), 1)
 
   const annualReserve = Math.round(totalHigh / (maxYear - CURRENT_YEAR + 1) / 12)
-  const totalHistoricalSpend = SERVICE_RECORDS.reduce((s, r) => s + (r.totalCost ?? 0), 0)
+  const totalHistoricalSpend = propertyServiceRecords.reduce((s, r) => s + (r.totalCost ?? 0), 0)
   const annualAvgSpend = Math.round(totalHistoricalSpend / 2)
 
   // Detail view
   if (selectedItemId) {
-    const item = CAPITAL_ITEMS.find(i => i.id === selectedItemId)
+    const item = propertyCapitalItems.find(i => i.id === selectedItemId)
     if (item) {
       return (
         <CapitalItemDetail
@@ -604,7 +609,7 @@ export function BudgetScreen() {
       <div>
         <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide mb-3">Historical Spend</h2>
         <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-sm overflow-hidden">
-          {SERVICE_RECORDS.map(r => (
+          {propertyServiceRecords.map(r => (
             <div key={r.id} className="flex items-center gap-3 px-4 py-3 border-b border-slate-100 dark:border-slate-700/50 last:border-0">
               <div className="flex-1 min-w-0">
                 <p className="text-sm text-slate-700 dark:text-slate-300 truncate">{r.workDescription}</p>

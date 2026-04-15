@@ -330,6 +330,8 @@ export function FuelScreen() {
 
   function refresh() { setDeliveries(getDeliveriesForProperty(activePropertyId)) }
 
+  useEffect(() => { refresh() }, [activePropertyId])
+
   function handleSave(d: FuelDelivery) {
     fuelStore.add(d)
     refresh()

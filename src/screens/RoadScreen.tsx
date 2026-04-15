@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Plus, X, MapPin, Pencil, Trash2 } from 'lucide-react'
 import { cn } from '../utils/cn'
 import { roadStore, getRoadEventsForProperty, getRoadSpendByYear, getGravelTonsByYear } from '../lib/roadStore'
@@ -316,6 +316,8 @@ export function RoadScreen() {
   function refresh() {
     setEvents(getRoadEventsForProperty(activePropertyId))
   }
+
+  useEffect(() => { refresh() }, [activePropertyId])
 
   function handleAdd(e: RoadEvent) {
     roadStore.add(e)

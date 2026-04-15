@@ -381,6 +381,8 @@ export function WellTestScreen() {
 
   function refresh() { setTests(getTestsForProperty(activePropertyId)) }
 
+  useEffect(() => { refresh() }, [activePropertyId])
+
   function handleSave(t: WellTest) {
     wellTestStore.add(t)
     refresh()
