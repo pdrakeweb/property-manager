@@ -2,10 +2,10 @@ import { useState, useEffect } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, Camera, Wrench, BarChart3,
-  MessageSquare, ClipboardList, Settings, ChevronDown,
+  MessageSquare, ClipboardList, Settings, ChevronDown, ChevronRight,
   Building2, TreePine, Users, Droplets, Receipt, Home, Zap, CalendarDays,
   RefreshCw, Shield, FileCheck, CheckSquare, Activity, MapPin,
-  Sun, Moon, Monitor,
+  Sun, Moon, Monitor, DollarSign, HardHat,
 } from 'lucide-react'
 import { cn } from '../../utils/cn'
 import { PROPERTIES } from '../../data/mockData'
@@ -15,27 +15,97 @@ import type { SyncStats } from '../../lib/localIndex'
 import { isDev } from '../../auth/oauth'
 import { useTheme } from '../../contexts/ThemeContext'
 
-const NAV_ITEMS = [
+type NavItem = { to: string; icon: React.ComponentType<{ className?: string }>; label: string; mobileShow: boolean }
+type NavSection = { label: string; icon: React.ComponentType<{ className?: string }>; items: NavItem[] }
+
+const TOP_NAV: NavItem[] = [
   { to: '/',           icon: LayoutDashboard, label: 'Dashboard',   mobileShow: true  },
   { to: '/capture',    icon: Camera,          label: 'Capture',     mobileShow: true  },
   { to: '/maintenance',icon: Wrench,          label: 'Maintenance', mobileShow: true  },
   { to: '/calendar',   icon: CalendarDays,    label: 'Calendar',    mobileShow: true  },
   { to: '/checklists', icon: CheckSquare,     label: 'Checklists',  mobileShow: true  },
-  { to: '/budget',     icon: BarChart3,       label: 'Budget',      mobileShow: false },
   { to: '/advisor',    icon: MessageSquare,   label: 'Ask AI',      mobileShow: true  },
-  { to: '/inventory',  icon: ClipboardList,   label: 'Inventory',   mobileShow: false },
-  { to: '/vendors',    icon: Users,           label: 'Vendors',     mobileShow: false },
-  { to: '/fuel',       icon: Droplets,        label: 'Fuel',        mobileShow: false },
-  { to: '/tax',        icon: Receipt,         label: 'Property Tax',mobileShow: false },
-  { to: '/mortgage',   icon: Home,            label: 'Mortgage',    mobileShow: false },
-  { to: '/utilities',  icon: Zap,             label: 'Utilities',   mobileShow: false },
-  { to: '/insurance',  icon: Shield,          label: 'Insurance',   mobileShow: false },
-  { to: '/permits',    icon: FileCheck,       label: 'Permits',     mobileShow: false },
-  { to: '/generator',  icon: Activity,        label: 'Generator',   mobileShow: false },
-  { to: '/road',       icon: MapPin,          label: 'Roads',       mobileShow: false },
+]
+
+const NAV_SECTIONS: NavSection[] = [
+  {
+    label: 'Financial',
+    icon: DollarSign,
+    items: [
+      { to: '/budget',     icon: BarChart3, label: 'Budget',      mobileShow: false },
+      { to: '/tax',        icon: Receipt,   label: 'Property Tax', mobileShow: false },
+      { to: '/mortgage',   icon: Home,      label: 'Mortgage',    mobileShow: false },
+      { to: '/utilities',  icon: Zap,       label: 'Utilities',   mobileShow: false },
+      { to: '/insurance',  icon: Shield,    label: 'Insurance',   mobileShow: false },
+    ],
+  },
+  {
+    label: 'Property',
+    icon: HardHat,
+    items: [
+      { to: '/inventory',  icon: ClipboardList, label: 'Inventory',   mobileShow: false },
+      { to: '/vendors',    icon: Users,         label: 'Vendors',     mobileShow: false },
+      { to: '/permits',    icon: FileCheck,     label: 'Permits',     mobileShow: false },
+      { to: '/fuel',       icon: Droplets,      label: 'Fuel',        mobileShow: false },
+      { to: '/generator',  icon: Activity,      label: 'Generator',   mobileShow: false },
+      { to: '/road',       icon: MapPin,        label: 'Roads',       mobileShow: false },
+    ],
+  },
+]
+
+// Flat list for mobile bottom nav and route matching
+const NAV_ITEMS = [
+  ...TOP_NAV,
+  ...NAV_SECTIONS.flatMap(s => s.items),
 ]
 
 const PROPERTY_ICONS = { residence: Building2, camp: TreePine, land: Building2 }
+
+function NavSectionGroup({ section, pathname }: { section: NavSection; pathname: string }) {
+  const hasActiveChild = section.items.some(item =>
+    item.to === '/' ? pathname === '/' : pathname.startsWith(item.to)
+  )
+  const [open, setOpen] = useState(hasActiveChild)
+  const SectionIcon = section.icon
+
+  return (
+    <div>
+      <button
+        onClick={() => setOpen(o => !o)}
+        className={cn(
+          'flex items-center gap-3 w-full px-3 py-2 rounded-lg text-xs font-semibold uppercase tracking-wider transition-colors',
+          hasActiveChild
+            ? 'text-green-400'
+            : 'text-slate-500 hover:text-slate-300',
+        )}
+      >
+        <SectionIcon className="w-3.5 h-3.5 shrink-0" />
+        <span className="flex-1 text-left">{section.label}</span>
+        <ChevronRight className={cn('w-3.5 h-3.5 transition-transform', open && 'rotate-90')} />
+      </button>
+      {open && (
+        <div className="mt-0.5 space-y-0.5">
+          {section.items.map(({ to, icon: Icon, label }) => (
+            <NavLink
+              key={to}
+              to={to}
+              end={to === '/'}
+              className={({ isActive }) => cn(
+                'flex items-center gap-3 pl-6 pr-3 py-2 rounded-lg text-sm font-medium transition-colors',
+                isActive
+                  ? 'bg-green-600 text-white'
+                  : 'text-slate-300 hover:bg-slate-700 hover:text-white',
+              )}
+            >
+              <Icon className="w-4 h-4 shrink-0" />
+              {label}
+            </NavLink>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
 function ThemeToggle() {
   const { theme, setTheme } = useTheme()
@@ -250,7 +320,7 @@ export function AppShell({ children }: AppShellProps) {
 
         {/* Nav items */}
         <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-          {NAV_ITEMS.map(({ to, icon: Icon, label }) => (
+          {TOP_NAV.map(({ to, icon: Icon, label }) => (
             <NavLink
               key={to}
               to={to}
@@ -259,13 +329,18 @@ export function AppShell({ children }: AppShellProps) {
                 'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
                 isActive
                   ? 'bg-green-600 text-white'
-                  : 'text-slate-300 dark:text-slate-600 hover:bg-slate-700 hover:text-white',
+                  : 'text-slate-300 hover:bg-slate-700 hover:text-white',
               )}
             >
               <Icon className="w-4 h-4 shrink-0" />
               {label}
             </NavLink>
           ))}
+          <div className="pt-3 space-y-1">
+            {NAV_SECTIONS.map(section => (
+              <NavSectionGroup key={section.label} section={section} pathname={location.pathname} />
+            ))}
+          </div>
         </nav>
 
         {/* Settings + offline pill at bottom */}
