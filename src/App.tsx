@@ -222,8 +222,9 @@ function OAuthCallbackHandler({ onDone }: { onDone: (ok: boolean) => void }) {
     handleOAuthCallback(code, state)
       .then(() => onDone(true))
       .catch(e => {
+        console.error('OAuth callback failed:', e)
         setError(String(e))
-        onDone(false)
+        // Don't call onDone(false) — let the user see the error
       })
   }, [onDone])
 
