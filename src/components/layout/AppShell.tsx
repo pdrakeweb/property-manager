@@ -1,28 +1,44 @@
-import { useState } from 'react'
-import { NavLink, useLocation } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, Camera, Wrench, BarChart3,
   MessageSquare, ClipboardList, Settings, ChevronDown,
-  Building2, TreePine, Sun, Moon, Monitor,
+  Building2, TreePine, Users, Droplets, Receipt, Home, Zap, CalendarDays,
+  RefreshCw, Shield, FileCheck, CheckSquare, Activity, MapPin,
+  Sun, Moon, Monitor,
 } from 'lucide-react'
 import { cn } from '../../utils/cn'
 import { PROPERTIES } from '../../data/mockData'
+import { useAppStore } from '../../store/AppStoreContext'
+import { localIndex } from '../../lib/localIndex'
+import type { SyncStats } from '../../lib/localIndex'
+import { isDev } from '../../auth/oauth'
 import { useTheme } from '../../contexts/ThemeContext'
 
 const NAV_ITEMS = [
-  { to: '/',           icon: LayoutDashboard, label: 'Dashboard'   },
-  { to: '/capture',    icon: Camera,          label: 'Capture'     },
-  { to: '/maintenance',icon: Wrench,          label: 'Maintenance' },
-  { to: '/budget',     icon: BarChart3,       label: 'Budget'      },
-  { to: '/advisor',    icon: MessageSquare,   label: 'Ask AI'      },
-  { to: '/inventory',  icon: ClipboardList,   label: 'Inventory'   },
+  { to: '/',           icon: LayoutDashboard, label: 'Dashboard',   mobileShow: true  },
+  { to: '/capture',    icon: Camera,          label: 'Capture',     mobileShow: true  },
+  { to: '/maintenance',icon: Wrench,          label: 'Maintenance', mobileShow: true  },
+  { to: '/calendar',   icon: CalendarDays,    label: 'Calendar',    mobileShow: true  },
+  { to: '/checklists', icon: CheckSquare,     label: 'Checklists',  mobileShow: true  },
+  { to: '/budget',     icon: BarChart3,       label: 'Budget',      mobileShow: false },
+  { to: '/advisor',    icon: MessageSquare,   label: 'Ask AI',      mobileShow: true  },
+  { to: '/inventory',  icon: ClipboardList,   label: 'Inventory',   mobileShow: false },
+  { to: '/vendors',    icon: Users,           label: 'Vendors',     mobileShow: false },
+  { to: '/fuel',       icon: Droplets,        label: 'Fuel',        mobileShow: false },
+  { to: '/tax',        icon: Receipt,         label: 'Property Tax',mobileShow: false },
+  { to: '/mortgage',   icon: Home,            label: 'Mortgage',    mobileShow: false },
+  { to: '/utilities',  icon: Zap,             label: 'Utilities',   mobileShow: false },
+  { to: '/insurance',  icon: Shield,          label: 'Insurance',   mobileShow: false },
+  { to: '/permits',    icon: FileCheck,       label: 'Permits',     mobileShow: false },
+  { to: '/generator',  icon: Activity,        label: 'Generator',   mobileShow: false },
+  { to: '/road',       icon: MapPin,          label: 'Roads',       mobileShow: false },
 ]
 
 const PROPERTY_ICONS = { residence: Building2, camp: TreePine, land: Building2 }
 
 function ThemeToggle() {
   const { theme, setTheme } = useTheme()
-
   return (
     <div className="flex items-center gap-1 bg-slate-800 rounded-lg p-1">
       {([
@@ -33,13 +49,11 @@ function ThemeToggle() {
         <button
           key={id}
           onClick={() => setTheme(id)}
+          title={id.charAt(0).toUpperCase() + id.slice(1)}
           className={cn(
             'flex items-center justify-center w-7 h-7 rounded-md transition-colors',
-            theme === id
-              ? 'bg-green-600 text-white'
-              : 'text-slate-400 hover:text-slate-200',
+            theme === id ? 'bg-green-600 text-white' : 'text-slate-400 hover:text-slate-200',
           )}
-          title={id.charAt(0).toUpperCase() + id.slice(1)}
         >
           <Icon className="w-3.5 h-3.5" />
         </button>
@@ -50,8 +64,8 @@ function ThemeToggle() {
 
 function PropertySwitcher() {
   const [open, setOpen] = useState(false)
-  const [activeId, setActiveId] = useState('tannerville')
-  const active = PROPERTIES.find(p => p.id === activeId)!
+  const { activePropertyId, setActivePropertyId } = useAppStore()
+  const active = PROPERTIES.find(p => p.id === activePropertyId) ?? PROPERTIES[0]
   const Icon = PROPERTY_ICONS[active.type]
 
   return (
@@ -63,9 +77,9 @@ function PropertySwitcher() {
         <Icon className="w-4 h-4 text-green-400 shrink-0" />
         <div className="flex-1 min-w-0">
           <div className="text-sm font-medium text-white truncate">{active.shortName}</div>
-          <div className="text-xs text-slate-400 truncate">{active.address}</div>
+          <div className="text-xs text-slate-400 dark:text-slate-500 truncate">{active.address}</div>
         </div>
-        <ChevronDown className={cn('w-4 h-4 text-slate-400 transition-transform', open && 'rotate-180')} />
+        <ChevronDown className={cn('w-4 h-4 text-slate-400 dark:text-slate-500 transition-transform', open && 'rotate-180')} />
       </button>
 
       {open && (
@@ -75,16 +89,16 @@ function PropertySwitcher() {
             return (
               <button
                 key={p.id}
-                onClick={() => { setActiveId(p.id); setOpen(false) }}
+                onClick={() => { setActivePropertyId(p.id); setOpen(false) }}
                 className={cn(
                   'flex items-center gap-3 w-full px-3 py-2.5 text-left hover:bg-slate-700 transition-colors',
-                  p.id === activeId && 'bg-slate-700',
+                  p.id === activePropertyId && 'bg-slate-700',
                 )}
               >
                 <PIcon className="w-4 h-4 text-green-400 shrink-0" />
                 <div>
                   <div className="text-sm font-medium text-white">{p.name}</div>
-                  <div className="text-xs text-slate-400">{p.stats.documented}/{p.stats.total} documented</div>
+                  <div className="text-xs text-slate-400 dark:text-slate-500">{p.stats.documented}/{p.stats.total} documented</div>
                 </div>
               </button>
             )
@@ -102,8 +116,8 @@ function PropertySwitcher() {
 
 function MobilePropertySwitcher() {
   const [open, setOpen] = useState(false)
-  const [activeId, setActiveId] = useState('tannerville')
-  const active = PROPERTIES.find(p => p.id === activeId)!
+  const { activePropertyId, setActivePropertyId } = useAppStore()
+  const active = PROPERTIES.find(p => p.id === activePropertyId) ?? PROPERTIES[0]
   const Icon = PROPERTY_ICONS[active.type]
 
   return (
@@ -113,7 +127,7 @@ function MobilePropertySwitcher() {
         className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-700 rounded-lg px-2.5 py-1.5"
       >
         <Icon className="w-3.5 h-3.5 text-green-600 dark:text-green-400" />
-        <span className="text-sm font-medium text-slate-700 dark:text-slate-200">{active.shortName}</span>
+        <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{active.shortName}</span>
         <ChevronDown className={cn('w-3.5 h-3.5 text-slate-500 dark:text-slate-400 transition-transform', open && 'rotate-180')} />
       </button>
 
@@ -126,10 +140,10 @@ function MobilePropertySwitcher() {
               return (
                 <button
                   key={p.id}
-                  onClick={() => { setActiveId(p.id); setOpen(false) }}
+                  onClick={() => { setActivePropertyId(p.id); setOpen(false) }}
                   className={cn(
-                    'flex items-center gap-3 w-full px-4 py-3 text-left hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors',
-                    p.id === activeId && 'bg-green-50 dark:bg-green-900/20',
+                    'flex items-center gap-3 w-full px-4 py-3 text-left hover:bg-slate-50 dark:hover:bg-slate-700/50',
+                    p.id === activePropertyId && 'bg-green-50 dark:bg-green-900/20',
                   )}
                 >
                   <PIcon className="w-4 h-4 text-green-600 dark:text-green-400" />
@@ -147,6 +161,60 @@ function MobilePropertySwitcher() {
   )
 }
 
+function SyncPill() {
+  const navigate = useNavigate()
+  const [stats, setStats] = useState<SyncStats>(() => localIndex.getSyncStats())
+  const devMode = isDev()
+
+  useEffect(() => {
+    const refresh = () => setStats(localIndex.getSyncStats())
+    const id = setInterval(refresh, 30_000)
+    window.addEventListener('focus', refresh)
+    return () => { clearInterval(id); window.removeEventListener('focus', refresh) }
+  }, [])
+
+  if (stats.conflicts > 0) {
+    return (
+      <button
+        onClick={() => navigate('/conflicts')}
+        className="flex items-center gap-1 bg-red-500 hover:bg-red-600 text-white text-xs font-semibold rounded-full px-2.5 py-1 transition-colors shrink-0"
+      >
+        <RefreshCw className="w-3 h-3" />
+        {devMode && <span className="opacity-75">DEV</span>}
+        {stats.conflicts} conflict{stats.conflicts > 1 ? 's' : ''}
+      </button>
+    )
+  }
+
+  if (stats.pending > 0) {
+    return (
+      <button
+        onClick={() => navigate('/settings')}
+        className={cn(
+          'flex items-center gap-1 text-white text-xs font-semibold rounded-full px-2.5 py-1 transition-colors shrink-0',
+          devMode ? 'bg-green-500 hover:bg-green-600' : 'bg-amber-500 hover:bg-amber-600',
+        )}
+      >
+        <RefreshCw className="w-3 h-3" />
+        {devMode && <span className="opacity-75">DEV</span>}
+        {stats.pending} pending
+      </button>
+    )
+  }
+
+  // In dev mode, always show a quiet indicator even when synced
+  if (devMode) {
+    return (
+      <span className="flex items-center gap-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-xs font-semibold rounded-full px-2.5 py-1 shrink-0">
+        <RefreshCw className="w-3 h-3" />
+        DEV
+      </span>
+    )
+  }
+
+  return null
+}
+
 interface AppShellProps {
   children: React.ReactNode
 }
@@ -159,14 +227,14 @@ export function AppShell({ children }: AppShellProps) {
   )
 
   return (
-    <div className="min-h-screen bg-[#f8f7f4] dark:bg-[#0f1117]">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-800/50">
 
       {/* ── Desktop Sidebar ────────────────────────────────────────────── */}
       <aside className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-64 lg:flex-col bg-slate-900 z-30">
 
         {/* Logo */}
         <div className="flex items-center gap-3 px-4 pt-6 pb-4">
-          <div className="w-8 h-8 bg-green-600 rounded-lg flex items-center justify-center shrink-0">
+          <div className="w-8 h-8 bg-green-500 rounded-lg flex items-center justify-center shrink-0">
             <Building2 className="w-5 h-5 text-white" />
           </div>
           <div>
@@ -191,7 +259,7 @@ export function AppShell({ children }: AppShellProps) {
                 'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
                 isActive
                   ? 'bg-green-600 text-white'
-                  : 'text-slate-300 hover:bg-slate-700 hover:text-white',
+                  : 'text-slate-300 dark:text-slate-600 hover:bg-slate-700 hover:text-white',
               )}
             >
               <Icon className="w-4 h-4 shrink-0" />
@@ -200,7 +268,7 @@ export function AppShell({ children }: AppShellProps) {
           ))}
         </nav>
 
-        {/* Theme toggle + Settings at bottom */}
+        {/* Settings + offline pill at bottom */}
         <div className="px-3 pb-6 border-t border-slate-700 pt-4 space-y-2">
           <div className="px-1">
             <ThemeToggle />
@@ -209,17 +277,20 @@ export function AppShell({ children }: AppShellProps) {
             to="/settings"
             className={({ isActive }) => cn(
               'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
-              isActive ? 'bg-green-600 text-white' : 'text-slate-400 hover:bg-slate-700 hover:text-white',
+              isActive ? 'bg-green-600 text-white' : 'text-slate-400 dark:text-slate-500 hover:bg-slate-700 hover:text-white',
             )}
           >
             <Settings className="w-4 h-4 shrink-0" />
             Settings
           </NavLink>
+          <div className="px-3">
+            <SyncPill />
+          </div>
         </div>
       </aside>
 
       {/* ── Mobile Header ─────────────────────────────────────────────── */}
-      <header className="lg:hidden sticky top-0 z-30 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700">
+      <header className="lg:hidden sticky top-0 z-30 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
         <div className="flex items-center justify-between px-4 h-14">
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 bg-green-600 rounded-md flex items-center justify-center">
@@ -229,7 +300,10 @@ export function AppShell({ children }: AppShellProps) {
               {currentNav?.label ?? 'Property Manager'}
             </span>
           </div>
-          <MobilePropertySwitcher />
+          <div className="flex items-center gap-2">
+            <SyncPill />
+            <MobilePropertySwitcher />
+          </div>
         </div>
       </header>
 
@@ -241,9 +315,9 @@ export function AppShell({ children }: AppShellProps) {
       </main>
 
       {/* ── Mobile Bottom Nav ─────────────────────────────────────────── */}
-      <nav className="lg:hidden fixed bottom-0 inset-x-0 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700 z-30 safe-bottom">
+      <nav className="lg:hidden fixed bottom-0 inset-x-0 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 z-30 safe-bottom">
         <div className="flex items-center">
-          {NAV_ITEMS.filter(n => n.to !== '/inventory').map(({ to, icon: Icon, label }) => (
+          {NAV_ITEMS.filter(n => n.mobileShow).map(({ to, icon: Icon, label }) => (
             <NavLink
               key={to}
               to={to}
