@@ -1,10 +1,14 @@
 import { useState, useRef, useEffect } from 'react'
 import {
   Send, Sparkles, ChevronDown, Database, Loader2,
-  Copy, ThumbsUp, Save, RefreshCw,
+  Copy, ThumbsUp, Save, RefreshCw, AlertCircle,
 } from 'lucide-react'
 import { cn } from '../utils/cn'
-import { SAMPLE_AI_MESSAGES, SUGGESTED_PROMPTS } from '../data/mockData'
+import { SUGGESTED_PROMPTS, PROPERTIES } from '../data/mockData'
+import { useAppStore } from '../store/AppStoreContext'
+import { getOpenRouterKey } from '../store/settings'
+import { getModelForTask } from '../store/settings'
+import { localIndex } from '../lib/localIndex'
 import type { AIMessage } from '../types'
 
 const MODELS = [
@@ -147,11 +151,35 @@ function MessageBubble({ msg }: { msg: AIMessage }) {
   )
 }
 
+/** Build a system prompt with property context from local index */
+function buildSystemPrompt(propertyId: string): string {
+  const prop = PROPERTIES.find(p => p.id === propertyId)
+  const name = prop?.name ?? propertyId
+  const equipmentRecords = localIndex.getAll('equipment', propertyId)
+  const equipmentSummary = equipmentRecords.length > 0
+    ? equipmentRecords.map(r => `- ${r.categoryId}: ${r.label ?? 'Unnamed'}`).join('\n')
+    : 'No equipment records yet.'
+
+  return `You are a helpful property management advisor. You have access to the following context about the user's property.
+
+Property: ${name} (${prop?.address ?? ''})
+Type: ${prop?.type ?? 'unknown'}
+
+Documented equipment:
+${equipmentSummary}
+
+Use this context to provide specific, actionable advice about maintenance, repairs, budgets, and upgrades. If you don't have enough data to answer precisely, say so and suggest what records the user should capture.`
+}
+
 export function AIAdvisoryScreen() {
-  const [model,    setModel]    = useState('anthropic/claude-opus-4-6')
-  const [messages, setMessages] = useState<AIMessage[]>(SAMPLE_AI_MESSAGES)
+  const { activePropertyId } = useAppStore()
+  const activeProperty = PROPERTIES.find(p => p.id === activePropertyId) ?? PROPERTIES[0]
+
+  const [model,    setModel]    = useState(() => getModelForTask('advisory', 'anthropic/claude-opus-4-6'))
+  const [messages, setMessages] = useState<AIMessage[]>([])
   const [input,    setInput]    = useState('')
   const [loading,  setLoading]  = useState(false)
+  const [error,    setError]    = useState('')
   const [showSuggestions, setShowSuggestions] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef  = useRef<HTMLTextAreaElement>(null)
@@ -160,9 +188,10 @@ export function AIAdvisoryScreen() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  function handleSend(text = input.trim()) {
+  async function handleSend(text = input.trim()) {
     if (!text || loading) return
     setInput('')
+    setError('')
     setShowSuggestions(false)
 
     const userMsg: AIMessage = {
@@ -171,20 +200,67 @@ export function AIAdvisoryScreen() {
       content: text,
       timestamp: new Date().toISOString(),
     }
-    setMessages(prev => [...prev, userMsg])
+    const updatedMessages = [...messages, userMsg]
+    setMessages(updatedMessages)
     setLoading(true)
 
-    // Simulate AI response after delay
-    setTimeout(() => {
-      const response: AIMessage = {
+    const apiKey = getOpenRouterKey()
+    if (!apiKey) {
+      setMessages(prev => [...prev, {
+        id: `msg-${Date.now()}-err`,
+        role: 'assistant',
+        content: 'No OpenRouter API key configured. Go to **Settings** to add your key, or set `VITE_OPENROUTER_KEY` in your `.env` file.',
+        timestamp: new Date().toISOString(),
+      }])
+      setLoading(false)
+      return
+    }
+
+    try {
+      const systemPrompt = buildSystemPrompt(activePropertyId)
+      const chatMessages = [
+        { role: 'system' as const, content: systemPrompt },
+        ...updatedMessages.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
+      ]
+
+      const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+          'HTTP-Referer': window.location.origin,
+        },
+        body: JSON.stringify({
+          model,
+          messages: chatMessages,
+        }),
+      })
+
+      if (!resp.ok) {
+        const errText = await resp.text()
+        throw new Error(`OpenRouter error ${resp.status}: ${errText.slice(0, 200)}`)
+      }
+
+      const data = await resp.json() as { choices: Array<{ message: { content: string } }> }
+      const content = data.choices?.[0]?.message?.content ?? 'No response received.'
+
+      setMessages(prev => [...prev, {
         id: `msg-${Date.now()}-ai`,
         role: 'assistant',
-        content: `Based on your property records at 2392 Tannerville Rd, here is my analysis:\n\n**Regarding "${text.slice(0, 40)}${text.length > 40 ? '…' : ''}"**\n\nI've reviewed your documented systems and maintenance history. This is a simulated response — connect your OpenRouter API key in Settings to get real AI answers grounded in your actual property data.\n\nYour knowledge base currently includes ${messages.filter(m => m.role === 'user').length + 1} documented systems with service history going back to 2023.`,
+        content,
         timestamp: new Date().toISOString(),
-      }
-      setMessages(prev => [...prev, response])
+      }])
+    } catch (e) {
+      setError(String(e))
+      setMessages(prev => [...prev, {
+        id: `msg-${Date.now()}-err`,
+        role: 'assistant',
+        content: `Sorry, I encountered an error: ${e instanceof Error ? e.message : String(e)}`,
+        timestamp: new Date().toISOString(),
+      }])
+    } finally {
       setLoading(false)
-    }, 2000)
+    }
   }
 
   function handleKeyDown(e: React.KeyboardEvent) {
@@ -223,7 +299,7 @@ export function AIAdvisoryScreen() {
       <div className="px-4 sm:px-6 py-2 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-700 shrink-0">
         <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
           <Database className="w-3 h-3" />
-          <span>Property context: <strong className="text-slate-700 dark:text-slate-300">2392 Tannerville Rd</strong> — equipment records, maintenance history, capital forecast loaded</span>
+          <span>Property context: <strong className="text-slate-700 dark:text-slate-300">{activeProperty.name}</strong> — equipment records, maintenance history, capital forecast loaded</span>
         </div>
       </div>
 
