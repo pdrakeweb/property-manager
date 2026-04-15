@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Plus, X, Activity } from 'lucide-react'
 import { cn } from '../utils/cn'
 import {
@@ -408,6 +408,8 @@ export function GeneratorScreen() {
   function refresh() {
     setGenerators(getGeneratorsForProperty(activePropertyId))
   }
+
+  useEffect(() => { refresh() }, [activePropertyId])
 
   return (
     <>

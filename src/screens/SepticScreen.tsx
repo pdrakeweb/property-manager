@@ -205,6 +205,8 @@ export function SepticScreen() {
 
   function refresh() { setEvents(getEventsForProperty(activePropertyId)) }
 
+  useEffect(() => { refresh() }, [activePropertyId])
+
   function handleSave(e: SepticEvent) {
     septicStore.add(e)
     refresh()
