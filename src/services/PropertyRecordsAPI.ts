@@ -21,6 +21,7 @@ import { getAssessmentsForProperty, getPaymentsForProperty } from '../lib/taxSto
 import { getMortgagesForProperty } from '../lib/mortgageStore'
 import { getYTDSpend } from '../lib/costStore'
 import { getUpcomingExpiries } from '../lib/expiryStore'
+import { getNarrativeText } from '../lib/narrativeStore'
 import type {
   Property, EquipmentRecord, MaintenanceTask, CapitalItem,
   ServiceRecord, HAStatus, Category,
@@ -228,6 +229,11 @@ export class PropertyRecordsAPI {
     }
 
     return lines.join('\n')
+  }
+
+  /** Get the owner-provided narrative context for this property */
+  getNarrative(): string {
+    return getNarrativeText(this.propertyId)
   }
 
   searchRecords(query: string): SearchResult[] {

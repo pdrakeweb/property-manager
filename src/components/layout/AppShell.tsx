@@ -5,7 +5,7 @@ import {
   MessageSquare, ClipboardList, Settings, ChevronDown, ChevronRight,
   Building2, TreePine, Users, Droplets, Receipt, Home, Zap, CalendarDays,
   RefreshCw, Shield, FileCheck, CheckSquare, Activity, MapPin,
-  Sun, Moon, Monitor, DollarSign, HardHat,
+  Sun, Moon, Monitor, DollarSign, HardHat, BookOpen,
 } from 'lucide-react'
 import { cn } from '../../utils/cn'
 import { PROPERTIES } from '../../data/mockData'
@@ -43,6 +43,7 @@ const NAV_SECTIONS: NavSection[] = [
     label: 'Property',
     icon: HardHat,
     items: [
+      { to: '/profile',    icon: BookOpen,      label: 'Profile',     mobileShow: false },
       { to: '/inventory',  icon: ClipboardList, label: 'Inventory',   mobileShow: false },
       { to: '/vendors',    icon: Users,         label: 'Vendors',     mobileShow: false },
       { to: '/permits',    icon: FileCheck,     label: 'Permits',     mobileShow: false },
