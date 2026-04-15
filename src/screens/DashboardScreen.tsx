@@ -212,7 +212,7 @@ export function DashboardScreen() {
 
   function handlePropertySelect(propertyId: string) {
     setActivePropertyId(propertyId)
-    navigate('/maintenance')
+    toggleDashboardMode('single')
   }
 
   const today       = new Date().toISOString().slice(0, 10)
@@ -332,7 +332,8 @@ export function DashboardScreen() {
         </div>
       )}
 
-      {/* ── Property Health Row ──────────────────────────────────────────── */}
+      {/* ── Property Health Row (All mode only) ──────────────────────────── */}
+      {dashboardMode === 'all' && (
       <div>
         <h2 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">Property Status</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -374,9 +375,10 @@ export function DashboardScreen() {
           })}
         </div>
       </div>
+      )}
 
-      {/* ── Overdue Across All Properties ───────────────────────────────── */}
-      {overdueByProp.length > 0 && (
+      {/* ── Overdue Across All Properties (All mode only) ──────────────── */}
+      {dashboardMode === 'all' && overdueByProp.length > 0 && (
         <div>
           <div className="flex items-center gap-2 mb-3">
             <AlertTriangle className="w-4 h-4 text-red-500" />
@@ -419,8 +421,8 @@ export function DashboardScreen() {
         </div>
       )}
 
-      {/* ── Due in 30 Days ───────────────────────────────────────────────── */}
-      {allDue30.length > 0 && (
+      {/* ── Due in 30 Days (All mode only) ─────────────────────────────── */}
+      {dashboardMode === 'all' && allDue30.length > 0 && (
         <div>
           <h2 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">
             Due in 30 Days — All Properties
@@ -458,8 +460,8 @@ export function DashboardScreen() {
         </div>
       )}
 
-      {/* ── Capital Projects — All Properties ───────────────────────────── */}
-      {CAPITAL_ITEMS.filter(i => i.priority === 'critical' || i.priority === 'high').length > 0 && (
+      {/* ── Capital Projects — All Properties (All mode only) ─────────── */}
+      {dashboardMode === 'all' && CAPITAL_ITEMS.filter(i => i.priority === 'critical' || i.priority === 'high').length > 0 && (
         <div>
           <h2 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">
             Capital Projects — All Properties
