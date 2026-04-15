@@ -51,7 +51,7 @@ function ItemRow({
         'rounded-xl border transition-all',
         isDone    && 'bg-emerald-50 border-emerald-100',
         isSkipped && 'bg-slate-50 border-slate-100',
-        isActive  && 'bg-white border-slate-200',
+        isActive  && 'card-surface',
       )}
     >
       <div className="flex items-start gap-3 p-3">

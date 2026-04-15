@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback } from 'react'
+import { getOpenRouterKey } from '../store/settings'
 
 export type AIState = 'idle' | 'extracting' | 'done' | 'error'
 export type Confidence = 'high' | 'medium' | 'low'
@@ -32,7 +33,7 @@ async function callExtraction(
   fieldIds: string[],
   prompt: string,
 ): Promise<ExtractionResult> {
-  const apiKey = localStorage.getItem('openrouter_api_key')
+  const apiKey = getOpenRouterKey()
   if (!apiKey) throw new Error('No OpenRouter API key configured in Settings')
 
   const base64 = await blobToBase64(blob)

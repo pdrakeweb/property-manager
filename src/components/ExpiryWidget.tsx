@@ -26,7 +26,7 @@ export function ExpiryWidget({ propertyId }: ExpiryWidgetProps) {
   }
 
   return (
-    <div className="bg-white border border-slate-200 rounded-2xl shadow-sm">
+    <div className="card-surface rounded-2xl shadow-sm">
       <div className="px-5 pt-5 pb-4">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-sm font-semibold text-slate-700 uppercase tracking-wide">Documents Expiring Soon</h2>

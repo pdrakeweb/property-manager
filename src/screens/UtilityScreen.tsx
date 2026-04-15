@@ -12,7 +12,7 @@ import {
 import { useDocumentExtraction } from '../hooks/useDocumentExtraction'
 import type { UtilityAccount, UtilityBill, UtilityType } from '../schemas'
 
-const baseInput = 'w-full text-sm border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-sky-300 focus:border-sky-300 transition-all placeholder:text-slate-400'
+const baseInput = 'w-full text-sm input-surface rounded-xl px-3 py-2.5 transition-all'
 
 const UTILITY_TYPES: UtilityType[] = ['electric', 'gas', 'water', 'sewer', 'trash', 'internet', 'phone', 'other']
 
@@ -39,7 +39,7 @@ function CapturePanel({
   if (aiState !== 'done' && pushed) setPushed(false)
 
   return (
-    <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+    <div className="card-surface rounded-2xl overflow-hidden shadow-sm">
       <div className="p-4">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-sm font-semibold text-slate-700">Photograph or Upload Bill</h2>
@@ -168,7 +168,7 @@ function BillForm({
     <div className="space-y-4">
       <CapturePanel onExtracted={v => setVals(prev => ({ ...prev, ...v }))} />
 
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-4 space-y-4">
+      <div className="card-surface rounded-2xl shadow-sm p-4 space-y-4">
         <div className="flex items-center gap-2">
           <span className={cn('w-2.5 h-2.5 rounded-full shrink-0', UTILITY_COLORS[account.type])} />
           <h3 className="text-sm font-semibold text-slate-700">{account.provider} · {UTILITY_LABELS[account.type]}</h3>
@@ -251,12 +251,12 @@ function AccountForm({
   }
 
   return (
-    <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-4 space-y-4">
+    <div className="card-surface rounded-2xl shadow-sm p-4 space-y-4">
       <h3 className="text-sm font-semibold text-slate-700">Add Utility Account</h3>
 
       <div>
         <label className="block text-xs font-medium text-slate-600 mb-1.5">Type</label>
-        <select value={type} onChange={e => setType(e.target.value as UtilityType)} className={cn(baseInput, 'bg-white')}>
+        <select value={type} onChange={e => setType(e.target.value as UtilityType)} className={baseInput}>
           {UTILITY_TYPES.map(t => <option key={t} value={t}>{UTILITY_LABELS[t]}</option>)}
         </select>
       </div>
@@ -290,7 +290,7 @@ function MonthlyChart({ propertyId }: { propertyId: string }) {
   const maxCost = Math.max(...months.map(m => m.cost), 1)
 
   return (
-    <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-4">
+    <div className="card-surface rounded-2xl shadow-sm p-4">
       <h3 className="text-sm font-semibold text-slate-700 mb-4">Monthly Spend</h3>
       <div className="flex items-end gap-1.5 h-28">
         {months.map(m => {
@@ -368,7 +368,7 @@ function AccountDetail({
       </div>
 
       {/* Header card */}
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-4">
+      <div className="card-surface rounded-2xl shadow-sm p-4">
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-3">
             <div className={cn('w-8 h-8 rounded-lg flex items-center justify-center', UTILITY_COLORS[account.type])}>
@@ -403,12 +403,12 @@ function AccountDetail({
       </div>
 
       {bills.length === 0 ? (
-        <div className="bg-white border border-slate-200 rounded-2xl p-8 text-center">
-          <p className="text-sm text-slate-500">No bills recorded yet.</p>
+        <div className="card-surface rounded-2xl p-8 text-center">
+          <p className="text-sm text-muted">No bills recorded yet.</p>
           <button onClick={() => setView('add-bill')} className="mt-3 text-sm text-sky-600 font-medium hover:text-sky-700">+ Add first bill</button>
         </div>
       ) : (
-        <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm divide-y divide-slate-100">
+        <div className="card-surface rounded-2xl overflow-hidden shadow-sm card-divider">
           {bills.map(b => {
             const prevYearKey = `${parseInt(b.periodStart.slice(0, 4)) - 1}-${b.periodStart.slice(5, 7)}`
             const prevYearCost = byMonth[prevYearKey]
@@ -506,11 +506,11 @@ export function UtilityScreen() {
       {/* YTD summary */}
       {allBills.length > 0 && (
         <div className="grid grid-cols-2 gap-3">
-          <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-4">
+          <div className="card-surface rounded-2xl shadow-sm p-4">
             <p className="text-xs text-slate-500">YTD Total ({new Date().getFullYear()})</p>
             <p className="text-xl font-bold text-slate-800 mt-0.5">${totalYTD.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
           </div>
-          <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-4">
+          <div className="card-surface rounded-2xl shadow-sm p-4">
             <p className="text-xs text-slate-500">Total Bills</p>
             <p className="text-xl font-bold text-slate-800 mt-0.5">{allBills.length}</p>
           </div>
@@ -523,7 +523,7 @@ export function UtilityScreen() {
       {/* Accounts list */}
       <div className="space-y-3">
         {accounts.length === 0 ? (
-          <div className="bg-white border border-slate-200 rounded-2xl p-8 text-center">
+          <div className="card-surface rounded-2xl p-8 text-center">
             <Zap className="w-8 h-8 text-slate-300 mx-auto mb-3" />
             <p className="text-sm text-slate-500">No utility accounts yet.</p>
             <button onClick={() => setView('add-account')} className="mt-3 text-sm text-sky-600 font-medium hover:text-sky-700">
@@ -538,7 +538,7 @@ export function UtilityScreen() {
               <button
                 key={acct.id}
                 onClick={() => setView({ account: acct.id })}
-                className="w-full bg-white border border-slate-200 rounded-2xl shadow-sm p-4 text-left hover:shadow-md hover:border-slate-300 transition-all"
+                className="w-full card-surface rounded-2xl shadow-sm p-4 text-left hover:shadow-md hover:border-slate-300 transition-all"
               >
                 <div className="flex items-center gap-3">
                   <div className={cn('w-8 h-8 rounded-lg flex items-center justify-center shrink-0', UTILITY_COLORS[acct.type])}>

@@ -115,7 +115,7 @@ function VendorModal({ initial, onSave, onClose }: VendorModalProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 px-4 pb-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-5 space-y-4 max-h-[90vh] overflow-y-auto">
+      <div className="modal-surface rounded-2xl w-full max-w-sm p-5 space-y-4 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between">
           <h2 className="text-base font-semibold text-slate-900">{initial ? 'Edit Vendor' : 'Add Vendor'}</h2>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
@@ -129,7 +129,7 @@ function VendorModal({ initial, onSave, onClose }: VendorModalProps) {
             <input
               value={form.name} onChange={e => set('name', e.target.value)}
               placeholder="e.g. Buckeye HVAC Services"
-              className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-sky-300"
+              className="w-full text-sm input-surface rounded-xl px-3 py-2.5"
             />
           </div>
 
@@ -137,7 +137,7 @@ function VendorModal({ initial, onSave, onClose }: VendorModalProps) {
             <label className="block text-xs font-medium text-slate-600 mb-1">Type</label>
             <select
               value={form.type} onChange={e => set('type', e.target.value)}
-              className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-sky-300 bg-white"
+              className="w-full text-sm input-surface rounded-xl px-3 py-2.5"
             >
               {VENDOR_TYPES.map(t => (
                 <option key={t.value} value={t.value}>{t.label}</option>
@@ -151,7 +151,7 @@ function VendorModal({ initial, onSave, onClose }: VendorModalProps) {
               <input
                 type="tel" value={form.phone} onChange={e => set('phone', e.target.value)}
                 placeholder="(330) 555-0100"
-                className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-sky-300"
+                className="w-full text-sm input-surface rounded-xl px-3 py-2.5"
               />
             </div>
             <div>
@@ -159,7 +159,7 @@ function VendorModal({ initial, onSave, onClose }: VendorModalProps) {
               <input
                 value={form.license} onChange={e => set('license', e.target.value)}
                 placeholder="OH-123456"
-                className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-sky-300"
+                className="w-full text-sm input-surface rounded-xl px-3 py-2.5"
               />
             </div>
           </div>
@@ -169,7 +169,7 @@ function VendorModal({ initial, onSave, onClose }: VendorModalProps) {
             <input
               type="email" value={form.email} onChange={e => set('email', e.target.value)}
               placeholder="vendor@example.com"
-              className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-sky-300"
+              className="w-full text-sm input-surface rounded-xl px-3 py-2.5"
             />
           </div>
 
@@ -183,7 +183,7 @@ function VendorModal({ initial, onSave, onClose }: VendorModalProps) {
             <textarea
               value={form.notes} onChange={e => set('notes', e.target.value)}
               rows={2} placeholder="Any notes about this vendor…"
-              className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-sky-300 resize-none"
+              className="w-full text-sm input-surface rounded-xl px-3 py-2.5 resize-none"
             />
           </div>
 
@@ -249,7 +249,7 @@ function VendorDetail({ vendor, onEdit, onDelete, onBack }: {
         </button>
       </div>
 
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-5 space-y-3">
+      <div className="card-surface rounded-2xl shadow-sm p-5 space-y-3">
         {vendor.rating && (
           <div className="flex items-center gap-2">
             <Stars rating={vendor.rating} />
@@ -298,7 +298,7 @@ function VendorDetail({ vendor, onEdit, onDelete, onBack }: {
         ) : (
           <div className="space-y-3">
             {history.map(e => (
-              <div key={e.id} className="bg-white border border-slate-200 rounded-xl px-4 py-3">
+              <div key={e.id} className="card-surface rounded-xl px-4 py-3">
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <p className="text-sm font-medium text-slate-800">{e.taskTitle}</p>
@@ -405,7 +405,7 @@ export function VendorScreen() {
             <button
               key={v.id}
               onClick={() => setDetailVendor(v)}
-              className="w-full bg-white border border-slate-200 rounded-2xl shadow-sm px-4 py-4 text-left hover:shadow-md hover:border-slate-300 transition-all"
+              className="w-full card-surface rounded-2xl shadow-sm px-4 py-4 text-left hover:shadow-md hover:border-slate-300 transition-all"
             >
               <div className="flex items-start gap-3">
                 <div className="flex-1 min-w-0">

@@ -198,7 +198,7 @@ function SeasonCard({
 
       {/* Progress bar for in_progress */}
       {status === 'in_progress' && totalCount > 0 && (
-        <div className="mt-2 bg-white/60 rounded-full h-2">
+        <div className="mt-2 bg-white/60 dark:bg-slate-700/60 rounded-full h-2">
           <div
             className="bg-sky-500 rounded-full h-2 transition-all"
             style={{ width: `${Math.round((doneCount / totalCount) * 100)}%` }}
@@ -263,7 +263,7 @@ function RecentRunsSection() {
   }
 
   return (
-    <div className="border border-slate-200 rounded-2xl bg-white shadow-sm divide-y divide-slate-100">
+    <div className="card-surface rounded-2xl shadow-sm card-divider">
       {recent.map(run => {
         const meta = SEASON_META[run.season]
         const property = PROPERTIES.find(p => p.id === run.propertyId)

@@ -72,7 +72,7 @@ function DoneModal({ task, onConfirm, onClose }: DoneModalProps) {
   const [invoiceRef, setInvoiceRef] = useState('')
   const [notes,      setNotes]      = useState('')
 
-  const inp = 'w-full text-sm border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-sky-300 bg-white'
+  const inp = 'w-full text-sm input-surface rounded-xl px-3 py-2.5'
 
   function confirm() {
     costStore.add({
@@ -94,7 +94,7 @@ function DoneModal({ task, onConfirm, onClose }: DoneModalProps) {
 
   return (
     <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/50 px-4 pb-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-5 space-y-4 max-h-[85vh] overflow-y-auto">
+      <div className="modal-surface rounded-2xl w-full max-w-sm p-5 space-y-4 max-h-[85vh] overflow-y-auto">
         <div className="flex items-center justify-between">
           <h3 className="text-base font-semibold text-slate-900">Mark Complete</h3>
           <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-600 rounded-lg">
@@ -159,7 +159,7 @@ function AddTaskModal({ propertyId, prefilledDate, onClose, onSaved }: AddTaskMo
   const [dueDate,  setDueDate]  = useState(prefilledDate)
   const [priority, setPriority] = useState<Priority>('medium')
 
-  const inp = 'w-full text-sm border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-sky-300 bg-white'
+  const inp = 'w-full text-sm input-surface rounded-xl px-3 py-2.5'
 
   function save() {
     if (!title.trim()) return
@@ -180,7 +180,7 @@ function AddTaskModal({ propertyId, prefilledDate, onClose, onSaved }: AddTaskMo
 
   return (
     <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/50 px-4 pb-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-5 space-y-4">
+      <div className="modal-surface rounded-2xl w-full max-w-sm p-5 space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="text-base font-semibold text-slate-900">Add Task</h3>
           <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-600 rounded-lg">
@@ -254,7 +254,7 @@ function DelayModal({ task, onClose, onDelayed }: DelayModalProps) {
 
   return (
     <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/50 px-4 pb-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-5 space-y-4">
+      <div className="modal-surface rounded-2xl w-full max-w-sm p-5 space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="text-base font-semibold text-slate-900">Delay Task</h3>
           <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-600 rounded-lg">
@@ -269,7 +269,7 @@ function DelayModal({ task, onClose, onDelayed }: DelayModalProps) {
             value={newDate}
             min={today}
             onChange={e => setNewDate(e.target.value)}
-            className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-sky-300"
+            className="w-full text-sm input-surface rounded-xl px-3 py-2.5"
           />
         </div>
         <div className="flex gap-3">
@@ -317,7 +317,7 @@ function DayDetailPanel({
       <div className="fixed inset-0 z-40 bg-black/30" onClick={onClose} />
 
       {/* Panel — bottom sheet on mobile, right panel on desktop */}
-      <div className="fixed bottom-0 inset-x-0 z-50 sm:inset-auto sm:right-0 sm:top-0 sm:bottom-0 sm:w-96 bg-white shadow-2xl flex flex-col max-h-[80vh] sm:max-h-none rounded-t-3xl sm:rounded-none overflow-hidden">
+      <div className="fixed bottom-0 inset-x-0 z-50 sm:inset-auto sm:right-0 sm:top-0 sm:bottom-0 sm:w-96 modal-surface shadow-2xl flex flex-col max-h-[80vh] sm:max-h-none rounded-t-3xl sm:rounded-none overflow-hidden">
 
         {/* Drag handle (mobile) */}
         <div className="flex justify-center pt-3 pb-1 sm:hidden">
@@ -551,7 +551,7 @@ export function CalendarScreen() {
       </div>
 
       {/* Month navigation */}
-      <div className="flex items-center justify-between bg-white border border-slate-200 rounded-2xl px-4 py-3 shadow-sm">
+      <div className="flex items-center justify-between card-surface rounded-2xl px-4 py-3 shadow-sm">
         <button
           onClick={prevMonth}
           className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-600 transition-colors"
@@ -573,7 +573,7 @@ export function CalendarScreen() {
       </div>
 
       {/* Calendar grid */}
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+      <div className="card-surface rounded-2xl shadow-sm overflow-hidden">
 
         {/* Weekday headers */}
         <div className="grid grid-cols-7 border-b border-slate-100">
@@ -665,7 +665,7 @@ export function CalendarScreen() {
       </div>
 
       {/* Month summary card */}
-      <div className="bg-white border border-slate-200 rounded-2xl px-5 py-4 shadow-sm">
+      <div className="card-surface rounded-2xl px-5 py-4 shadow-sm">
         <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">
           {formatMonthYear(year, month)}
         </p>

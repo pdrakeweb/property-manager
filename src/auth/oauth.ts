@@ -2,13 +2,18 @@
 
 const GOOGLE_AUTH_URL  = 'https://accounts.google.com/o/oauth2/v2/auth'
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token'
-const SCOPES = 'https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/calendar.events openid email profile'
+const SCOPES = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/calendar.events openid email profile'
 
 /** Client ID: set VITE_GOOGLE_CLIENT_ID in .env, or store in localStorage for zero-rebuild config */
 export function getClientId(): string {
   return (import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined)
     ?? localStorage.getItem('google_client_id')
     ?? ''
+}
+
+/** Client secret: only needed for "Web application" client type (not SPA) */
+function getClientSecret(): string {
+  return (import.meta.env.VITE_GOOGLE_CLIENT_SECRET as string | undefined) ?? ''
 }
 
 /** The redirect URI must exactly match what's registered in Google Cloud Console */
@@ -74,16 +79,20 @@ export async function handleOAuthCallback(code: string, state: string): Promise<
   const verifier = sessionStorage.getItem('pkce_verifier')
   if (!verifier) throw new Error('PKCE verifier missing from session')
 
+  const tokenParams: Record<string, string> = {
+    client_id:     getClientId(),
+    code,
+    redirect_uri:  getRedirectUri(),
+    grant_type:    'authorization_code',
+    code_verifier: verifier,
+  }
+  const secret = getClientSecret()
+  if (secret) tokenParams.client_secret = secret
+
   const resp = await fetch(GOOGLE_TOKEN_URL, {
     method:  'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body:    new URLSearchParams({
-      client_id:     getClientId(),
-      code,
-      redirect_uri:  getRedirectUri(),
-      grant_type:    'authorization_code',
-      code_verifier: verifier,
-    }),
+    body:    new URLSearchParams(tokenParams),
   })
 
   if (!resp.ok) {
@@ -104,14 +113,18 @@ async function refreshAccessToken(): Promise<string> {
   const refreshToken = localStorage.getItem('google_refresh_token')
   if (!refreshToken) throw new Error('No refresh token stored')
 
+  const refreshParams: Record<string, string> = {
+    client_id:     getClientId(),
+    grant_type:    'refresh_token',
+    refresh_token: refreshToken,
+  }
+  const secret = getClientSecret()
+  if (secret) refreshParams.client_secret = secret
+
   const resp = await fetch(GOOGLE_TOKEN_URL, {
     method:  'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body:    new URLSearchParams({
-      client_id:     getClientId(),
-      grant_type:    'refresh_token',
-      refresh_token: refreshToken,
-    }),
+    body:    new URLSearchParams(refreshParams),
   })
 
   if (!resp.ok) throw new Error(`Token refresh failed: ${resp.status}`)

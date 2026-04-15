@@ -187,7 +187,7 @@ function PolicyForm({
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">Policy Type</label>
-            <select value={type} onChange={e => setType(e.target.value as PolicyType)} className={cn(inp, 'bg-white')}>
+            <select value={type} onChange={e => setType(e.target.value as PolicyType)} className={inp}>
               {Object.entries(POLICY_TYPE_LABELS).map(([v, l]) => (
                 <option key={v} value={v}>{l}</option>
               ))}
@@ -195,7 +195,7 @@ function PolicyForm({
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">Status</label>
-            <select value={status} onChange={e => setStatus(e.target.value as PolicyStatus)} className={cn(inp, 'bg-white')}>
+            <select value={status} onChange={e => setStatus(e.target.value as PolicyStatus)} className={inp}>
               <option value="active">Active</option>
               <option value="pending">Pending</option>
               <option value="expired">Expired</option>
@@ -268,7 +268,7 @@ function PolicyForm({
                     type="number" value={val as string}
                     onChange={e => (setter as (v: string) => void)(e.target.value)}
                     placeholder="0"
-                    className={cn('w-full text-sm border border-slate-200 rounded-lg px-2.5 pl-6 py-2 focus:outline-none focus:ring-2 focus:ring-sky-300 bg-white', confRing(field as string))}
+                    className={cn('w-full text-sm input-surface rounded-lg px-2.5 pl-6 py-2', confRing(field as string))}
                   />
                 </div>
               </div>

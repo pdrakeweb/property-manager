@@ -25,7 +25,7 @@ const PAYMENT_PROMPT =
 
 // ── Shared UI helpers ────────────────────────────────────────────────────────
 
-const baseInput = 'w-full text-sm border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-sky-300 focus:border-sky-300 transition-all placeholder:text-slate-400'
+const baseInput = 'w-full text-sm input-surface rounded-xl px-3 py-2.5 transition-all'
 
 function DocumentCapturePanel({
   title,
@@ -52,7 +52,7 @@ function DocumentCapturePanel({
   if (aiState !== 'done') prevDone.current = false
 
   return (
-    <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+    <div className="card-surface rounded-2xl overflow-hidden shadow-sm">
       <div className="p-4">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-sm font-semibold text-slate-700">{title}</h2>
@@ -215,7 +215,7 @@ function AssessmentForm({
         onExtracted={v => { applyExtracted(v); setExtracted(Object.fromEntries(Object.keys(v).map(k => [k, { confidence: 'high' as const }]))) }}
       />
 
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-4 space-y-4">
+      <div className="card-surface rounded-2xl shadow-sm p-4 space-y-4">
         <h3 className="text-sm font-semibold text-slate-700">Assessment Details</h3>
         {field('year',                'Tax Year',              'number', '2024')}
         {field('assessedLand',        'Assessed Land Value',   'number', '0.00')}
@@ -291,7 +291,7 @@ function PaymentForm({
         onExtracted={v => setVals(prev => ({ ...prev, ...v }))}
       />
 
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-4 space-y-4">
+      <div className="card-surface rounded-2xl shadow-sm p-4 space-y-4">
         <h3 className="text-sm font-semibold text-slate-700">Payment Details</h3>
 
         <div className="grid grid-cols-2 gap-3">
@@ -301,7 +301,7 @@ function PaymentForm({
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1.5">Installment</label>
-            <select value={vals.installment} onChange={e => setVals(p => ({ ...p, installment: e.target.value }))} className={cn(baseInput, 'bg-white')}>
+            <select value={vals.installment} onChange={e => setVals(p => ({ ...p, installment: e.target.value }))} className={baseInput}>
               <option value="1">1st (~Feb 10)</option>
               <option value="2">2nd (~Jul 10)</option>
             </select>
@@ -419,7 +419,7 @@ export function TaxScreen() {
             onClick={() => setTab(t)}
             className={cn(
               'flex-1 text-sm font-medium py-2 rounded-lg transition-colors capitalize',
-              tab === t ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700',
+              tab === t ? 'toggle-active' : 'toggle-inactive',
             )}
           >
             {t}
@@ -442,14 +442,14 @@ export function TaxScreen() {
           </div>
 
           {payments.length === 0 ? (
-            <div className="bg-white border border-slate-200 rounded-2xl p-8 text-center">
+            <div className="card-surface rounded-2xl p-8 text-center">
               <p className="text-sm text-slate-500">No tax payments recorded yet.</p>
               <button onClick={() => setAdding('payment')} className="mt-3 text-sm text-sky-600 font-medium hover:text-sky-700">
                 + Add first payment
               </button>
             </div>
           ) : (
-            <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm divide-y divide-slate-100">
+            <div className="card-surface rounded-2xl overflow-hidden shadow-sm card-divider">
               {payments.map(p => {
                 const overdue   = !p.paidDate && p.dueDate < today
                 const unpaid    = !p.paidDate && p.dueDate >= today
@@ -511,14 +511,14 @@ export function TaxScreen() {
           </div>
 
           {assessments.length === 0 ? (
-            <div className="bg-white border border-slate-200 rounded-2xl p-8 text-center">
+            <div className="card-surface rounded-2xl p-8 text-center">
               <p className="text-sm text-slate-500">No assessments recorded yet.</p>
               <button onClick={() => setAdding('assessment')} className="mt-3 text-sm text-sky-600 font-medium hover:text-sky-700">
                 + Add first assessment
               </button>
             </div>
           ) : (
-            <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+            <div className="card-surface rounded-2xl overflow-hidden shadow-sm">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-slate-100 text-xs text-slate-500 uppercase tracking-wide">

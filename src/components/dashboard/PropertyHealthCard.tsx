@@ -69,7 +69,7 @@ export function PropertyHealthCard({ property, onSelect }: PropertyHealthCardPro
     <div
       key={visitKey}
       onClick={() => onSelect(property.id)}
-      className="border border-slate-200 rounded-2xl bg-white p-4 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
+      className="card-surface rounded-2xl p-4 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
     >
       {/* Header row */}
       <div className="flex items-start justify-between mb-3 gap-2">

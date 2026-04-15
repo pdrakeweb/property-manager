@@ -169,11 +169,11 @@ function AddModal({ propertyId, onSave, onClose }: AddModalProps) {
     { value: 'advisory', label: 'Advisory', color: 'text-amber-600'   },
   ]
 
-  const inputCls = 'w-full text-sm border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-sky-300'
+  const inputCls = 'w-full text-sm input-surface rounded-xl px-3 py-2.5'
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 px-4 pb-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-5 space-y-4 max-h-[90vh] overflow-y-auto">
+      <div className="modal-surface rounded-2xl w-full max-w-lg p-5 space-y-4 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between">
           <h2 className="text-base font-semibold text-slate-900">Add Well Test</h2>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
@@ -229,7 +229,7 @@ function AddModal({ propertyId, onSave, onClose }: AddModalProps) {
                 />
                 <select
                   value={p.passFail} onChange={e => setParam(i, 'passFail', e.target.value as PassFail)}
-                  className="text-xs border border-slate-200 rounded-lg px-2 py-2 focus:outline-none bg-white"
+                  className="text-xs input-surface rounded-lg px-2 py-2"
                 >
                   {pfOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
@@ -249,7 +249,7 @@ function AddModal({ propertyId, onSave, onClose }: AddModalProps) {
           <select
             value={overrideResult}
             onChange={e => setOverrideResult(e.target.value as WellTest['overallResult'] | '')}
-            className={cn(inputCls, 'bg-white')}
+            className={inputCls}
           >
             <option value="">Auto-calculate</option>
             <option value="pass">Pass</option>
@@ -283,7 +283,7 @@ function TestCard({ test, onDelete }: { test: WellTest; onDelete: () => void }) 
   const failing = test.parameters.filter(p => p.passFail === 'fail')
 
   return (
-    <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+    <div className="card-surface rounded-2xl shadow-sm overflow-hidden">
       <div className="px-4 py-4">
         <div className="flex items-start gap-3">
           <div className={cn('w-2.5 h-2.5 rounded-full mt-1.5 shrink-0', RESULT_DOT[test.overallResult])} />
@@ -457,7 +457,7 @@ export function WellTestScreen() {
               onClick={() => setTab(t)}
               className={cn(
                 'flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors',
-                tab === t ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700',
+                tab === t ? 'toggle-active' : 'toggle-inactive',
               )}
             >
               {t === 'list' ? 'Test History' : 'Trends'}
@@ -489,7 +489,7 @@ export function WellTestScreen() {
               <select
                 value={trendParam}
                 onChange={e => setTrendParam(e.target.value)}
-                className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-sky-300 bg-white"
+                className="w-full text-sm input-surface rounded-xl px-3 py-2.5"
               >
                 <option value="">Choose a parameter…</option>
                 {allParamNames.map(n => <option key={n} value={n}>{n}</option>)}
@@ -509,7 +509,7 @@ export function WellTestScreen() {
             )}
 
             {trendData.length > 0 && (
-              <div className="bg-white border border-slate-200 rounded-2xl shadow-sm px-4 py-4">
+              <div className="card-surface rounded-2xl shadow-sm px-4 py-4">
                 <p className="text-sm font-semibold text-slate-700 mb-3">{trendParam}</p>
                 <LineChart data={trendData} />
               </div>

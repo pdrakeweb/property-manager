@@ -193,7 +193,7 @@ function PermitForm({
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">Permit Type</label>
-            <select value={type} onChange={e => setType(e.target.value as PermitType)} className={cn(inp, 'bg-white')}>
+            <select value={type} onChange={e => setType(e.target.value as PermitType)} className={inp}>
               {Object.entries(PERMIT_TYPE_LABELS).map(([v, l]) => (
                 <option key={v} value={v}>{l}</option>
               ))}
@@ -201,7 +201,7 @@ function PermitForm({
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">Status</label>
-            <select value={status} onChange={e => setStatus(e.target.value as PermitStatus)} className={cn(inp, 'bg-white')}>
+            <select value={status} onChange={e => setStatus(e.target.value as PermitStatus)} className={inp}>
               {Object.entries(PERMIT_STATUS_LABELS).map(([v, l]) => (
                 <option key={v} value={v}>{l}</option>
               ))}

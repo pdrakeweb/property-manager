@@ -38,28 +38,37 @@ import {
   handleOAuthCallback,
   getClientId,
 } from './auth/oauth'
+import { getOpenRouterKey, setSetting, SETTINGS } from './store/settings'
 
 // ── Sign-in screen ───────────────────────────────────────────────────────────
 
 function SignInScreen({ onSignIn }: { onSignIn: () => void }) {
-  const [openRouterKey, setOpenRouterKey] = useState(
-    () => localStorage.getItem('openrouter_api_key') ?? '',
-  )
-  const [clientId,    setClientId]    = useState(() => localStorage.getItem('google_client_id') ?? getClientId())
+  // Pre-filled from .env or localStorage — hide fields when already set
+  const envClientId = getClientId()
+  const envOrKey    = getOpenRouterKey()
+
+  const [clientId,    setClientId]    = useState(() => localStorage.getItem('google_client_id') ?? envClientId)
+  const [openRouterKey, setOpenRouterKey] = useState(() => envOrKey)
   const [showOrKey,   setShowOrKey]   = useState(false)
   const [showGcpId,   setShowGcpId]   = useState(false)
   const [error,       setError]       = useState('')
   const [signingIn,   setSigningIn]   = useState(false)
 
+  const hasClientId = !!envClientId
+  const hasOrKey    = !!envOrKey
+
   function saveAndSignIn() {
-    if (!clientId.trim()) {
+    const finalClientId = hasClientId ? envClientId : clientId.trim()
+    if (!finalClientId) {
       setError('Enter your Google Cloud OAuth Client ID to continue.')
       return
     }
-    if (openRouterKey.trim()) {
-      localStorage.setItem('openrouter_api_key', openRouterKey.trim())
+    if (!hasOrKey && openRouterKey.trim()) {
+      setSetting(SETTINGS.openRouterKey, openRouterKey.trim())
     }
-    localStorage.setItem('google_client_id', clientId.trim())
+    if (!hasClientId) {
+      localStorage.setItem('google_client_id', finalClientId)
+    }
     setSigningIn(true)
     startOAuthFlow().catch(e => {
       setError(String(e))
@@ -77,26 +86,28 @@ function SignInScreen({ onSignIn }: { onSignIn: () => void }) {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center px-4">
       <div className="w-full max-w-sm space-y-6">
 
         {/* Logo */}
         <div className="text-center">
-          <div className="w-16 h-16 bg-sky-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
+          <div className="w-16 h-16 bg-green-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
             <Building2 className="w-9 h-9 text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-slate-900">Property Manager</h1>
-          <p className="text-sm text-slate-500 mt-1">Sign in with Google to access your Drive records</p>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Property Manager</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Sign in with Google to access your Drive records</p>
         </div>
 
-        {/* Config card */}
-        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm divide-y divide-slate-100">
+        {/* Config card — only show fields not already set via .env */}
+        {(!hasClientId || !hasOrKey) && (
+        <div className="card-surface rounded-2xl shadow-sm card-divider">
 
-          {/* Google Client ID */}
+          {/* Google Client ID — hidden when VITE_GOOGLE_CLIENT_ID is set */}
+          {!hasClientId && (
           <div className="p-4">
-            <label className="block text-xs font-semibold text-slate-600 mb-1.5">
+            <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">
               Google OAuth Client ID
-              <span className="text-slate-400 font-normal ml-1">— from Google Cloud Console</span>
+              <span className="text-slate-400 dark:text-slate-500 font-normal ml-1">— from Google Cloud Console</span>
             </label>
             <div className="flex items-center gap-2">
               <input
@@ -104,22 +115,24 @@ function SignInScreen({ onSignIn }: { onSignIn: () => void }) {
                 value={clientId}
                 onChange={e => setClientId(e.target.value)}
                 placeholder="xxxxxxxx.apps.googleusercontent.com"
-                className="flex-1 text-sm border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-sky-300 font-mono placeholder:font-sans placeholder:text-slate-400"
+                className="flex-1 text-sm input-surface rounded-xl px-3 py-2.5 font-mono placeholder:font-sans"
               />
-              <button onClick={() => setShowGcpId(s => !s)} className="text-slate-400 hover:text-slate-600 shrink-0">
+              <button onClick={() => setShowGcpId(s => !s)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 shrink-0">
                 {showGcpId ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
-            <p className="text-xs text-slate-400 mt-1.5">
+            <p className="text-xs text-slate-400 dark:text-slate-500 mt-1.5">
               Set once — stored in localStorage. Or set VITE_GOOGLE_CLIENT_ID in .env.
             </p>
           </div>
+          )}
 
-          {/* OpenRouter key */}
+          {/* OpenRouter key — hidden when VITE_OPENROUTER_KEY is set */}
+          {!hasOrKey && (
           <div className="p-4">
-            <label className="block text-xs font-semibold text-slate-600 mb-1.5">
+            <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">
               OpenRouter API Key
-              <span className="text-slate-400 font-normal ml-1">— optional, enables AI features</span>
+              <span className="text-slate-400 dark:text-slate-500 font-normal ml-1">— optional, enables AI features</span>
             </label>
             <div className="flex items-center gap-2">
               <input
@@ -127,14 +140,16 @@ function SignInScreen({ onSignIn }: { onSignIn: () => void }) {
                 value={openRouterKey}
                 onChange={e => setOpenRouterKey(e.target.value)}
                 placeholder="sk-or-v1-…"
-                className="flex-1 text-sm border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-sky-300 font-mono placeholder:font-sans placeholder:text-slate-400"
+                className="flex-1 text-sm input-surface rounded-xl px-3 py-2.5 font-mono placeholder:font-sans"
               />
-              <button onClick={() => setShowOrKey(s => !s)} className="text-slate-400 hover:text-slate-600 shrink-0">
+              <button onClick={() => setShowOrKey(s => !s)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 shrink-0">
                 {showOrKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
           </div>
+          )}
         </div>
+        )}
 
         {/* Error */}
         {error && (
@@ -207,8 +222,9 @@ function OAuthCallbackHandler({ onDone }: { onDone: (ok: boolean) => void }) {
     handleOAuthCallback(code, state)
       .then(() => onDone(true))
       .catch(e => {
+        console.error('OAuth callback failed:', e)
         setError(String(e))
-        onDone(false)
+        // Don't call onDone(false) — let the user see the error
       })
   }, [onDone])
 

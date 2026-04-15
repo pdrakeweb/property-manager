@@ -13,7 +13,7 @@ import {
 import { useDocumentExtraction, confidenceRing } from '../hooks/useDocumentExtraction'
 import type { Mortgage, MortgagePayment } from '../schemas'
 
-const baseInput = 'w-full text-sm border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-sky-300 focus:border-sky-300 transition-all placeholder:text-slate-400'
+const baseInput = 'w-full text-sm input-surface rounded-xl px-3 py-2.5 transition-all'
 
 // ── Extraction fields ─────────────────────────────────────────────────────────
 
@@ -50,7 +50,7 @@ function CapturePanel({
   if (aiState !== 'done' && pushed) setPushed(false)
 
   return (
-    <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+    <div className="card-surface rounded-2xl overflow-hidden shadow-sm">
       <div className="p-4">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-sm font-semibold text-slate-700">{title}</h2>
@@ -215,7 +215,7 @@ function MortgageForm({
         onExtracted={applyExtracted}
       />
 
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-4 space-y-4">
+      <div className="card-surface rounded-2xl shadow-sm p-4 space-y-4">
         <h3 className="text-sm font-semibold text-slate-700">Mortgage Details</h3>
 
         <div className="grid grid-cols-2 gap-3">
@@ -224,7 +224,7 @@ function MortgageForm({
             <select
               value={vals.label}
               onChange={e => setVals(p => ({ ...p, label: e.target.value }))}
-              className={cn(baseInput, 'bg-white')}
+              className={baseInput}
             >
               {['Primary', 'HELOC', 'Second Mortgage', 'Construction', 'Other'].map(o => (
                 <option key={o} value={o}>{o}</option>
@@ -320,7 +320,7 @@ function PaymentForm({
         onExtracted={v => setVals(prev => ({ ...prev, ...v }))}
       />
 
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-4 space-y-4">
+      <div className="card-surface rounded-2xl shadow-sm p-4 space-y-4">
         <h3 className="text-sm font-semibold text-slate-700">Payment Details</h3>
         <div>
           <label className="block text-xs font-medium text-slate-600 mb-1.5">Payment Date</label>
@@ -384,7 +384,7 @@ function AmortizationView({ mortgage }: { mortgage: Mortgage }) {
   return (
     <div className="space-y-4">
       {/* Extra payment simulator */}
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-4">
+      <div className="card-surface rounded-2xl shadow-sm p-4">
         <div className="flex items-center gap-2 mb-3">
           <Calculator className="w-4 h-4 text-slate-500" />
           <h3 className="text-sm font-semibold text-slate-700">Extra Payment Simulator</h3>
@@ -419,7 +419,7 @@ function AmortizationView({ mortgage }: { mortgage: Mortgage }) {
       </div>
 
       {/* Amortization table — paginated */}
-      <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+      <div className="card-surface rounded-2xl overflow-hidden shadow-sm">
         <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
           <div>
             <h3 className="text-sm font-semibold text-slate-700">Amortization Schedule</h3>
@@ -522,7 +522,7 @@ function MortgageDetail({
       </div>
 
       {/* Stats bar */}
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-4">
+      <div className="card-surface rounded-2xl shadow-sm p-4">
         <div className="flex items-start justify-between mb-3">
           <div>
             <p className="text-xs text-slate-500 font-medium uppercase tracking-wide">{mortgage.label}</p>
@@ -569,7 +569,7 @@ function MortgageDetail({
             onClick={() => setTab(t)}
             className={cn(
               'flex-1 text-sm font-medium py-2 rounded-lg transition-colors capitalize',
-              tab === t ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700',
+              tab === t ? 'toggle-active' : 'toggle-inactive',
             )}
           >
             {t}
@@ -591,11 +591,11 @@ function MortgageDetail({
           </div>
 
           {payments.length === 0 ? (
-            <div className="bg-white border border-slate-200 rounded-2xl p-8 text-center">
+            <div className="card-surface rounded-2xl p-8 text-center">
               <p className="text-sm text-slate-500">No payments logged yet.</p>
             </div>
           ) : (
-            <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm divide-y divide-slate-100">
+            <div className="card-surface rounded-2xl overflow-hidden shadow-sm card-divider">
               {payments.map(p => (
                 <div key={p.id} className="flex items-center gap-3 px-4 py-3.5">
                   <div className="flex-1 min-w-0">
@@ -682,7 +682,7 @@ export function MortgageScreen() {
 
       {/* Total balance summary */}
       {mortgages.length > 0 && (
-        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-4 flex items-center gap-4">
+        <div className="card-surface rounded-2xl shadow-sm p-4 flex items-center gap-4">
           <div className="w-10 h-10 bg-sky-100 rounded-xl flex items-center justify-center shrink-0">
             <DollarSign className="w-5 h-5 text-sky-600" />
           </div>
@@ -698,7 +698,7 @@ export function MortgageScreen() {
 
       {/* Mortgage list */}
       {mortgages.length === 0 ? (
-        <div className="bg-white border border-slate-200 rounded-2xl p-8 text-center">
+        <div className="card-surface rounded-2xl p-8 text-center">
           <TrendingDown className="w-8 h-8 text-slate-300 mx-auto mb-3" />
           <p className="text-sm text-slate-500">No mortgages recorded yet.</p>
           <button onClick={() => setView('add')} className="mt-3 text-sm text-sky-600 font-medium hover:text-sky-700">
@@ -713,7 +713,7 @@ export function MortgageScreen() {
               <button
                 key={m.id}
                 onClick={() => setView({ detail: m.id })}
-                className="w-full bg-white border border-slate-200 rounded-2xl shadow-sm p-4 text-left hover:shadow-md hover:border-slate-300 transition-all"
+                className="w-full card-surface rounded-2xl shadow-sm p-4 text-left hover:shadow-md hover:border-slate-300 transition-all"
               >
                 <div className="flex items-start justify-between mb-3">
                   <div>
