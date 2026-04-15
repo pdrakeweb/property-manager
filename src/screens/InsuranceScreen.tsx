@@ -47,10 +47,10 @@ function renewalStatus(policy: InsurancePolicy): { label: string; cls: string } 
   const in30   = new Date(Date.now() + 30  * 86_400_000).toISOString().slice(0, 10)
   const in60   = new Date(Date.now() + 60  * 86_400_000).toISOString().slice(0, 10)
 
-  if (policy.renewalDate < today)  return { label: 'Expired',    cls: 'bg-red-100 text-red-700 border-red-200' }
-  if (policy.renewalDate <= in30)  return { label: 'Renews <30d', cls: 'bg-orange-100 text-orange-700 border-orange-200' }
-  if (policy.renewalDate <= in60)  return { label: 'Renews <60d', cls: 'bg-amber-100 text-amber-700 border-amber-200' }
-  return { label: 'Active', cls: 'bg-emerald-100 text-emerald-700 border-emerald-200' }
+  if (policy.renewalDate < today)  return { label: 'Expired',    cls: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800' }
+  if (policy.renewalDate <= in30)  return { label: 'Renews <30d', cls: 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 border-orange-200 dark:border-orange-800' }
+  if (policy.renewalDate <= in60)  return { label: 'Renews <60d', cls: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800' }
+  return { label: 'Active', cls: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800' }
 }
 
 function fmt(n: number | undefined): string {
@@ -58,7 +58,7 @@ function fmt(n: number | undefined): string {
   return '$' + n.toLocaleString('en-US', { maximumFractionDigits: 0 })
 }
 
-const inp = 'w-full text-sm border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-sky-300 bg-white'
+const inp = 'w-full text-sm border border-slate-200 dark:border-slate-600 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-green-300 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500'
 
 // ── Policy Form ───────────────────────────────────────────────────────────────
 
@@ -164,14 +164,14 @@ function PolicyForm({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 px-4 pb-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-5 space-y-4 max-h-[90vh] overflow-y-auto">
+      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-md p-5 space-y-4 max-h-[90vh] overflow-y-auto">
 
         {/* Header */}
         <div className="flex items-center justify-between">
-          <h2 className="text-base font-semibold text-slate-900">
+          <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
             {initial ? 'Edit Policy' : 'Add Insurance Policy'}
           </h2>
-          <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-600 rounded-lg">
+          <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-lg">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -305,7 +305,7 @@ function PolicyForm({
           <button
             onClick={handleSave}
             disabled={!insurer.trim() || !renDate}
-            className="flex-[2] py-3 rounded-2xl bg-sky-600 text-white text-sm font-semibold hover:bg-sky-700 disabled:bg-sky-300 transition-colors"
+            className="flex-[2] py-3 rounded-2xl bg-green-600 text-white text-sm font-semibold hover:bg-green-700 disabled:bg-green-300 transition-colors"
           >
             {initial ? 'Save Changes' : 'Add Policy'}
           </button>
@@ -329,15 +329,15 @@ function PolicyCard({
   const ca                      = policy.coverageAmounts
 
   return (
-    <div className="border border-slate-100 rounded-xl overflow-hidden">
+    <div className="border border-slate-100 dark:border-slate-700 rounded-xl overflow-hidden">
       <button
         onClick={() => setExpanded(x => !x)}
-        className="flex items-center gap-3 w-full px-4 py-3.5 text-left hover:bg-slate-50 transition-colors"
+        className="flex items-center gap-3 w-full px-4 py-3.5 text-left hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
       >
-        <Shield className="w-5 h-5 text-slate-400 shrink-0" />
+        <Shield className="w-5 h-5 text-slate-400 dark:text-slate-500 shrink-0" />
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-slate-800 truncate">{policy.insurer}</p>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate">{policy.insurer}</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
             {POLICY_TYPE_LABELS[policy.type]} · {policy.policyNumber || 'No policy #'}
           </p>
         </div>
@@ -351,28 +351,28 @@ function PolicyCard({
       </button>
 
       {expanded && (
-        <div className="px-4 pb-4 space-y-3 border-t border-slate-100 pt-3">
+        <div className="px-4 pb-4 space-y-3 border-t border-slate-100 dark:border-slate-700 pt-3">
 
           {/* Dates + premium */}
           <div className="grid grid-cols-3 gap-2 text-xs">
             <div>
-              <p className="text-slate-500">Effective</p>
-              <p className="font-medium text-slate-800">{policy.effectiveDate || '—'}</p>
+              <p className="text-slate-500 dark:text-slate-400">Effective</p>
+              <p className="font-medium text-slate-800 dark:text-slate-200">{policy.effectiveDate || '—'}</p>
             </div>
             <div>
-              <p className="text-slate-500">Renewal</p>
-              <p className="font-medium text-slate-800">{policy.renewalDate}</p>
+              <p className="text-slate-500 dark:text-slate-400">Renewal</p>
+              <p className="font-medium text-slate-800 dark:text-slate-200">{policy.renewalDate}</p>
             </div>
             <div>
-              <p className="text-slate-500">Premium/yr</p>
-              <p className="font-medium text-slate-800">{fmt(policy.annualPremium)}</p>
+              <p className="text-slate-500 dark:text-slate-400">Premium/yr</p>
+              <p className="font-medium text-slate-800 dark:text-slate-200">{fmt(policy.annualPremium)}</p>
             </div>
           </div>
 
           {/* Coverage amounts */}
           {(ca.dwelling || ca.liability || ca.deductible) && (
-            <div className="bg-slate-50 rounded-lg p-3 space-y-1.5">
-              <p className="text-xs font-semibold text-slate-600 mb-2">Coverage</p>
+            <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-3 space-y-1.5">
+              <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-2">Coverage</p>
               {[
                 ['Dwelling',          ca.dwelling],
                 ['Other Structures',  ca.otherStructures],
@@ -381,8 +381,8 @@ function PolicyCard({
                 ['Deductible',        ca.deductible],
               ].filter(([, v]) => v).map(([label, val]) => (
                 <div key={label as string} className="flex justify-between text-xs">
-                  <span className="text-slate-500">{label as string}</span>
-                  <span className="font-medium text-slate-800">{fmt(val as number)}</span>
+                  <span className="text-slate-500 dark:text-slate-400">{label as string}</span>
+                  <span className="font-medium text-slate-800 dark:text-slate-200">{fmt(val as number)}</span>
                 </div>
               ))}
             </div>
@@ -390,15 +390,15 @@ function PolicyCard({
 
           {/* Agent */}
           {policy.agent && (
-            <div className="bg-slate-50 rounded-lg p-3">
-              <p className="text-xs font-semibold text-slate-600 mb-1.5">Agent</p>
-              <p className="text-sm font-medium text-slate-800">{policy.agent.name}</p>
-              {policy.agent.agency && <p className="text-xs text-slate-500">{policy.agent.agency}</p>}
+            <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-3">
+              <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">Agent</p>
+              <p className="text-sm font-medium text-slate-800 dark:text-slate-200">{policy.agent.name}</p>
+              {policy.agent.agency && <p className="text-xs text-slate-500 dark:text-slate-400">{policy.agent.agency}</p>}
               <div className="flex gap-3 mt-2">
                 {policy.agent.phone && (
                   <a
                     href={`tel:${policy.agent.phone}`}
-                    className="flex items-center gap-1 text-xs text-sky-600 hover:text-sky-700 font-medium"
+                    className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 font-medium"
                   >
                     <Phone className="w-3 h-3" />
                     {policy.agent.phone}
@@ -407,7 +407,7 @@ function PolicyCard({
                 {policy.agent.email && (
                   <a
                     href={`mailto:${policy.agent.email}`}
-                    className="flex items-center gap-1 text-xs text-sky-600 hover:text-sky-700 font-medium"
+                    className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 font-medium"
                   >
                     <Mail className="w-3 h-3" />
                     Email
@@ -421,7 +421,7 @@ function PolicyCard({
             <a
               href={`https://drive.google.com/file/d/${policy.driveFileId}/view`}
               target="_blank" rel="noopener noreferrer"
-              className="flex items-center gap-1 text-xs text-sky-600 hover:text-sky-700 font-medium"
+              className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 font-medium"
             >
               <ExternalLink className="w-3 h-3" />
               View policy PDF in Drive
@@ -435,13 +435,13 @@ function PolicyCard({
           <div className="flex gap-2 pt-1">
             <button
               onClick={onEdit}
-              className="flex-1 py-2 rounded-xl bg-slate-100 text-slate-700 text-xs font-semibold hover:bg-slate-200 transition-colors"
+              className="flex-1 py-2 rounded-xl bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
             >
               Edit
             </button>
             <button
               onClick={onDelete}
-              className="flex-1 py-2 rounded-xl bg-red-50 text-red-600 text-xs font-semibold hover:bg-red-100 transition-colors"
+              className="flex-1 py-2 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-xs font-semibold hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
             >
               Delete
             </button>
@@ -487,12 +487,12 @@ export function InsuranceScreen() {
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-xl font-bold text-slate-900">Insurance</h1>
-          <p className="text-sm text-slate-500 mt-0.5">{activeProperty.shortName} · {policies.length} {policies.length === 1 ? 'policy' : 'policies'}</p>
+          <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">Insurance</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">{activeProperty.shortName} · {policies.length} {policies.length === 1 ? 'policy' : 'policies'}</p>
         </div>
         <button
           onClick={openAdd}
-          className="flex items-center gap-2 bg-sky-600 hover:bg-sky-700 text-white text-sm font-semibold rounded-xl px-4 py-2.5 transition-colors"
+          className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-xl px-4 py-2.5 transition-colors"
         >
           <Plus className="w-4 h-4" />
           Add Policy
@@ -522,8 +522,8 @@ export function InsuranceScreen() {
       )}
 
       {/* Coverage gap checklist */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
-        <h2 className="text-sm font-semibold text-slate-700 mb-3">Coverage Checklist</h2>
+      <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 shadow-sm">
+        <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Coverage Checklist</h2>
         <div className="space-y-2">
           {COVERAGE_CHECKLIST.filter(c => c.requiredFor.includes(activeProperty.type)).map(item => {
             const covered = activePolicyTypes.has(item.id as InsurancePolicy['type'])
@@ -533,13 +533,13 @@ export function InsuranceScreen() {
                   ? <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
                   : <Circle       className="w-4 h-4 text-red-400 shrink-0" />
                 }
-                <span className={cn('text-sm', covered ? 'text-slate-700' : 'text-red-700 font-medium')}>
+                <span className={cn('text-sm', covered ? 'text-slate-700 dark:text-slate-300' : 'text-red-700 dark:text-red-400 font-medium')}>
                   {item.label}
                 </span>
                 {!covered && (
                   <button
                     onClick={() => { setEditPolicy(undefined); setShowForm(true) }}
-                    className="ml-auto text-xs text-sky-600 hover:text-sky-700 font-medium"
+                    className="ml-auto text-xs text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 font-medium"
                   >
                     + Add
                   </button>
@@ -549,13 +549,13 @@ export function InsuranceScreen() {
           })}
         </div>
         {coverageGaps.length === 0 && (
-          <p className="text-xs text-emerald-600 font-medium mt-2">All coverage types present ✓</p>
+          <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium mt-2">All coverage types present ✓</p>
         )}
       </div>
 
       {/* Policy list */}
       {policies.length > 0 ? (
-        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm divide-y divide-slate-100 overflow-hidden">
+        <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-sm divide-y divide-slate-100 dark:divide-slate-700 overflow-hidden">
           {policies.map(policy => (
             <PolicyCard
               key={policy.id}
@@ -566,11 +566,11 @@ export function InsuranceScreen() {
           ))}
         </div>
       ) : (
-        <div className="bg-white border border-slate-200 rounded-2xl p-8 shadow-sm text-center">
-          <Shield className="w-10 h-10 text-slate-200 mx-auto mb-3" />
-          <p className="text-sm font-medium text-slate-700 mb-1">No policies added yet</p>
-          <p className="text-xs text-slate-500 mb-4">Add your homeowners, farm, and umbrella policies for quick access and renewal tracking.</p>
-          <button onClick={openAdd} className="text-sm text-sky-600 hover:text-sky-700 font-medium">
+        <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-8 shadow-sm text-center">
+          <Shield className="w-10 h-10 text-slate-200 dark:text-slate-600 mx-auto mb-3" />
+          <p className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">No policies added yet</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">Add your homeowners, farm, and umbrella policies for quick access and renewal tracking.</p>
+          <button onClick={openAdd} className="text-sm text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 font-medium">
             + Add your first policy
           </button>
         </div>

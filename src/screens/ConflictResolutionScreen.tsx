@@ -67,29 +67,29 @@ function FieldTable({
     <div className="overflow-x-auto">
       <table className="w-full text-xs border-collapse">
         <thead>
-          <tr className="bg-slate-50 text-slate-500 uppercase tracking-wide">
+          <tr className="bg-slate-50 dark:bg-slate-700 text-slate-500 dark:text-slate-400 uppercase tracking-wide">
             <th className="text-left py-2 px-3 w-1/4 font-semibold">Field</th>
             <th className="text-left py-2 px-3 w-[37.5%] font-semibold">Drive version</th>
             <th className="text-left py-2 px-3 w-[37.5%] font-semibold">Your version (v2)</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-slate-100">
+        <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
           {allKeys.map(key => {
             const isDiff = diffed.has(key)
             return (
-              <tr key={key} className={isDiff ? 'bg-amber-50' : ''}>
-                <td className={cn('py-2 px-3 font-medium', isDiff ? 'text-amber-700' : 'text-slate-500')}>
+              <tr key={key} className={isDiff ? 'bg-amber-50 dark:bg-amber-900/20' : ''}>
+                <td className={cn('py-2 px-3 font-medium', isDiff ? 'text-amber-700 dark:text-amber-400' : 'text-slate-500 dark:text-slate-400')}>
                   {key}
                   {isDiff && <span className="ml-1 text-amber-400">●</span>}
                 </td>
-                <td className="py-2 px-3 text-slate-700">{original[key] ?? <span className="text-slate-300 italic">—</span>}</td>
+                <td className="py-2 px-3 text-slate-700 dark:text-slate-300">{original[key] ?? <span className="text-slate-300 dark:text-slate-600 italic">—</span>}</td>
                 <td className="py-2 px-3">
                   {isDiff ? (
                     <input
                       type="text"
                       value={edits[key] ?? v2[key] ?? ''}
                       onChange={e => onEdit(key, e.target.value)}
-                      className="w-full text-xs border border-amber-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-amber-400 bg-white"
+                      className="w-full text-xs border border-amber-300 dark:border-amber-700 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-amber-400 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100"
                     />
                   ) : (
                     <span className="text-slate-700">{v2[key] ?? <span className="text-slate-300 italic">—</span>}</span>
@@ -172,17 +172,17 @@ function ConflictCard({
   }
 
   return (
-    <div className="border border-amber-200 rounded-2xl bg-white shadow-sm overflow-hidden">
+    <div className="border border-amber-200 dark:border-amber-800 rounded-2xl bg-white dark:bg-slate-800 shadow-sm overflow-hidden">
       {/* Header */}
       <button
         type="button"
         onClick={() => setExpanded(e => !e)}
-        className="w-full flex items-center gap-3 px-5 py-4 text-left hover:bg-amber-50 transition-colors"
+        className="w-full flex items-center gap-3 px-5 py-4 text-left hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors"
       >
         <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0" />
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-slate-900 truncate">{pair.original.title}</p>
-          <p className="text-xs text-slate-500">
+          <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">{pair.original.title}</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400">
             {pair.original.type} · {pair.original.propertyId} · {diffed.size} field{diffed.size !== 1 ? 's' : ''} differ
           </p>
         </div>
@@ -192,7 +192,7 @@ function ConflictCard({
       </button>
 
       {expanded && (
-        <div className="border-t border-amber-100">
+        <div className="border-t border-amber-100 dark:border-amber-900">
           <FieldTable
             original={origFields}
             v2={v2Fields}
@@ -202,12 +202,12 @@ function ConflictCard({
           />
 
           {/* Action bar */}
-          <div className="flex flex-wrap gap-2 px-5 py-4 bg-slate-50 border-t border-slate-100">
+          <div className="flex flex-wrap gap-2 px-5 py-4 bg-slate-50 dark:bg-slate-700/50 border-t border-slate-100 dark:border-slate-700">
             <button
               type="button"
               onClick={keepMine}
               disabled={saving}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 disabled:opacity-50 text-white text-xs font-semibold transition-colors"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white text-xs font-semibold transition-colors"
             >
               <CheckCircle2 className="w-3.5 h-3.5" />
               Keep mine (v2)
@@ -216,7 +216,7 @@ function ConflictCard({
               type="button"
               onClick={keepTheirs}
               disabled={saving}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 hover:bg-slate-100 disabled:opacity-50 text-slate-700 text-xs font-semibold transition-colors"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50 text-slate-700 dark:text-slate-300 text-xs font-semibold transition-colors"
             >
               <Trash2 className="w-3.5 h-3.5" />
               Keep theirs (Drive)
@@ -258,13 +258,13 @@ export function ConflictResolutionScreen() {
         <button
           type="button"
           onClick={() => navigate(-1)}
-          className="p-2 rounded-xl hover:bg-slate-100 transition-colors"
+          className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
         >
-          <ArrowLeft className="w-5 h-5 text-slate-600" />
+          <ArrowLeft className="w-5 h-5 text-slate-600 dark:text-slate-400" />
         </button>
         <div>
-          <h1 className="text-xl font-bold text-slate-900">Sync Conflicts</h1>
-          <p className="text-sm text-slate-500 mt-0.5">
+          <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">Sync Conflicts</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
             These records were modified both locally and in Drive. Choose which version to keep.
           </p>
         </div>
@@ -277,8 +277,8 @@ export function ConflictResolutionScreen() {
             <CheckCircle2 className="w-8 h-8 text-emerald-500" />
           </div>
           <div>
-            <p className="text-lg font-semibold text-slate-900">No conflicts</p>
-            <p className="text-sm text-slate-500 mt-1">All records are in sync.</p>
+            <p className="text-lg font-semibold text-slate-900 dark:text-slate-100">No conflicts</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">All records are in sync.</p>
           </div>
         </div>
       ) : (

@@ -9,13 +9,13 @@ import type { RoadEvent, RoadMaintenanceTypeId } from '../types/road'
 // ── Badge colors ─────────────────────────────────────────────────────────────
 
 const BADGE_CLASS: Record<RoadMaintenanceTypeId, string> = {
-  gravel_delivery:    'bg-sky-50 text-sky-700 border-sky-200',
-  culvert_cleaning:   'bg-amber-50 text-amber-700 border-amber-200',
-  plowing_service:    'bg-slate-50 text-slate-700 border-slate-200',
-  washout_repair:     'bg-amber-50 text-amber-700 border-amber-200',
-  vegetation_control: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  gate_maintenance:   'bg-purple-50 text-purple-700 border-purple-200',
-  other:              'bg-gray-50 text-gray-700 border-gray-200',
+  gravel_delivery:    'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800',
+  culvert_cleaning:   'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800',
+  plowing_service:    'bg-slate-50 dark:bg-slate-700 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-600',
+  washout_repair:     'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800',
+  vegetation_control: 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800',
+  gate_maintenance:   'bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-400 border-purple-200 dark:border-purple-800',
+  other:              'bg-slate-50 dark:bg-slate-700 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-600',
 }
 
 function typeLabel(id: RoadMaintenanceTypeId): string {
@@ -83,14 +83,14 @@ function EventForm({ initial, propertyId, onSave, onClose, title }: EventFormPro
     onSave(event)
   }
 
-  const inputCls = 'w-full text-sm border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-sky-300 bg-white'
+  const inputCls = 'w-full text-sm border border-slate-200 dark:border-slate-600 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-green-300 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500'
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 px-4 pb-4">
-      <div className="rounded-t-2xl sm:rounded-2xl bg-white p-5 w-full sm:max-w-lg max-h-[90vh] overflow-y-auto shadow-xl">
+      <div className="rounded-t-2xl sm:rounded-2xl bg-white dark:bg-slate-800 p-5 w-full sm:max-w-lg max-h-[90vh] overflow-y-auto shadow-xl">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-base font-semibold text-slate-900">{title}</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+          <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">{title}</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 p-1 rounded-lg">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -192,14 +192,14 @@ function EventForm({ initial, propertyId, onSave, onClose, title }: EventFormPro
         <div className="flex gap-3 pt-4">
           <button
             onClick={onClose}
-            className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl px-4 py-2.5 text-sm font-medium"
+            className="flex-1 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-xl px-4 py-2.5 text-sm font-medium"
           >
             Cancel
           </button>
           <button
             onClick={handleSave}
             disabled={!vendor.trim()}
-            className="flex-1 bg-sky-600 hover:bg-sky-700 disabled:opacity-50 text-white rounded-xl px-4 py-2.5 text-sm font-semibold"
+            className="flex-1 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded-xl px-4 py-2.5 text-sm font-semibold"
           >
             Save
           </button>
@@ -227,7 +227,7 @@ function EventCard({ event, onEdit, onDelete }: EventCardProps) {
   })
 
   return (
-    <div className="border border-slate-200 rounded-2xl bg-white p-4 shadow-sm">
+    <div className="border border-slate-200 dark:border-slate-700 rounded-2xl bg-white dark:bg-slate-800 p-4 shadow-sm">
       <div className="flex items-start gap-3">
         <div className="flex-1 min-w-0">
           {/* Top row: badge + date */}
@@ -235,12 +235,12 @@ function EventCard({ event, onEdit, onDelete }: EventCardProps) {
             <span className={cn('text-xs font-medium border rounded-full px-2.5 py-0.5', BADGE_CLASS[event.maintenanceTypeId])}>
               {typeLabel(event.maintenanceTypeId)}
             </span>
-            <span className="text-xs text-slate-400">{dateStr}</span>
-            <span className="text-xs text-slate-500 font-medium">{event.vendor}</span>
+            <span className="text-xs text-slate-400 dark:text-slate-500">{dateStr}</span>
+            <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">{event.vendor}</span>
           </div>
 
           {/* Secondary row: quantity + area */}
-          <div className="flex flex-wrap gap-3 mt-1.5 text-xs text-slate-500">
+          <div className="flex flex-wrap gap-3 mt-1.5 text-xs text-slate-500 dark:text-slate-400">
             {event.quantity != null && (
               <span>{event.quantity} {event.unit}</span>
             )}
@@ -250,14 +250,14 @@ function EventCard({ event, onEdit, onDelete }: EventCardProps) {
           </div>
 
           {event.notes && (
-            <p className="text-xs text-slate-400 mt-1.5">{event.notes}</p>
+            <p className="text-xs text-slate-400 dark:text-slate-500 mt-1.5">{event.notes}</p>
           )}
         </div>
 
         {/* Cost + actions */}
         <div className="flex flex-col items-end gap-2 shrink-0">
           {event.cost != null && (
-            <span className="text-sm font-bold text-slate-700">
+            <span className="text-sm font-bold text-slate-700 dark:text-slate-300">
               ${event.cost.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
             </span>
           )}
@@ -282,12 +282,12 @@ function EventCard({ event, onEdit, onDelete }: EventCardProps) {
 
       {/* Inline delete confirm */}
       {confirmDelete && (
-        <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between">
-          <span className="text-xs text-red-600 font-medium">Confirm delete?</span>
+        <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700 flex items-center justify-between">
+          <span className="text-xs text-red-600 dark:text-red-400 font-medium">Confirm delete?</span>
           <div className="flex gap-2">
             <button
               onClick={() => setConfirmDelete(false)}
-              className="text-xs px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 font-medium"
+              className="text-xs px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-400 font-medium"
             >
               No
             </button>
@@ -355,12 +355,12 @@ export function RoadScreen() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-xl font-bold text-slate-900">Road &amp; Access</h1>
-            <p className="text-sm text-slate-500 mt-0.5">{events.length} event{events.length !== 1 ? 's' : ''}</p>
+            <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">Road &amp; Access</h1>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">{events.length} event{events.length !== 1 ? 's' : ''}</p>
           </div>
           <button
             onClick={() => setShowAdd(true)}
-            className="flex items-center gap-2 bg-sky-600 hover:bg-sky-700 text-white rounded-xl px-4 py-2.5 text-sm font-semibold"
+            className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white rounded-xl px-4 py-2.5 text-sm font-semibold"
           >
             <Plus className="w-4 h-4" />
             Log Event
@@ -369,15 +369,15 @@ export function RoadScreen() {
 
         {/* Summary cards */}
         <div className="flex gap-3 flex-wrap">
-          <div className="border border-slate-200 rounded-2xl bg-white px-4 py-3 shadow-sm flex-1 min-w-[140px]">
-            <p className="text-xs text-slate-500 font-medium">Total spend {year}</p>
-            <p className="text-lg font-bold text-slate-800 mt-0.5">
+          <div className="border border-slate-200 dark:border-slate-700 rounded-2xl bg-white dark:bg-slate-800 px-4 py-3 shadow-sm flex-1 min-w-[140px]">
+            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Total spend {year}</p>
+            <p className="text-lg font-bold text-slate-800 dark:text-slate-200 mt-0.5">
               ${spendThisYear.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
             </p>
           </div>
-          <div className="border border-slate-200 rounded-2xl bg-white px-4 py-3 shadow-sm flex-1 min-w-[140px]">
-            <p className="text-xs text-slate-500 font-medium">Gravel {year}</p>
-            <p className="text-lg font-bold text-slate-800 mt-0.5">
+          <div className="border border-slate-200 dark:border-slate-700 rounded-2xl bg-white dark:bg-slate-800 px-4 py-3 shadow-sm flex-1 min-w-[140px]">
+            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Gravel {year}</p>
+            <p className="text-lg font-bold text-slate-800 dark:text-slate-200 mt-0.5">
               {gravelThisYear.toLocaleString('en-US', { maximumFractionDigits: 1 })} tons
             </p>
           </div>
@@ -392,8 +392,8 @@ export function RoadScreen() {
               className={cn(
                 'rounded-xl px-3 py-1.5 text-sm font-medium transition-colors',
                 activeTab === t.key
-                  ? 'bg-sky-600 text-white'
-                  : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50',
+                  ? 'bg-green-600 text-white'
+                  : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50',
               )}
             >
               {t.label}
@@ -404,12 +404,12 @@ export function RoadScreen() {
         {/* Empty state */}
         {events.length === 0 && (
           <div className="text-center py-16 space-y-3">
-            <MapPin className="w-12 h-12 text-slate-200 mx-auto" />
-            <p className="text-slate-500 font-medium">No road maintenance logged.</p>
-            <p className="text-sm text-slate-400">Track gravel deliveries, culvert cleaning, plowing, and more.</p>
+            <MapPin className="w-12 h-12 text-slate-200 dark:text-slate-600 mx-auto" />
+            <p className="text-slate-500 dark:text-slate-400 font-medium">No road maintenance logged.</p>
+            <p className="text-sm text-slate-400 dark:text-slate-500">Track gravel deliveries, culvert cleaning, plowing, and more.</p>
             <button
               onClick={() => setShowAdd(true)}
-              className="inline-flex items-center gap-2 bg-sky-600 hover:bg-sky-700 text-white rounded-xl px-4 py-2.5 text-sm font-semibold"
+              className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white rounded-xl px-4 py-2.5 text-sm font-semibold"
             >
               <Plus className="w-4 h-4" />
               Log First Event
@@ -420,7 +420,7 @@ export function RoadScreen() {
         {/* Filtered empty state */}
         {events.length > 0 && filtered.length === 0 && (
           <div className="text-center py-10">
-            <p className="text-slate-400 text-sm">No events match this filter.</p>
+            <p className="text-slate-400 dark:text-slate-500 text-sm">No events match this filter.</p>
           </div>
         )}
 

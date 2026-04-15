@@ -187,9 +187,9 @@ function QuickAddModal({ onClose, onSaved }: { onClose: () => void; onSaved: () 
 // ── Property health badge ─────────────────────────────────────────────────────
 
 function healthBadge(overdueCount: number) {
-  if (overdueCount === 0) return { label: 'Good',    cls: 'bg-emerald-100 text-emerald-700 border-emerald-200' }
-  if (overdueCount <= 3)  return { label: `${overdueCount} overdue`, cls: 'bg-amber-100 text-amber-700 border-amber-200' }
-  return                         { label: `${overdueCount} overdue`, cls: 'bg-red-100 text-red-700 border-red-200' }
+  if (overdueCount === 0) return { label: 'Good',    cls: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800' }
+  if (overdueCount <= 3)  return { label: `${overdueCount} overdue`, cls: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800' }
+  return                         { label: `${overdueCount} overdue`, cls: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800' }
 }
 
 const PROP_ICONS = { residence: Building2, camp: TreePine, land: Building2 }
@@ -386,21 +386,21 @@ export function DashboardScreen() {
           </div>
           <div className="space-y-3">
             {overdueByProp.map(({ property: prop, tasks: propTasks }) => (
-              <div key={prop.id} className="bg-red-50 border border-red-200 rounded-2xl overflow-hidden">
-                <div className="px-4 py-2 border-b border-red-100">
-                  <span className="text-xs font-semibold text-red-700">{prop.shortName}</span>
+              <div key={prop.id} className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl overflow-hidden">
+                <div className="px-4 py-2 border-b border-red-100 dark:border-red-900">
+                  <span className="text-xs font-semibold text-red-700 dark:text-red-400">{prop.shortName}</span>
                 </div>
-                <div className="divide-y divide-red-100">
+                <div className="divide-y divide-red-100 dark:divide-red-900">
                   {propTasks.slice(0, 3).map(task => (
                     <div
                       key={task.id}
                       onClick={() => navigate('/maintenance')}
-                      className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-red-100 transition-colors"
+                      className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
                     >
                       <div className={cn('w-2 h-2 rounded-full shrink-0', priorityDot(task.priority))} />
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-red-800 leading-tight truncate">{task.title}</p>
-                        <p className="text-xs text-red-600 mt-0.5">
+                        <p className="text-sm font-medium text-red-800 dark:text-red-300 leading-tight truncate">{task.title}</p>
+                        <p className="text-xs text-red-600 dark:text-red-400 mt-0.5">
                           {task.systemLabel} · Due {new Date(task.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                         </p>
                       </div>
@@ -408,7 +408,7 @@ export function DashboardScreen() {
                     </div>
                   ))}
                   {propTasks.length > 3 && (
-                    <div className="px-4 py-2 text-xs text-red-600 font-medium">
+                    <div className="px-4 py-2 text-xs text-red-600 dark:text-red-400 font-medium">
                       +{propTasks.length - 3} more overdue tasks
                     </div>
                   )}
@@ -533,12 +533,12 @@ export function DashboardScreen() {
 
       {/* ── YTD Spend Card ──────────────────────────────────────────────── */}
       {ytdSpend > 0 && (
-        <div className="bg-emerald-50 border border-emerald-200 rounded-2xl px-5 py-4 flex items-center justify-between">
+        <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-2xl px-5 py-4 flex items-center justify-between">
           <div>
-            <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wide">YTD Maintenance Spend</p>
-            <p className="text-2xl font-bold text-emerald-800 mt-0.5">${ytdSpend.toLocaleString()}</p>
+            <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 uppercase tracking-wide">YTD Maintenance Spend</p>
+            <p className="text-2xl font-bold text-emerald-800 dark:text-emerald-300 mt-0.5">${ytdSpend.toLocaleString()}</p>
           </div>
-          <div className="text-xs text-emerald-600 text-right">
+          <div className="text-xs text-emerald-600 dark:text-emerald-400 text-right">
             <p>{new Date().getFullYear()}</p>
           </div>
         </div>
@@ -704,8 +704,8 @@ export function DashboardScreen() {
                   <div className="px-5 pt-5 pb-4">
                     <SectionHeader title="Property Tax" action="View all" onAction={() => navigate('/tax')} />
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center shrink-0">
-                        <Receipt className="w-5 h-5 text-amber-600" />
+                      <div className="w-10 h-10 bg-amber-100 dark:bg-amber-900/30 rounded-xl flex items-center justify-center shrink-0">
+                        <Receipt className="w-5 h-5 text-amber-600 dark:text-amber-400" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">
@@ -729,11 +729,11 @@ export function DashboardScreen() {
                   <div className="px-5 pt-5 pb-4">
                     <SectionHeader title="Home Equity" action="Mortgages" onAction={() => navigate('/mortgage')} />
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center shrink-0">
-                        <Home className="w-5 h-5 text-emerald-600" />
+                      <div className="w-10 h-10 bg-emerald-100 dark:bg-emerald-900/30 rounded-xl flex items-center justify-center shrink-0">
+                        <Home className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-2xl font-bold text-emerald-700">${equity.toLocaleString()}</p>
+                        <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-400">${equity.toLocaleString()}</p>
                         <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                           Market ${(latestAssess!.marketValue ?? latestAssess!.totalAssessed).toLocaleString()} − Debt ${totalMtgBalance.toLocaleString()}
                         </p>
@@ -751,8 +751,8 @@ export function DashboardScreen() {
                 <SectionHeader title="Recent Activity" />
                 <div className="space-y-3">
                   {[
-                    { date: 'Apr 11', text: 'Water heater — AI advisor session saved to Drive', icon: MessageSquare, color: 'text-emerald-600 bg-emerald-50' },
-                    { date: 'Jan 15', text: 'HVAC filter replaced — service record saved',       icon: Wrench,        color: 'text-orange-500 bg-orange-50' },
+                    { date: 'Apr 11', text: 'Water heater — AI advisor session saved to Drive', icon: MessageSquare, color: 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20' },
+                    { date: 'Jan 15', text: 'HVAC filter replaced — service record saved',       icon: Wrench,        color: 'text-orange-500 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20' },
                     { date: 'Nov 1',  text: 'Generator annual service — Buckeye Power Sales',    icon: Zap,           color: 'text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20'       },
                   ].map(({ date, text, icon: Icon, color }) => (
                     <div key={text} className="flex items-start gap-3">

@@ -49,11 +49,11 @@ function expiryAlertClass(permit: Permit): string | null {
 
 function statusChipClass(status: PermitStatus): string {
   switch (status) {
-    case 'approved':           return 'bg-emerald-100 text-emerald-700 border-emerald-200'
-    case 'open':               return 'bg-sky-100 text-sky-700 border-sky-200'
-    case 'pending_inspection': return 'bg-amber-100 text-amber-700 border-amber-200'
-    case 'expired':            return 'bg-red-100 text-red-700 border-red-200'
-    case 'rejected':           return 'bg-slate-100 text-slate-600 border-slate-200'
+    case 'approved':           return 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800'
+    case 'open':               return 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800'
+    case 'pending_inspection': return 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800'
+    case 'expired':            return 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800'
+    case 'rejected':           return 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-600'
   }
 }
 
@@ -76,7 +76,7 @@ function sortPermits(permits: Permit[]): Permit[] {
 
 type FilterTab = 'all' | 'open' | 'approved' | 'expired'
 
-const inp = 'w-full text-sm border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-sky-300 bg-white'
+const inp = 'w-full text-sm border border-slate-200 dark:border-slate-600 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-green-300 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500'
 
 // ── Permit Form ───────────────────────────────────────────────────────────────
 
@@ -170,14 +170,14 @@ function PermitForm({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 px-4 pb-4">
-      <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-xl w-full sm:max-w-lg p-5 space-y-4 max-h-[90vh] overflow-y-auto">
+      <div className="bg-white dark:bg-slate-800 rounded-t-2xl sm:rounded-2xl shadow-xl w-full sm:max-w-lg p-5 space-y-4 max-h-[90vh] overflow-y-auto">
 
         {/* Header */}
         <div className="flex items-center justify-between">
-          <h2 className="text-base font-semibold text-slate-900">
+          <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
             {initial ? 'Edit Permit' : 'Add Permit / Inspection'}
           </h2>
-          <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-600 rounded-lg">
+          <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-lg">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -296,7 +296,7 @@ function PermitForm({
           <button
             onClick={handleSave}
             disabled={!issuer.trim() || !description.trim()}
-            className="flex-[2] py-3 rounded-2xl bg-sky-600 text-white text-sm font-semibold hover:bg-sky-700 disabled:bg-sky-300 transition-colors"
+            className="flex-[2] py-3 rounded-2xl bg-green-600 text-white text-sm font-semibold hover:bg-green-700 disabled:bg-green-300 transition-colors"
           >
             {initial ? 'Save Changes' : 'Add Permit'}
           </button>
@@ -319,15 +319,15 @@ function PermitCard({
   const alertCls = expiryAlertClass(permit)
 
   return (
-    <div className={cn('border border-slate-100 rounded-xl overflow-hidden', alertCls && alertCls.replace('border-', 'border-l-4 border-l-'))}>
+    <div className={cn('border border-slate-100 dark:border-slate-700 rounded-xl overflow-hidden', alertCls && alertCls.replace('border-', 'border-l-4 border-l-'))}>
       <button
         onClick={() => setExpanded(x => !x)}
-        className="flex items-center gap-3 w-full px-4 py-3.5 text-left hover:bg-slate-50 transition-colors"
+        className="flex items-center gap-3 w-full px-4 py-3.5 text-left hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
       >
-        <FileCheck className="w-5 h-5 text-slate-400 shrink-0" />
+        <FileCheck className="w-5 h-5 text-slate-400 dark:text-slate-500 shrink-0" />
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-slate-800 truncate">{permit.description}</p>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate">{permit.description}</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
             {PERMIT_TYPE_LABELS[permit.type]}
             {permit.permitNumber ? ` · ${permit.permitNumber}` : ''}
           </p>
@@ -342,49 +342,49 @@ function PermitCard({
       </button>
 
       {expanded && (
-        <div className="px-4 pb-4 space-y-3 border-t border-slate-100 pt-3">
+        <div className="px-4 pb-4 space-y-3 border-t border-slate-100 dark:border-slate-700 pt-3">
 
           {/* Issuer + dates */}
           <div className="grid grid-cols-2 gap-2 text-xs">
             <div>
-              <p className="text-slate-500">Issuing Authority</p>
-              <p className="font-medium text-slate-800">{permit.issuer}</p>
+              <p className="text-slate-500 dark:text-slate-400">Issuing Authority</p>
+              <p className="font-medium text-slate-800 dark:text-slate-200">{permit.issuer}</p>
             </div>
             {permit.issuedDate && (
               <div>
-                <p className="text-slate-500">Issued</p>
-                <p className="font-medium text-slate-800">{permit.issuedDate}</p>
+                <p className="text-slate-500 dark:text-slate-400">Issued</p>
+                <p className="font-medium text-slate-800 dark:text-slate-200">{permit.issuedDate}</p>
               </div>
             )}
             {permit.expiryDate && (
               <div>
-                <p className="text-slate-500">Expires</p>
-                <p className={cn('font-medium', permit.expiryDate < new Date().toISOString().slice(0, 10) ? 'text-red-700' : 'text-slate-800')}>
+                <p className="text-slate-500 dark:text-slate-400">Expires</p>
+                <p className={cn('font-medium', permit.expiryDate < new Date().toISOString().slice(0, 10) ? 'text-red-700 dark:text-red-400' : 'text-slate-800 dark:text-slate-200')}>
                   {permit.expiryDate}
                 </p>
               </div>
             )}
             {permit.inspectionDate && (
               <div>
-                <p className="text-slate-500">Inspection</p>
-                <p className="font-medium text-slate-800">{permit.inspectionDate}</p>
+                <p className="text-slate-500 dark:text-slate-400">Inspection</p>
+                <p className="font-medium text-slate-800 dark:text-slate-200">{permit.inspectionDate}</p>
               </div>
             )}
           </div>
 
           {/* Contractor + cost */}
           {(permit.contractor || permit.cost) && (
-            <div className="bg-slate-50 rounded-lg p-3 grid grid-cols-2 gap-2 text-xs">
+            <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-3 grid grid-cols-2 gap-2 text-xs">
               {permit.contractor && (
                 <div>
-                  <p className="text-slate-500">Contractor</p>
-                  <p className="font-medium text-slate-800">{permit.contractor}</p>
+                  <p className="text-slate-500 dark:text-slate-400">Contractor</p>
+                  <p className="font-medium text-slate-800 dark:text-slate-200">{permit.contractor}</p>
                 </div>
               )}
               {permit.cost !== undefined && (
                 <div>
-                  <p className="text-slate-500">Permit Cost</p>
-                  <p className="font-medium text-slate-800">{fmt(permit.cost)}</p>
+                  <p className="text-slate-500 dark:text-slate-400">Permit Cost</p>
+                  <p className="font-medium text-slate-800 dark:text-slate-200">{fmt(permit.cost)}</p>
                 </div>
               )}
             </div>
@@ -394,7 +394,7 @@ function PermitCard({
             <a
               href={`https://drive.google.com/file/d/${permit.driveFileId}/view`}
               target="_blank" rel="noopener noreferrer"
-              className="flex items-center gap-1 text-xs text-sky-600 hover:text-sky-700 font-medium"
+              className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 font-medium"
             >
               <ExternalLink className="w-3 h-3" />
               View permit document in Drive
@@ -408,13 +408,13 @@ function PermitCard({
           <div className="flex gap-2 pt-1">
             <button
               onClick={onEdit}
-              className="flex-1 py-2 rounded-xl bg-slate-100 text-slate-700 text-xs font-semibold hover:bg-slate-200 transition-colors"
+              className="flex-1 py-2 rounded-xl bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
             >
               Edit
             </button>
             <button
               onClick={onDelete}
-              className="flex-1 py-2 rounded-xl bg-red-50 text-red-600 text-xs font-semibold hover:bg-red-100 transition-colors"
+              className="flex-1 py-2 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-xs font-semibold hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
             >
               Delete
             </button>
@@ -474,14 +474,14 @@ export function PermitsScreen() {
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-xl font-bold text-slate-900">Permits &amp; Inspections</h1>
-          <p className="text-sm text-slate-500 mt-0.5">
+          <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">Permits &amp; Inspections</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
             {activeProperty.shortName} · {allPermits.length} {allPermits.length === 1 ? 'record' : 'records'}
           </p>
         </div>
         <button
           onClick={openAdd}
-          className="flex items-center gap-2 bg-sky-600 hover:bg-sky-700 text-white text-sm font-semibold rounded-xl px-4 py-2.5 transition-colors"
+          className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-xl px-4 py-2.5 transition-colors"
         >
           <Plus className="w-4 h-4" />
           Add Permit
@@ -511,7 +511,7 @@ export function PermitsScreen() {
       )}
 
       {/* Filter tabs */}
-      <div className="flex gap-1 bg-slate-100 rounded-xl p-1">
+      <div className="flex gap-1 bg-slate-100 dark:bg-slate-700 rounded-xl p-1">
         {TAB_ITEMS.map(tab => (
           <button
             key={tab.id}
@@ -519,15 +519,15 @@ export function PermitsScreen() {
             className={cn(
               'flex-1 py-1.5 px-2 rounded-lg text-xs font-semibold transition-colors',
               filter === tab.id
-                ? 'bg-white text-slate-900 shadow-sm'
-                : 'text-slate-500 hover:text-slate-700',
+                ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 shadow-sm'
+                : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300',
             )}
           >
             {tab.label}
             {tab.count > 0 && (
               <span className={cn(
                 'ml-1 px-1.5 py-0.5 rounded-full text-xs',
-                filter === tab.id ? 'bg-sky-100 text-sky-700' : 'bg-slate-200 text-slate-500',
+                filter === tab.id ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' : 'bg-slate-200 dark:bg-slate-600 text-slate-500 dark:text-slate-400',
               )}>
                 {tab.count}
               </span>
@@ -538,7 +538,7 @@ export function PermitsScreen() {
 
       {/* Permit list */}
       {filtered.length > 0 ? (
-        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm divide-y divide-slate-100 overflow-hidden">
+        <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-sm divide-y divide-slate-100 dark:divide-slate-700 overflow-hidden">
           {filtered.map(permit => (
             <PermitCard
               key={permit.id}
@@ -549,20 +549,20 @@ export function PermitsScreen() {
           ))}
         </div>
       ) : (
-        <div className="bg-white border border-slate-200 rounded-2xl p-8 shadow-sm text-center">
-          <FileCheck className="w-10 h-10 text-slate-200 mx-auto mb-3" />
+        <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-8 shadow-sm text-center">
+          <FileCheck className="w-10 h-10 text-slate-200 dark:text-slate-600 mx-auto mb-3" />
           {filter === 'all' ? (
             <>
-              <p className="text-sm font-medium text-slate-700 mb-1">No permits on record</p>
-              <p className="text-xs text-slate-500 mb-4">
+              <p className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">No permits on record</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
                 Track building permits, inspections, and certifications for easy access and expiry alerts.
               </p>
-              <button onClick={openAdd} className="text-sm text-sky-600 hover:text-sky-700 font-medium">
+              <button onClick={openAdd} className="text-sm text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 font-medium">
                 + Add your first permit
               </button>
             </>
           ) : (
-            <p className="text-sm text-slate-500">No {filter} permits</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400">No {filter} permits</p>
           )}
         </div>
       )}
