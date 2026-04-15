@@ -340,15 +340,23 @@ export async function chatWithTools(
     }
 
     // No tool calls — this is the final text response
-    // If we got content from the non-streaming call, deliver it
     if (result.content) {
-      // Re-do as streaming for nice UX
-      await chatCompletionStream({ ...opts, messages }, callbacks)
+      // Deliver the content we already have (simulate streaming for nice UX)
+      for (const char of result.content) {
+        callbacks.onToken(char)
+      }
+      callbacks.onDone(result.content)
       return
     }
 
-    // Fallback: empty response
-    callbacks.onDone('')
+    // Empty response from non-streaming — try once more with streaming directly (no tools)
+    // This handles models that return empty on tool-capable requests
+    opts.logger?.log('warn', 'api', 'Empty response from tool-capable request, retrying without tools')
+    try {
+      await chatCompletionStream({ ...opts, messages, tools: undefined }, callbacks)
+    } catch {
+      callbacks.onDone('')
+    }
     return
   }
 
