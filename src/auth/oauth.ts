@@ -162,6 +162,9 @@ export async function getValidToken(): Promise<string | null> {
 
   if (!token) return null
 
+  // Dev bypass token never expires — skip refresh entirely
+  if (token === 'dev_token') return token
+
   // Refresh proactively if expiring within 5 minutes
   if (Date.now() > expiresAt - 5 * 60 * 1000) {
     try {

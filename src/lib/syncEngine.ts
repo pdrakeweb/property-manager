@@ -1,7 +1,7 @@
 import { DriveClient, ETagConflictError } from './driveClient'
 import { localDriveAdapter } from './localDriveAdapter'
 import { localIndex } from './localIndex'
-import type { IndexRecord } from './localIndex'
+import type { IndexRecord, IndexRecordType } from './localIndex'
 import { MAINTENANCE_TASKS, PROPERTIES, CATEGORIES } from '../data/mockData'
 import { formatMaintenanceTask, taskFilename } from './domainMarkdown'
 import type { MaintenanceTask } from '../types'
@@ -193,8 +193,8 @@ async function resolveConflict(
 
 /**
  * List Drive files in all category folders for a property and add any unknown
- * files to the local index as type='equipment', syncState='synced'.
- * Does NOT download or parse file content — just tracks existence.
+ * files to the local index. Task files (task_*.md) are downloaded and parsed
+ * to restore full task data; all other files are added as type='equipment'.
  */
 export async function pullFromDrive(
   token: string,
@@ -205,11 +205,11 @@ export async function pullFromDrive(
 
   const rootFolderId = property.driveRootFolderId
 
-  // Build a set of known driveFileIds for fast lookup
+  // Build a set of known driveFileIds from all relevant record types
   const knownDriveIds = new Set(
-    localIndex.getAll('equipment', propertyId)
-      .map(r => r.driveFileId)
-      .filter(Boolean) as string[],
+    (['equipment', 'task'] as IndexRecordType[]).flatMap(type =>
+      localIndex.getAll(type, propertyId).map(r => r.driveFileId).filter(Boolean),
+    ) as string[],
   )
 
   let pulled  = 0
@@ -224,17 +224,76 @@ export async function pullFromDrive(
         if (!file.name.endsWith('.md')) continue
         if (knownDriveIds.has(file.id))  continue
 
-        localIndex.upsert({
-          id:            `drive_${file.id}`,
-          type:          'equipment',
-          categoryId:    cat.id,
-          propertyId,
-          title:         file.name.replace(/\.md$/, ''),
-          data:          { filename: file.name, driveFileId: file.id },
-          syncState:     'synced',
-          driveFileId:   file.id,
-          driveUpdatedAt: new Date().toISOString(),
-        })
+        const isTask = file.name.startsWith('task_')
+
+        if (isTask) {
+          // Download and parse content to restore full task fields
+          try {
+            const fileData   = await drive().downloadFile(token, file.id)
+            const parsed     = parseMdContent(fileData.content)
+            const titleMatch = fileData.content.match(/^# Maintenance:\s+(.+)$/m)
+            const title      = titleMatch?.[1]?.trim()
+              ?? file.name.replace(/^task_/, '').replace(/_[^_]+\.md$/, '').replace(/_/g, ' ')
+            const categoryId = (parsed['category'] as string) ?? cat.id
+
+            localIndex.upsert({
+              id:            `drive_${file.id}`,
+              type:          'task',
+              categoryId,
+              propertyId,
+              title,
+              data:          {
+                id:          `drive_${file.id}`,
+                propertyId,
+                title,
+                systemLabel: (parsed['system'] as string) ?? '',
+                categoryId,
+                dueDate:     (parsed['due_date'] as string) ?? new Date().toISOString().slice(0, 10),
+                priority:    (parsed['priority'] as string) ?? 'medium',
+                status:      (parsed['status'] as string) ?? 'upcoming',
+                recurrence:  parsed['recurrence'] as string | undefined,
+                source:      (parsed['source'] as string) ?? 'manual',
+                notes:       parsed['notes'] as string | undefined,
+                filename:    file.name,
+                rootFolderId,
+                mdContent:   fileData.content,
+              },
+              syncState:      'synced',
+              driveFileId:    file.id,
+              driveEtag:      fileData.etag,
+              driveUpdatedAt: new Date().toISOString(),
+            })
+          } catch {
+            // If download/parse fails, add minimal task placeholder
+            localIndex.upsert({
+              id:            `drive_${file.id}`,
+              type:          'task',
+              categoryId:    cat.id,
+              propertyId,
+              title:         file.name.replace(/^task_/, '').replace(/_[^_]+\.md$/, '').replace(/_/g, ' '),
+              data:          {
+                dueDate: new Date().toISOString().slice(0, 10),
+                status: 'upcoming', priority: 'medium', source: 'manual', systemLabel: '',
+                filename: file.name, rootFolderId,
+              },
+              syncState:      'synced',
+              driveFileId:    file.id,
+              driveUpdatedAt: new Date().toISOString(),
+            })
+          }
+        } else {
+          localIndex.upsert({
+            id:            `drive_${file.id}`,
+            type:          'equipment',
+            categoryId:    cat.id,
+            propertyId,
+            title:         file.name.replace(/\.md$/, ''),
+            data:          { filename: file.name, driveFileId: file.id },
+            syncState:     'synced',
+            driveFileId:   file.id,
+            driveUpdatedAt: new Date().toISOString(),
+          })
+        }
         knownDriveIds.add(file.id)
         pulled++
       }
