@@ -1,6 +1,5 @@
 import { localIndex } from './localIndex'
 import { seedTasksForProperty } from './syncEngine'
-import { formatMaintenanceTask, taskFilename } from './domainMarkdown'
 import { PROPERTIES } from '../data/mockData'
 import type { MaintenanceTask } from '../types'
 
@@ -61,8 +60,6 @@ export function markTaskDone(taskId: string): void {
 function addToIndex(task: MaintenanceTask, syncState: 'pending_upload' | 'local_only' = 'pending_upload'): void {
   const property = PROPERTIES.find(p => p.id === task.propertyId)
   const rootFolderId = property?.driveRootFolderId ?? ''
-  const mdContent = formatMaintenanceTask(task)
-  const filename = taskFilename(task)
 
   localIndex.upsert({
     id:         task.id,
@@ -72,10 +69,9 @@ function addToIndex(task: MaintenanceTask, syncState: 'pending_upload' | 'local_
     title:      task.title,
     data: {
       ...(task as unknown as Record<string, unknown>),
-      mdContent,
-      filename,
+      filename:     `task_${task.id}.json`,
       rootFolderId,
-      categoryId: task.categoryId,
+      categoryId:   task.categoryId,
     },
     syncState,
   })
@@ -90,7 +86,6 @@ export const customTaskStore = {
   update(task: MaintenanceTask) { addToIndex(task) },
   getAll(): MaintenanceTask[]   {
     // Tasks are now in localIndex — callers should use getActiveTasks() instead.
-    // Return empty so we don't double-count; getActiveTasks() is the source of truth.
     return []
   },
 }

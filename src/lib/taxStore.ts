@@ -1,15 +1,12 @@
 import { makeSyncedStore } from './syncedStore'
-import { formatTaxAssessment, taxAssessmentFilename, formatTaxPayment, taxPaymentFilename } from './domainMarkdown'
 import type { TaxAssessment, TaxPayment } from '../schemas'
 
 export const taxAssessmentStore = makeSyncedStore<TaxAssessment>(
   'pm_tax_assessments', 'tax_assessment', 'tax',
-  formatTaxAssessment, taxAssessmentFilename,
 )
 
 export const taxPaymentStore = makeSyncedStore<TaxPayment>(
   'pm_tax_payments', 'tax_payment', 'tax',
-  formatTaxPayment, taxPaymentFilename,
 )
 
 export function getAssessmentsForProperty(propertyId: string): TaxAssessment[] {

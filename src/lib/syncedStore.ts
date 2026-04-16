@@ -2,6 +2,9 @@
  * Sync-aware store wrapper — wraps makeStore<T> so that every
  * add/update/upsert also writes to localIndex with pending_upload
  * state, making records eligible for Drive sync via pushPending().
+ *
+ * Records are serialized to Drive as JSON (full IndexRecord), not markdown.
+ * Human-readable markdown export is handled separately by markdownExport.ts.
  */
 
 import { makeStore } from './localStore'
@@ -14,16 +17,12 @@ import { PROPERTIES } from '../data/mockData'
  * @param key             localStorage key for the store
  * @param indexType       IndexRecordType for localIndex records
  * @param driveCategoryId Category ID for Drive folder resolution
- * @param formatMd        Function to generate markdown content from a record
- * @param makeFilename    Function to generate a Drive filename from a record
  * @param getPropertyId   Optional — extract propertyId from record (defaults to `r.propertyId`)
  */
 export function makeSyncedStore<T extends { id: string }>(
   key: string,
   indexType: IndexRecordType,
   driveCategoryId: string,
-  formatMd: (record: T) => string,
-  makeFilename: (record: T) => string,
   getPropertyId?: (record: T) => string,
 ) {
   const store = makeStore<T>(key)
@@ -39,17 +38,23 @@ export function makeSyncedStore<T extends { id: string }>(
     // Don't queue if no Drive root (e.g. Camp with empty driveRootFolderId)
     if (!rootFolderId) return
 
-    const mdContent = formatMd(item)
-    const filename = makeFilename(item)
+    // Derive a human-readable title from common naming fields
+    const typed = item as Record<string, unknown>
+    const title = String(
+      typed['label'] ?? typed['name'] ?? typed['title'] ?? typed['provider'] ??
+      typed['taskTitle'] ?? `${indexType}_${(item as { id: string }).id.slice(0, 8)}`,
+    )
+
+    // JSON filename: <type>_<id>.json
+    const filename = `${indexType}_${(item as { id: string }).id}.json`
 
     localIndex.upsert({
-      id: (item as unknown as { id: string }).id,
-      type: indexType,
+      id:         (item as { id: string }).id,
+      type:       indexType,
       propertyId: propId,
-      title: filename.replace(/\.md$/, ''),
+      title,
       data: {
-        ...item as unknown as Record<string, unknown>,
-        mdContent,
+        ...(item as unknown as Record<string, unknown>),
         filename,
         rootFolderId,
         categoryId: driveCategoryId,

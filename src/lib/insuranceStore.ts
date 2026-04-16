@@ -1,10 +1,8 @@
 import { makeSyncedStore } from './syncedStore'
-import { formatInsurance, insuranceFilename } from './domainMarkdown'
 import type { InsurancePolicy } from '../types/insurance'
 
 export const insuranceStore = makeSyncedStore<InsurancePolicy>(
   'pm_insurance_policies', 'insurance', 'insurance',
-  formatInsurance, insuranceFilename,
 )
 
 export function getPoliciesForProperty(propertyId: string): InsurancePolicy[] {

@@ -1,10 +1,8 @@
 import { makeSyncedStore } from './syncedStore'
-import { formatRoadEvent, roadEventFilename } from './domainMarkdown'
 import type { RoadEvent } from '../types/road'
 
 export const roadStore = makeSyncedStore<RoadEvent>(
   'pm_road_events', 'road', 'road',
-  formatRoadEvent, roadEventFilename,
 )
 
 export function getRoadEventsForProperty(propertyId: string): RoadEvent[] {

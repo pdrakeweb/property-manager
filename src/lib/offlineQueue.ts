@@ -6,7 +6,7 @@ export interface QueuedUpload {
   categoryId:    string
   rootFolderId:  string
   filename:      string
-  mdContent:     string
+  content:       string   // JSON-serialized IndexRecord
   capturedAt:    string
   enqueuedAt:    string
 }
@@ -56,7 +56,7 @@ export async function retryAll(getToken: () => Promise<string | null>): Promise<
       if (!token) { remaining.push(item); continue }
 
       const folderId = await DriveClient.resolveFolderId(token, item.categoryId, item.rootFolderId)
-      await DriveClient.uploadFile(token, folderId, item.filename, item.mdContent, 'text/markdown')
+      await DriveClient.uploadFile(token, folderId, item.filename, item.content, 'application/json')
       succeeded++
     } catch {
       remaining.push(item)

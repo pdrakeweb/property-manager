@@ -168,4 +168,10 @@ export const localIndex = {
     const index = load()
     return Object.values(index).some(r => r.type === type && r.propertyId === propertyId)
   },
+
+  /** All non-deleted records for a property, regardless of type. */
+  getAllForProperty(propertyId: string): IndexRecord[] {
+    const index = load()
+    return Object.values(index).filter(r => r.propertyId === propertyId && !r.deletedAt)
+  },
 }

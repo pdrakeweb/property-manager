@@ -1,10 +1,8 @@
 import { makeSyncedStore } from './syncedStore'
-import { formatCompletedEvent, completedEventFilename } from './domainMarkdown'
 import type { CompletedEvent } from '../schemas'
 
 export const costStore = makeSyncedStore<CompletedEvent>(
   'pm_completed_events', 'completed_event', 'completed_event',
-  formatCompletedEvent, completedEventFilename,
 )
 
 export function getYTDSpend(propertyId: string, year = new Date().getFullYear()): number {

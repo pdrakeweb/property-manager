@@ -3,7 +3,6 @@ import { localDriveAdapter } from './localDriveAdapter'
 import { localIndex } from './localIndex'
 import type { IndexRecord, IndexRecordType } from './localIndex'
 import { MAINTENANCE_TASKS, PROPERTIES, CATEGORIES } from '../data/mockData'
-import { formatMaintenanceTask, taskFilename } from './domainMarkdown'
 import type { MaintenanceTask } from '../types'
 
 /** Returns the real DriveClient in production, or the localStorage adapter in dev bypass mode */
@@ -43,20 +42,10 @@ function overlappingMutations(
   return overlapping
 }
 
-/** Parse markdown content back into a data record (best-effort key: value extraction). */
-function parseMdContent(md: string): Record<string, unknown> {
-  const result: Record<string, unknown> = {}
-  for (const line of md.split('\n')) {
-    const m = line.match(/^\*\*(.+?):\*\*\s*(.+)$/) ?? line.match(/^-\s+\*\*(.+?):\*\*\s*(.+)$/)
-    if (m) result[m[1].trim().toLowerCase().replace(/\s+/g, '_')] = m[2].trim()
-  }
-  return result
-}
-
 // ── Push ─────────────────────────────────────────────────────────────────────
 
 /**
- * Upload all pending_upload records to Drive with ETag-based conflict detection.
+ * Upload all pending_upload records to Drive as JSON (full IndexRecord).
  *
  * Per record:
  *  - New file (no driveEtag): upload without If-Match
@@ -68,21 +57,22 @@ export async function pushPending(token: string): Promise<{ uploaded: number; fa
   let uploaded = 0
 
   for (const record of pending) {
-    const { mdContent, filename, rootFolderId, categoryId } = record.data as {
-      mdContent:    string
+    const { filename, rootFolderId, categoryId } = record.data as {
       filename:     string
       rootFolderId: string
       categoryId:   string
     }
 
-    if (!mdContent || !filename || !rootFolderId || !categoryId) continue
+    if (!filename || !rootFolderId || !categoryId) continue
+
+    // Serialize the full IndexRecord as JSON — lossless, no markdown parsing needed on pull
+    const content = JSON.stringify(record)
 
     try {
       const folderId = await drive().resolveFolderId(token, categoryId, rootFolderId)
 
-      // Pass existing ETag for optimistic concurrency (undefined = new file)
       const file = await drive().uploadFile(
-        token, folderId, filename, mdContent, 'text/markdown',
+        token, folderId, filename, content, 'application/json',
         record.driveEtag,
       )
       localIndex.markSynced(record.id, file.id, new Date().toISOString(), (file as { etag?: string }).etag)
@@ -95,7 +85,7 @@ export async function pushPending(token: string): Promise<{ uploaded: number; fa
       }
 
       // ── Conflict resolution ──────────────────────────────────────────────
-      await resolveConflict(token, record, err, mdContent)
+      await resolveConflict(token, record, err)
     }
   }
 
@@ -104,32 +94,39 @@ export async function pushPending(token: string): Promise<{ uploaded: number; fa
 }
 
 async function resolveConflict(
-  _token:    string,
-  record:    IndexRecord,
-  conflict:  ETagConflictError,
-  localMd:   string,
+  _token:   string,
+  record:   IndexRecord,
+  conflict: ETagConflictError,
 ): Promise<void> {
-  const localData  = parseMdContent(localMd)
-  const remoteData = parseMdContent(conflict.latestContent)
+  // Parse the remote record from JSON; fall back to empty data if corrupt
+  let remoteRecord: IndexRecord
+  try {
+    remoteRecord = JSON.parse(conflict.latestContent) as IndexRecord
+  } catch {
+    remoteRecord = { ...record, data: {} }
+  }
+
+  const localData  = record.data as Record<string, unknown>
+  const remoteData = remoteRecord.data as Record<string, unknown>
   const overlap    = overlappingMutations(localData, remoteData)
 
-  if (overlap.length === 0) {
-    // ── Auto-merge: no overlapping field mutations ────────────────────────
-    // Take local values for locally-changed keys, Drive values for the rest.
-    const merged = { ...remoteData, ...localData }
+  const { filename, rootFolderId, categoryId } = record.data as {
+    filename: string; rootFolderId: string; categoryId: string
+  }
 
-    // Rebuild a simple merged markdown from the merged data object.
-    // Use the local mdContent as the base and let the merged values override nothing —
-    // since there's no overlap the local version IS the correct merged result.
-    const { mdContent, filename, rootFolderId, categoryId } = record.data as {
-      mdContent: string; filename: string; rootFolderId: string; categoryId: string
+  if (overlap.length === 0) {
+    // ── Auto-merge: no overlapping field mutations — local wins ──────────
+    const mergedRecord: IndexRecord = {
+      ...remoteRecord,
+      ...record,
+      data: { ...remoteData, ...localData },
     }
 
     try {
-      const folderId   = await drive().resolveFolderId(_token, categoryId, rootFolderId)
+      const folderId = await drive().resolveFolderId(_token, categoryId, rootFolderId)
       const mergedFile = await drive().uploadFile(
-        _token, folderId, filename, mdContent, 'text/markdown',
-        conflict.latestEtag,   // write against the latest known ETag
+        _token, folderId, filename, JSON.stringify(mergedRecord), 'application/json',
+        conflict.latestEtag,
       )
       localIndex.markSynced(
         record.id,
@@ -138,35 +135,29 @@ async function resolveConflict(
         (mergedFile as { etag?: string }).etag,
       )
     } catch {
-      // If even the merge upload failed, leave as pending — don't surface as conflict
+      // If merge upload failed, leave as pending for next retry
     }
-    // suppress unused variable lint for merged (used conceptually above)
-    void merged
 
   } else {
     // ── True conflict: surface for user resolution ────────────────────────
-    const { filename, rootFolderId, categoryId } = record.data as {
-      filename: string; rootFolderId: string; categoryId: string
-    }
-    const ts      = Date.now()
-    const v2Name  = filename.replace(/\.md$/, '') + `_v2_${ts}.md`
-    const v2Id    = `conflict_v2_${record.id}_${ts}`
+    const ts     = Date.now()
+    const v2Name = filename.replace(/\.json$/, '') + `_v2_${ts}.json`
+    const v2Id   = `conflict_v2_${record.id}_${ts}`
 
     // Write local version as a new v2 file in Drive
     try {
+      const v2Record: IndexRecord = {
+        ...record,
+        id:    v2Id,
+        title: record.title + ' (v2)',
+      }
       const folderId = await drive().resolveFolderId(_token, categoryId, rootFolderId)
       const v2File   = await drive().uploadFile(
-        _token, folderId, v2Name,
-        record.data.mdContent as string,
-        'text/markdown',
-        // No If-Match — this is a new file
+        _token, folderId, v2Name, JSON.stringify(v2Record), 'application/json',
       )
 
-      // Add v2 to the local index (synced, points back at original)
       localIndex.upsert({
-        ...record,
-        id:             v2Id,
-        title:          record.title + ' (v2)',
+        ...v2Record,
         syncState:      'synced',
         driveFileId:    v2File.id,
         driveEtag:      (v2File as { etag?: string }).etag,
@@ -174,7 +165,7 @@ async function resolveConflict(
         driveUpdatedAt: new Date().toISOString(),
       })
     } catch {
-      // If we can't even write the v2, fall through — still mark original as conflict
+      // If v2 write failed, fall through — still mark original as conflict
     }
 
     // Mark the original as conflict (links to v2)
@@ -192,9 +183,11 @@ async function resolveConflict(
 // ── Pull ─────────────────────────────────────────────────────────────────────
 
 /**
- * List Drive files in all category folders for a property and add any unknown
- * files to the local index. Task files (task_*.md) are downloaded and parsed
- * to restore full task data; all other files are added as type='equipment'.
+ * List Drive files in all category folders for a property and restore any
+ * unknown `.json` files into the local index.
+ *
+ * Each Drive file contains a full serialized IndexRecord (JSON). The record's
+ * own `type` field is used — no filename-prefix heuristics needed.
  */
 export async function pullFromDrive(
   token: string,
@@ -205,11 +198,11 @@ export async function pullFromDrive(
 
   const rootFolderId = property.driveRootFolderId
 
-  // Build a set of known driveFileIds from all relevant record types
+  // Build a set of known driveFileIds from all records for this property
   const knownDriveIds = new Set(
-    (['equipment', 'task'] as IndexRecordType[]).flatMap(type =>
-      localIndex.getAll(type, propertyId).map(r => r.driveFileId).filter(Boolean),
-    ) as string[],
+    localIndex.getAllForProperty(propertyId)
+      .map(r => r.driveFileId)
+      .filter(Boolean) as string[],
   )
 
   let pulled  = 0
@@ -221,81 +214,28 @@ export async function pullFromDrive(
       const files    = await drive().listFiles(token, folderId)
 
       for (const file of files) {
-        if (!file.name.endsWith('.md')) continue
-        if (knownDriveIds.has(file.id))  continue
+        if (!file.name.endsWith('.json')) continue
+        if (knownDriveIds.has(file.id))   continue
 
-        const isTask = file.name.startsWith('task_')
+        try {
+          const fileData = await drive().downloadFile(token, file.id)
+          const stored   = JSON.parse(fileData.content) as IndexRecord
 
-        if (isTask) {
-          // Download and parse content to restore full task fields
-          try {
-            const fileData   = await drive().downloadFile(token, file.id)
-            const parsed     = parseMdContent(fileData.content)
-            const titleMatch = fileData.content.match(/^# Maintenance:\s+(.+)$/m)
-            const title      = titleMatch?.[1]?.trim()
-              ?? file.name.replace(/^task_/, '').replace(/_[^_]+\.md$/, '').replace(/_/g, ' ')
-            const categoryId = (parsed['category'] as string) ?? cat.id
-
-            localIndex.upsert({
-              id:            `drive_${file.id}`,
-              type:          'task',
-              categoryId,
-              propertyId,
-              title,
-              data:          {
-                id:          `drive_${file.id}`,
-                propertyId,
-                title,
-                systemLabel: (parsed['system'] as string) ?? '',
-                categoryId,
-                dueDate:     (parsed['due_date'] as string) ?? new Date().toISOString().slice(0, 10),
-                priority:    (parsed['priority'] as string) ?? 'medium',
-                status:      (parsed['status'] as string) ?? 'upcoming',
-                recurrence:  parsed['recurrence'] as string | undefined,
-                source:      (parsed['source'] as string) ?? 'manual',
-                notes:       parsed['notes'] as string | undefined,
-                filename:    file.name,
-                rootFolderId,
-                mdContent:   fileData.content,
-              },
-              syncState:      'synced',
-              driveFileId:    file.id,
-              driveEtag:      fileData.etag,
-              driveUpdatedAt: new Date().toISOString(),
-            })
-          } catch {
-            // If download/parse fails, add minimal task placeholder
-            localIndex.upsert({
-              id:            `drive_${file.id}`,
-              type:          'task',
-              categoryId:    cat.id,
-              propertyId,
-              title:         file.name.replace(/^task_/, '').replace(/_[^_]+\.md$/, '').replace(/_/g, ' '),
-              data:          {
-                dueDate: new Date().toISOString().slice(0, 10),
-                status: 'upcoming', priority: 'medium', source: 'manual', systemLabel: '',
-                filename: file.name, rootFolderId,
-              },
-              syncState:      'synced',
-              driveFileId:    file.id,
-              driveUpdatedAt: new Date().toISOString(),
-            })
-          }
-        } else {
+          // Restore the full record; update Drive metadata to reflect this pull
           localIndex.upsert({
-            id:            `drive_${file.id}`,
-            type:          'equipment',
-            categoryId:    cat.id,
+            ...stored,
+            // Ensure propertyId matches (safety guard for cross-property files)
             propertyId,
-            title:         file.name.replace(/\.md$/, ''),
-            data:          { filename: file.name, driveFileId: file.id },
-            syncState:     'synced',
-            driveFileId:   file.id,
+            syncState:      'synced',
+            driveFileId:    file.id,
+            driveEtag:      fileData.etag,
             driveUpdatedAt: new Date().toISOString(),
           })
+          knownDriveIds.add(file.id)
+          pulled++
+        } catch {
+          failed++
         }
-        knownDriveIds.add(file.id)
-        pulled++
       }
     } catch {
       failed++
@@ -332,10 +272,9 @@ export function seedTasksForProperty(propertyId: string): void {
     const withStatus = { ...task, status }
     return {
       ...withStatus,
-      mdContent: formatMaintenanceTask(withStatus),
-      filename: taskFilename(withStatus),
+      filename:    `task_${task.id}.json`,
       rootFolderId,
-      categoryId: task.categoryId,
+      categoryId:  task.categoryId,
     } as unknown as Record<string, unknown>
   }
 
@@ -391,3 +330,6 @@ export async function syncAll(token: string, propertyId: string): Promise<SyncRe
 
   return { uploaded, uploadFailed, pulled, pullFailed }
 }
+
+// Re-export IndexRecordType for callers that imported it from here
+export type { IndexRecordType }

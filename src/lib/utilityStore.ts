@@ -1,15 +1,12 @@
 import { makeSyncedStore } from './syncedStore'
-import { formatUtilityAccount, utilityAccountFilename, formatUtilityBill, utilityBillFilename } from './domainMarkdown'
 import type { UtilityAccount, UtilityBill, UtilityType } from '../schemas'
 
 export const utilityAccountStore = makeSyncedStore<UtilityAccount>(
   'pm_utility_accounts', 'utility_account', 'utility',
-  formatUtilityAccount, utilityAccountFilename,
 )
 
 export const utilityBillStore = makeSyncedStore<UtilityBill>(
   'pm_utility_bills', 'utility_bill', 'utility',
-  formatUtilityBill, utilityBillFilename,
 )
 
 export function getAccountsForProperty(propertyId: string): UtilityAccount[] {
