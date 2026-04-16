@@ -275,6 +275,11 @@ export function SettingsScreen() {
             </button>
           </div>
         </Row>
+        <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700">
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Required for AI nameplate extraction. Without this, you can still capture photos and fill in equipment details manually.
+          </p>
+        </div>
         <div className="px-4 py-3.5">
           {hasDevModelOverride() && (
             <div className="mb-3 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">

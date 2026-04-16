@@ -8,6 +8,39 @@ export interface Property {
   address: string
   driveRootFolderId: string
   stats: { documented: number; total: number }
+  latitude?: number
+  longitude?: number
+}
+
+export interface GeolocatedProperty extends Property {
+  latitude: number
+  longitude: number
+}
+
+export interface CurrentWeather {
+  temperature: number
+  humidity: number
+  weatherCode: number
+  windSpeed: number
+  isDay: boolean
+  fetchedAt: string
+}
+
+export interface ClimateData {
+  climateZone: string
+  climateZoneDescription: string
+  monthlyAvgHigh: number[]
+  monthlyAvgLow: number[]
+  monthlyPrecipitation: number[]
+  annualHDD: number
+  annualCDD: number
+  fetchedAt: string
+}
+
+export interface EnergyRates {
+  state: string
+  electricityCentsPerKwh: number
+  naturalGasDollarsPerTherm: number
 }
 
 export type Priority = 'critical' | 'high' | 'medium' | 'low'

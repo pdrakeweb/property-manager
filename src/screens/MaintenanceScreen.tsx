@@ -12,6 +12,7 @@ import { useAppStore } from '../store/AppStoreContext'
 import {
   customTaskStore,
   getActiveTasks,
+  markTaskDone,
   setTaskDelay,
   setTaskRecurrence,
 } from '../lib/maintenanceStore'
@@ -82,6 +83,22 @@ function photoRoleBadge(role: EventPhoto['role']) {
   }[role]
 }
 
+// ── Recurrence helper ─────────────────────────────────────────────────────────
+
+function nextRecurrenceDate(currentDue: string, recurrence: string): string {
+  const d = new Date(currentDue + 'T12:00:00')
+  switch (recurrence) {
+    case 'Weekly':        d.setDate(d.getDate() + 7); break
+    case 'Monthly':       d.setMonth(d.getMonth() + 1); break
+    case 'Quarterly':     d.setMonth(d.getMonth() + 3); break
+    case 'Semi-annual':   d.setMonth(d.getMonth() + 6); break
+    case 'Annually':      d.setFullYear(d.getFullYear() + 1); break
+    case 'Every 90 days': d.setDate(d.getDate() + 90); break
+    default:              return ''
+  }
+  return d.toISOString().slice(0, 10)
+}
+
 // ── Mark Done Modal ───────────────────────────────────────────────────────────
 
 interface DoneModalProps {
@@ -141,6 +158,20 @@ function DoneModal({ task, propertyId, onConfirm, onClose }: DoneModalProps) {
       notes: doneNotes || undefined,
       photos: photos.length > 0 ? photos : undefined,
     })
+    // Mark the task completed in localIndex
+    markTaskDone(task.id)
+    // If recurring, create the next occurrence
+    if (task.recurrence) {
+      const nextDue = nextRecurrenceDate(task.dueDate, task.recurrence)
+      if (nextDue) {
+        customTaskStore.add({
+          ...task,
+          id: `task_${Date.now()}`,
+          dueDate: nextDue,
+          status: 'upcoming',
+        })
+      }
+    }
     onConfirm()
   }
 

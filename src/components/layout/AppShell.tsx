@@ -268,7 +268,7 @@ function SyncPill() {
       >
         <RefreshCw className="w-3 h-3" />
         {devMode && <span className="opacity-75">DEV</span>}
-        {stats.pending} pending
+        {stats.pending} unsynced
       </button>
     )
   }
@@ -346,6 +346,9 @@ export function AppShell({ children }: AppShellProps) {
 
         {/* Settings + offline pill at bottom */}
         <div className="px-3 pb-6 border-t border-slate-700 pt-4 space-y-2">
+          <div className="px-3">
+            <SyncPill />
+          </div>
           <div className="px-1">
             <ThemeToggle />
           </div>
@@ -359,9 +362,6 @@ export function AppShell({ children }: AppShellProps) {
             <Settings className="w-4 h-4 shrink-0" />
             Settings
           </NavLink>
-          <div className="px-3">
-            <SyncPill />
-          </div>
         </div>
       </aside>
 

@@ -7,6 +7,7 @@ import {
 import { cn } from '../utils/cn'
 import { CATEGORIES, EQUIPMENT, PROPERTIES } from '../data/mockData'
 import { useAppStore } from '../store/AppStoreContext'
+import { localIndex } from '../lib/localIndex'
 
 type FilterMode = 'all' | 'documented' | 'missing'
 
@@ -20,13 +21,15 @@ export function InventoryScreen() {
   const propertyCategories = CATEGORIES.filter(c => c.propertyTypes.includes(activeProperty.type))
   const propertyEquipment  = EQUIPMENT.filter(e => e.propertyId === activePropertyId)
 
-  const documented   = propertyCategories.filter(c => c.recordCount && c.recordCount > 0).length
+  // Count documented categories from localIndex (not Drive file counts from mockData)
+  const localItems   = localIndex.getAll('equipment', activePropertyId)
+  const documented   = propertyCategories.filter(c => localItems.some(r => r.categoryId === c.id)).length
   const total        = propertyCategories.length
-  const pct          = Math.round(documented / total * 100)
+  const pct          = total > 0 ? Math.round(documented / total * 100) : 0
 
   const visibleCategories = propertyCategories.filter(cat => {
-    if (filter === 'documented' && !(cat.recordCount && cat.recordCount > 0)) return false
-    if (filter === 'missing'    &&  (cat.recordCount && cat.recordCount > 0)) return false
+    if (filter === 'documented' && !localItems.some(r => r.categoryId === cat.id)) return false
+    if (filter === 'missing'    &&  localItems.some(r => r.categoryId === cat.id)) return false
     if (search) {
       const q = search.toLowerCase()
       return cat.label.toLowerCase().includes(q) || cat.description.toLowerCase().includes(q)
@@ -109,7 +112,7 @@ export function InventoryScreen() {
       {/* Category list */}
       <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden shadow-sm divide-y divide-slate-100 dark:divide-slate-700">
         {visibleCategories.map(cat => {
-          const isDone = !!(cat.recordCount && cat.recordCount > 0)
+          const isDone = localItems.some(r => r.categoryId === cat.id)
           const records = propertyEquipment.filter(e => e.categoryId === cat.id)
 
           return (
@@ -130,7 +133,7 @@ export function InventoryScreen() {
                 <div className="flex items-center gap-2 shrink-0">
                   {isDone ? (
                     <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">
-                      {cat.recordCount} record{(cat.recordCount ?? 0) > 1 ? 's' : ''}
+                      {localItems.filter(r => r.categoryId === cat.id).length} record{localItems.filter(r => r.categoryId === cat.id).length > 1 ? 's' : ''}
                     </span>
                   ) : (
                     <button

@@ -137,8 +137,9 @@ function BillForm({
   onSaved: () => void
   onCancel: () => void
 }) {
+  const todayStr = new Date().toISOString().slice(0, 10)
   const [vals, setVals] = useState<Record<string, string>>({
-    periodStart:  '',
+    periodStart:  todayStr,
     periodEnd:    '',
     consumption:  '',
     unit:         '',
@@ -341,8 +342,9 @@ function AccountDetail({
     byMonth[month] = (byMonth[month] ?? 0) + b.totalCost
   }
 
+  const thisYear = String(new Date().getFullYear())
   const ytd = bills
-    .filter(b => b.periodStart.startsWith(String(new Date().getFullYear())))
+    .filter(b => (b.periodStart || '').startsWith(thisYear))
     .reduce((s, b) => s + b.totalCost, 0)
 
   if (view === 'add-bill') {
@@ -416,16 +418,16 @@ function AccountDetail({
             return (
               <div key={b.id} className="flex items-center gap-3 px-4 py-3.5">
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-slate-800">
-                    {new Date(b.periodStart + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+                  <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+                    {b.periodStart ? new Date(b.periodStart + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : 'No date'}
                   </p>
-                  <p className="text-xs text-slate-500 mt-0.5">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                     {b.periodStart} → {b.periodEnd}
                     {b.consumption ? ` · ${b.consumption} ${b.unit ?? ''}` : ''}
                   </p>
                 </div>
                 <div className="text-right shrink-0">
-                  <p className="text-sm font-bold text-slate-800 tabular-nums">
+                  <p className="text-sm font-bold text-slate-800 dark:text-slate-200 tabular-nums">
                     ${b.totalCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </p>
                   {delta !== null && (
@@ -454,8 +456,9 @@ export function UtilityScreen() {
 
   const accounts = getAccountsForProperty(activePropertyId)
   const allBills = getBillsForProperty(activePropertyId)
+  const currentYear = String(new Date().getFullYear())
   const totalYTD = allBills
-    .filter(b => b.periodStart.startsWith(String(new Date().getFullYear())))
+    .filter(b => (b.periodStart || '').startsWith(currentYear))
     .reduce((s, b) => s + b.totalCost, 0)
 
   if (view === 'add-account') {

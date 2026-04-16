@@ -430,7 +430,7 @@ export function EquipmentFormScreen() {
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-2 mb-3">
+          <div className="grid grid-cols-2 gap-2 mb-2">
             <button
               onClick={() => cameraRef.current?.click()}
               disabled={aiState === 'extracting'}
@@ -448,6 +448,15 @@ export function EquipmentFormScreen() {
               Upload
             </button>
           </div>
+          <p className="text-center mb-3">
+            <button
+              type="button"
+              onClick={() => document.getElementById('equipment-form-fields')?.scrollIntoView({ behavior: 'smooth' })}
+              className="text-xs text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-400 transition-colors"
+            >
+              Skip — enter manually ↓
+            </button>
+          </p>
 
           {/* AI status banner */}
           {aiState !== 'idle' && (
@@ -471,7 +480,16 @@ export function EquipmentFormScreen() {
                           Configure in Settings →
                         </button>
                       </span>
-                    : (aiError || 'Extraction failed — fill in fields manually')
+                    : <span>
+                        {aiError || 'Extraction failed.'}{' '}
+                        <button
+                          type="button"
+                          onClick={() => { clearExtraction(); document.getElementById('equipment-form-fields')?.scrollIntoView({ behavior: 'smooth' }) }}
+                          className="underline font-semibold"
+                        >
+                          Enter details manually →
+                        </button>
+                      </span>
                 )}
               </span>
               {(aiState === 'done' || aiState === 'error') && (
@@ -518,7 +536,7 @@ export function EquipmentFormScreen() {
       </div>
 
       {/* Form Fields */}
-      <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden shadow-sm">
+      <div id="equipment-form-fields" className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden shadow-sm">
         <div className="p-4 border-b border-slate-100 dark:border-slate-700/50">
           <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Equipment Details</h2>
           {aiState === 'done' && (
