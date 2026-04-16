@@ -30,6 +30,7 @@ import { GeneratorScreen }     from './screens/GeneratorScreen'
 import { RoadScreen }                  from './screens/RoadScreen'
 import { ConflictResolutionScreen }    from './screens/ConflictResolutionScreen'
 import { PropertyProfileScreen }       from './screens/PropertyProfileScreen'
+import { EquipmentDetailScreen }       from './screens/EquipmentDetailScreen'
 
 import { syncAll, seedTasksForProperty } from './lib/syncEngine'
 import { PROPERTIES } from './data/mockData'
@@ -319,6 +320,7 @@ function MainApp() {
           <Route path="/road"                element={<RoadScreen />}          />
           <Route path="/profile"             element={<PropertyProfileScreen />} />
           <Route path="/conflicts"           element={<ConflictResolutionScreen />} />
+          <Route path="/equipment/:id"       element={<EquipmentDetailScreen />}   />
           <Route path="*"                    element={<Navigate to="/" />}     />
         </Routes>
       </AppShell>

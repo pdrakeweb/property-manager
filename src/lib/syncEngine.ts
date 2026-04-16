@@ -1,8 +1,8 @@
-import { DriveClient, ETagConflictError } from './driveClient'
+import { DriveClient, ETagConflictError, CATEGORY_FOLDER_NAMES } from './driveClient'
 import { localDriveAdapter } from './localDriveAdapter'
 import { localIndex } from './localIndex'
 import type { IndexRecord, IndexRecordType } from './localIndex'
-import { MAINTENANCE_TASKS, PROPERTIES, CATEGORIES } from '../data/mockData'
+import { MAINTENANCE_TASKS, PROPERTIES } from '../data/mockData'
 import type { MaintenanceTask } from '../types'
 
 /** Returns the real DriveClient in production, or the localStorage adapter in dev bypass mode */
@@ -208,9 +208,10 @@ export async function pullFromDrive(
   let pulled  = 0
   let failed  = 0
 
-  for (const cat of CATEGORIES) {
+  // Scan ALL known Drive folders (equipment categories + domain store folders)
+  for (const categoryId of Object.keys(CATEGORY_FOLDER_NAMES)) {
     try {
-      const folderId = await drive().resolveFolderId(token, cat.id, rootFolderId)
+      const folderId = await drive().resolveFolderId(token, categoryId, rootFolderId)
       const files    = await drive().listFiles(token, folderId)
 
       for (const file of files) {

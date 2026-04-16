@@ -63,6 +63,7 @@ export interface EquipmentRecord {
   uploadStatus: UploadStatus
   hasPhotos: boolean
   driveFileId?: string
+  haEntityId?: string
 }
 
 export interface MaintenanceTask {
@@ -130,6 +131,19 @@ export interface HAStatus {
   value: string
   unit?: string
   status: 'ok' | 'warning' | 'alert' | 'off' | 'unknown'
+}
+
+export interface HAConfig {
+  url: string
+  token: string
+}
+
+export interface HAEntityState {
+  entity_id: string
+  state: string
+  attributes: Record<string, unknown>
+  last_changed: string
+  last_updated: string
 }
 
 export interface AIMessage {
