@@ -20,6 +20,12 @@ Without it, the login screen will show credential input fields and OAuth will fa
 - Build: `npx vite build` (use `/c/nvm4w/nodejs/npx.cmd` on this machine)
 - The npm binary is at `/c/nvm4w/nodejs/npm`
 
+## Important Rules
+
+### Bash Command Style
+Never chain commands with && or ; operators. Run them as separate bash calls instead.
+
+
 ## Key Architecture Decisions
 
 - Local-first: all data in localStorage via `localIndex.ts`, synced to Google Drive

@@ -5,7 +5,9 @@
       "Read(//usr/local/bin/**)",
       "Read(//c/Users/pdrak/.nvm/versions/**)",
       "Bash(cmd.exe /c \"where node\")",
-      "Bash(cmd.exe /c \"where node && node --version && npm --version\")"
+      "Bash(cmd.exe /c \"where node && node --version && npm --version\")",
+      "Bash(cd *)",
+      "Bash(git *)"
     ]
   }
 }
