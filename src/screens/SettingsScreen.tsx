@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import {
-  Eye, EyeOff, CheckCircle2, Wifi, WifiOff,
+  Eye, EyeOff, CheckCircle2, XCircle, Wifi, WifiOff,
   ExternalLink, ChevronRight, Building2, Loader2, RefreshCw, Sparkles, Calendar,
   Sun, Moon, Monitor,
 } from 'lucide-react'
@@ -15,6 +15,7 @@ import {
   setSetting, clearSetting, SETTINGS,
   getOpenRouterKey, getHaUrl, getHaToken,
 } from '../store/settings'
+import { chatCompletion } from '../services/openRouterClient'
 
 const MODELS_BY_TASK = [
   { key: 'nameplate',    task: 'Nameplate Extraction',        default: 'anthropic/claude-sonnet-4-6'  },
@@ -65,6 +66,40 @@ export function SettingsScreen() {
     } else {
       clearSetting(SETTINGS.openRouterKey)
     }
+  }
+
+  type ModelTestResult = { model: string; ok: boolean; error?: string }
+  const [orTesting, setOrTesting] = useState(false)
+  const [orTestResults, setOrTestResults] = useState<ModelTestResult[]>([])
+
+  async function testOpenRouterModels() {
+    const key = openRouterKey.trim()
+    if (!key) return
+    saveOpenRouterKey()
+    setOrTesting(true)
+    setOrTestResults([])
+
+    const uniqueModels = [...new Set(MODELS_BY_TASK.map(({ key: k, default: def }) => getModelForTask(k, def)))]
+    const results: ModelTestResult[] = []
+
+    for (const model of uniqueModels) {
+      try {
+        await chatCompletion({
+          apiKey: key,
+          model,
+          messages: [{ role: 'user', content: 'Reply with the single word: ok' }],
+          maxTokens: 10,
+          temperature: 0,
+        })
+        results.push({ model, ok: true })
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        results.push({ model, ok: false, error: msg.slice(0, 120) })
+      }
+      setOrTestResults([...results])
+    }
+
+    setOrTesting(false)
   }
 
   // ── Home Assistant ──────────────────────────────────────────────────────────
@@ -314,6 +349,39 @@ export function SettingsScreen() {
               </div>
             ))}
           </div>
+          <div className="mt-3 flex items-center justify-between gap-2">
+            <button
+              onClick={testOpenRouterModels}
+              disabled={orTesting || !openRouterKey.trim()}
+              className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/30 disabled:opacity-50 transition-colors"
+            >
+              {orTesting && <Loader2 className="w-3 h-3 animate-spin" />}
+              {orTesting ? 'Testing…' : 'Test models'}
+            </button>
+            {orTestResults.length > 0 && !orTesting && (
+              <span className="text-xs text-slate-500 dark:text-slate-400">
+                {orTestResults.filter(r => r.ok).length}/{orTestResults.length} passed
+              </span>
+            )}
+          </div>
+          {orTestResults.length > 0 && (
+            <div className="mt-2 space-y-1">
+              {orTestResults.map(r => (
+                <div key={r.model} className="flex items-start gap-2">
+                  {r.ok
+                    ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-px" />
+                    : <XCircle     className="w-3.5 h-3.5 text-red-400 shrink-0 mt-px" />
+                  }
+                  <div className="min-w-0">
+                    <span className="text-xs font-mono text-slate-600 dark:text-slate-400 truncate block">{r.model}</span>
+                    {!r.ok && r.error && (
+                      <span className="text-xs text-red-500 dark:text-red-400 break-words">{r.error}</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </Section>
 
