@@ -1,15 +1,14 @@
-import { useState, useEffect, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Camera, Wrench, BarChart3, MessageSquare, AlertTriangle,
-  CheckCircle2, Circle, ChevronRight, ShieldAlert, Receipt, Home,
+  CheckCircle2, Circle, ChevronRight, Zap, ShieldAlert, Receipt, Home,
   Plus, X, ChevronDown, ChevronUp, Building2, TreePine,
 } from 'lucide-react'
 import { cn } from '../utils/cn'
-import { CATEGORIES } from '../data/mockData'
-import { PropertyRecordsAPI } from '../services/PropertyRecordsAPI'
-import { getHAConfig } from '../lib/haClient'
-import { getAllCapitalItems, getCapitalItemsForProperty } from '../lib/capitalItemStore'
+import {
+  CAPITAL_ITEMS, HA_STATUS, CATEGORIES,
+} from '../data/mockData'
 import { getYTDSpend, costStore } from '../lib/costStore'
 import { getUpcomingExpiries } from '../lib/expiryStore'
 import { ExpiryWidget } from '../components/ExpiryWidget'
@@ -19,6 +18,7 @@ import { getTotalMortgageBalance } from '../lib/mortgageStore'
 import { customTaskStore, getActiveTasks } from '../lib/maintenanceStore'
 import { localIndex } from '../lib/localIndex'
 import { useAppStore } from '../store/AppStoreContext'
+import { propertyStore } from '../lib/propertyStore'
 import { PropertyHealthCard } from '../components/dashboard/PropertyHealthCard'
 import type { Priority, HAStatus, MaintenanceTask } from '../types'
 
@@ -101,8 +101,7 @@ function Card({ children, className }: { children: ReactNode; className?: string
 // ── Quick-Add Maintenance Modal ───────────────────────────────────────────────
 
 function QuickAddModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
-  const { properties } = useAppStore()
-  const [propertyId, setPropertyId] = useState(properties[0]?.id ?? '')
+  const [propertyId, setPropertyId] = useState(() => propertyStore.getAll()[0]?.id ?? '')
   const [title,      setTitle]      = useState('')
   const [system,     setSystem]     = useState('')
   const [dueDate,    setDueDate]    = useState(new Date().toISOString().slice(0, 10))
@@ -139,7 +138,7 @@ function QuickAddModal({ onClose, onSaved }: { onClose: () => void; onSaved: () 
         <div>
           <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5">Property</label>
           <select value={propertyId} onChange={e => setPropertyId(e.target.value)} className={cn(inp, 'bg-white dark:bg-slate-800')}>
-            {properties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            {propertyStore.getAll().map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
         </div>
 
@@ -206,21 +205,6 @@ export function DashboardScreen() {
   const [detailOpen,    setDetailOpen]    = useState(true)
   const [tick,          setTick]          = useState(0)
   const [dashboardMode, setDashboardMode] = useState<DashboardMode>(readDashboardMode)
-  const [haSensors,     setHaSensors]     = useState<HAStatus[]>([])
-  const [haLoading,     setHaLoading]     = useState(false)
-
-  // Fetch live HA status when active property changes (silently no-op if unconfigured)
-  useEffect(() => {
-    const { url, token } = getHAConfig()
-    if (!url || !token) { setHaSensors([]); return }
-    let cancelled = false
-    setHaLoading(true)
-    new PropertyRecordsAPI(activePropertyId).getHAStatus()
-      .then(s => { if (!cancelled) setHaSensors(s) })
-      .catch(() => { if (!cancelled) setHaSensors([]) })
-      .finally(() => { if (!cancelled) setHaLoading(false) })
-    return () => { cancelled = true }
-  }, [activePropertyId])
 
   function toggleDashboardMode(mode: DashboardMode) {
     localStorage.setItem(DASHBOARD_MODE_KEY, mode)
@@ -272,9 +256,8 @@ export function DashboardScreen() {
   // ── Per-property detail data ───────────────────────────────────────────────
 
   const activeProperty = properties.find(p => p.id === activePropertyId) ?? properties[0]
-  if (!activeProperty) return null
   const tasks     = allTasks.filter(t => t.propertyId === activePropertyId)
-  const items     = getCapitalItemsForProperty(activePropertyId)
+  const items     = CAPITAL_ITEMS.filter(i => i.propertyId === activePropertyId)
   const cats      = CATEGORIES.filter(c => c.propertyTypes.includes(activeProperty.type))
   const dueTasks     = tasks.filter(t => t.status === 'due' || t.status === 'overdue')
   const topCapital   = items.filter(c => c.priority === 'critical' || c.priority === 'high')
@@ -479,14 +462,14 @@ export function DashboardScreen() {
       )}
 
       {/* ── Capital Projects — All Properties (All mode only) ─────────── */}
-      {dashboardMode === 'all' && getAllCapitalItems().filter(i => i.priority === 'critical' || i.priority === 'high').length > 0 && (
+      {dashboardMode === 'all' && CAPITAL_ITEMS.filter(i => i.priority === 'critical' || i.priority === 'high').length > 0 && (
         <div>
           <h2 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">
             Capital Projects — All Properties
           </h2>
           <Card>
             <div className="divide-y divide-slate-100 dark:divide-slate-700">
-              {getAllCapitalItems().filter(i => i.priority === 'critical' || i.priority === 'high').slice(0, 5).map(item => {
+              {CAPITAL_ITEMS.filter(i => i.priority === 'critical' || i.priority === 'high').slice(0, 5).map(item => {
                 const prop = properties.find(p => p.id === item.propertyId)
                 return (
                   <div key={item.id} className="flex items-center gap-3 px-4 py-3">
@@ -645,57 +628,37 @@ export function DashboardScreen() {
                 </div>
               </Card>
 
-              {/* Live HA Status — shows only when HA is configured and entities are linked */}
-              {(() => {
-                const { url, token } = getHAConfig()
-                const haConfigured = !!url && !!token
-                if (!haConfigured) return null
-                return (
-                  <Card>
-                    <div className="px-5 pt-5 pb-4">
-                      <div className="flex items-center justify-between mb-3">
-                        <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide">Live Status</h2>
-                        <div className="flex items-center gap-1.5">
-                          <div className={cn(
-                            'w-1.5 h-1.5 rounded-full',
-                            haLoading ? 'bg-amber-400 animate-pulse' : haSensors.length > 0 ? 'bg-emerald-400 animate-pulse' : 'bg-slate-300',
-                          )} />
-                          <span className="text-xs text-emerald-600 font-medium">Home Assistant</span>
-                        </div>
-                      </div>
-                      {haSensors.length === 0 ? (
-                        <p className="text-xs text-slate-500 dark:text-slate-400">
-                          {haLoading
-                            ? 'Loading live sensors…'
-                            : 'No equipment is linked to an HA entity for this property. Open an equipment record and set its HA entity to see live status here.'}
-                        </p>
-                      ) : (
-                        <div className="space-y-2.5">
-                          {haSensors.map(sensor => (
-                            <div key={sensor.entityId} className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <div className={cn('w-2 h-2 rounded-full shrink-0', haStatusDot(sensor.status))} />
-                                <span className="text-sm text-slate-700 dark:text-slate-300">{sensor.label}</span>
-                              </div>
-                              <span className={cn('text-sm font-semibold tabular-nums', haStatusColor(sensor.status))}>
-                                {sensor.value}{sensor.unit ? ` ${sensor.unit}` : ''}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      {haSensors.some(s => s.status === 'warning' || s.status === 'alert') && (
-                        <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700/50 flex items-center gap-2">
-                          <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
-                          <span className="text-xs text-amber-600">
-                            {haSensors.filter(s => s.status === 'warning' || s.status === 'alert').length} sensor{haSensors.filter(s => s.status === 'warning' || s.status === 'alert').length > 1 ? 's' : ''} need attention
-                          </span>
-                        </div>
-                      )}
+              {/* Live HA Status */}
+              <Card>
+                <div className="px-5 pt-5 pb-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide">Live Status</h2>
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      <span className="text-xs text-emerald-600 font-medium">Home Assistant</span>
                     </div>
-                  </Card>
-                )
-              })()}
+                  </div>
+                  <div className="space-y-2.5">
+                    {HA_STATUS.map(sensor => (
+                      <div key={sensor.entityId} className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className={cn('w-2 h-2 rounded-full shrink-0', haStatusDot(sensor.status))} />
+                          <span className="text-sm text-slate-700 dark:text-slate-300">{sensor.label}</span>
+                        </div>
+                        <span className={cn('text-sm font-semibold tabular-nums', haStatusColor(sensor.status))}>
+                          {sensor.value}{sensor.unit ? ` ${sensor.unit}` : ''}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  {HA_STATUS.some(s => s.status === 'warning') && (
+                    <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700/50 flex items-center gap-2">
+                      <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
+                      <span className="text-xs text-amber-600">Generator oil due within 44 hrs of runtime</span>
+                    </div>
+                  )}
+                </div>
+              </Card>
 
               {/* Documentation Checklist */}
               <Card>
@@ -785,48 +748,29 @@ export function DashboardScreen() {
 
             </div>
 
-            {/* Recent Activity — completed events for this property */}
-            {(() => {
-              const recent = costStore.getAll()
-                .filter(e => e.propertyId === activePropertyId)
-                .sort((a, b) => b.completionDate.localeCompare(a.completionDate))
-                .slice(0, 5)
-
-              return (
-                <Card>
-                  <div className="px-5 pt-5 pb-4">
-                    <SectionHeader title="Recent Activity" />
-                    {recent.length === 0 ? (
-                      <p className="text-xs text-slate-500 dark:text-slate-400">
-                        No completed events yet for this property. Completions logged against maintenance tasks appear here.
-                      </p>
-                    ) : (
-                      <div className="space-y-3">
-                        {recent.map(e => {
-                          const dateLabel = new Date(e.completionDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-                          const costLabel = e.cost != null ? ` · $${e.cost.toLocaleString()}` : ''
-                          const subject   = e.taskTitle || e.categoryId
-                          const actor     = e.contractor ? ` — ${e.contractor}` : ''
-                          return (
-                            <div key={e.id} className="flex items-start gap-3">
-                              <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20">
-                                <Wrench className="w-3.5 h-3.5" />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm text-slate-700 dark:text-slate-300 leading-tight truncate">
-                                  {subject}{actor}{costLabel}
-                                </p>
-                              </div>
-                              <span className="text-xs text-slate-400 dark:text-slate-500 shrink-0">{dateLabel}</span>
-                            </div>
-                          )
-                        })}
+            {/* Recent Activity */}
+            <Card>
+              <div className="px-5 pt-5 pb-4">
+                <SectionHeader title="Recent Activity" />
+                <div className="space-y-3">
+                  {[
+                    { date: 'Apr 11', text: 'Water heater — AI advisor session saved to Drive', icon: MessageSquare, color: 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20' },
+                    { date: 'Jan 15', text: 'HVAC filter replaced — service record saved',       icon: Wrench,        color: 'text-orange-500 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20' },
+                    { date: 'Nov 1',  text: 'Generator annual service — Buckeye Power Sales',    icon: Zap,           color: 'text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20'       },
+                  ].map(({ date, text, icon: Icon, color }) => (
+                    <div key={text} className="flex items-start gap-3">
+                      <div className={cn('w-7 h-7 rounded-lg flex items-center justify-center shrink-0', color)}>
+                        <Icon className="w-3.5 h-3.5" />
                       </div>
-                    )}
-                  </div>
-                </Card>
-              )
-            })()}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-slate-700 dark:text-slate-300 leading-tight">{text}</p>
+                      </div>
+                      <span className="text-xs text-slate-400 dark:text-slate-500 shrink-0">{date}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </Card>
 
           </div>
         )}

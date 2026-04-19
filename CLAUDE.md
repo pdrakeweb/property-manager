@@ -3,7 +3,7 @@
 ## Worktree Setup
 
 ### .env file
-When working in a git worktree (any `.claude/worktrees/` directory), the `.env` file
+When working in a git worktree (any `.claude/worktrees/` directory or temporary subdirectory worktrees like busy-bee), the `.env` file
 will not be present because it is gitignored. **Always copy it from the main project
 root before running the dev server or build:**
 
@@ -16,7 +16,7 @@ The `.env` file contains `VITE_GOOGLE_CLIENT_ID`, `VITE_GOOGLE_CLIENT_SECRET`,
 Without it, the login screen will show credential input fields and OAuth will fail.
 
 ### Sync
-We should always sync before starting any new set of work to ensure we are not working on outdated code due to parallel iplementation.  At session start or when starting a new implementation in an existing session, run `git fetch origin && git log --oneline HEAD..origin/<base-branch>` to check if the worktree is behind. If it is, rebase onto origin/<base-branch> before doing any work.
+We should always sync before starting any new set of work to ensure we are not working on outdated code due to parallel iplementation.  At session start or when starting a new implementation in an existing session, run `git fetch upstream && git log --oneline HEAD..upstream/<base-branch>` to check if the worktree is behind. If it is, rebase onto upstream/<base-branch> before doing any work.
 
 ## Dev Server
 

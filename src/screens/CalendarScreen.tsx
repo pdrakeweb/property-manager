@@ -4,7 +4,7 @@ import {
 } from 'lucide-react'
 import { cn } from '../utils/cn'
 import { costStore } from '../lib/costStore'
-import { customTaskStore, getAllCustomTasks } from '../lib/maintenanceStore'
+import { customTaskStore, getAllTasksAllProperties, getAllCustomTasks } from '../lib/maintenanceStore'
 import { MAINTENANCE_TASKS } from '../data/mockData'
 import { VendorSelector } from '../components/VendorSelector'
 import { useAppStore } from '../store/AppStoreContext'

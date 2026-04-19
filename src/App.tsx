@@ -41,7 +41,6 @@ import {
   startOAuthFlow,
   handleOAuthCallback,
   getClientId,
-  getValidToken,
 } from './auth/oauth'
 import { getOpenRouterKey, setSetting, SETTINGS } from './store/settings'
 
@@ -279,6 +278,7 @@ function useStartupSync() {
       if (running) return
       running = true
       try {
+        const { getValidToken } = await import('./auth/oauth')
         const token = await getValidToken()
         if (!token) return
         // Sync property config first so we have all properties before syncing records
@@ -322,6 +322,7 @@ function useScheduledMarkdownExport() {
 
       running = true
       try {
+        const { getValidToken } = await import('./auth/oauth')
         const token = await getValidToken()
         if (!token) return
         for (const p of propertyStore.getAll()) {
