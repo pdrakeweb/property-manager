@@ -61,3 +61,4 @@ export async function seedPropertiesFromMock(): Promise<void> {
   const { PROPERTIES } = await import('../data/mockData')
   for (const p of PROPERTIES) propertyStore.upsert(p)
 }
+

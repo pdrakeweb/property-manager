@@ -1,6 +1,14 @@
 import { createContext, useContext, useState, useCallback, type ReactNode } from 'react'
 import type { Property } from '../types'
 import { propertyStore } from '../lib/propertyStore'
+import { PROPERTIES } from '../data/mockData'
+
+function loadProperties(): Property[] {
+  if (!propertyStore.hasAny()) {
+    for (const p of PROPERTIES) propertyStore.upsert(p)
+  }
+  return propertyStore.getAll()
+}
 
 // ── State shape ──────────────────────────────────────────────────────────────
 
@@ -24,11 +32,11 @@ const AppStoreContext = createContext<AppStore | null>(null)
 // ── Provider ─────────────────────────────────────────────────────────────────
 
 export function AppStoreProvider({ children }: { children: ReactNode }) {
-  const [properties, setProperties] = useState<Property[]>(() => propertyStore.getAll())
+  const [properties, setProperties] = useState<Property[]>(() => loadProperties())
 
   const [activePropertyId, setActivePropertyIdRaw] = useState<string>(() => {
     const stored = localStorage.getItem('active_property_id')
-    const all    = propertyStore.getAll()
+    const all    = loadProperties()
     // Validate stored ID is still a real property; fall back to first
     if (stored && all.some(p => p.id === stored)) return stored
     return all[0]?.id ?? ''
