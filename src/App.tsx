@@ -31,6 +31,7 @@ import { RoadScreen }                  from './screens/RoadScreen'
 import { ConflictResolutionScreen }    from './screens/ConflictResolutionScreen'
 import { PropertyProfileScreen }       from './screens/PropertyProfileScreen'
 import { EquipmentDetailScreen }       from './screens/EquipmentDetailScreen'
+import { SyncScreen }                  from './screens/SyncScreen'
 
 import { syncAll, seedTasksForProperty } from './lib/syncEngine'
 import { PROPERTIES } from './data/mockData'
@@ -265,7 +266,10 @@ function useStartupSync() {
     for (const p of PROPERTIES) seedTasksForProperty(p.id)
 
     // 2. Async Drive sync — pull remote files into index, push any pending
+    let running = false
     async function run() {
+      if (running) return
+      running = true
       try {
         const { getValidToken } = await import('./auth/oauth')
         const token = await getValidToken()
@@ -274,11 +278,18 @@ function useStartupSync() {
         for (const p of PROPERTIES) {
           await syncAll(token, p.id)
         }
+        localStorage.setItem('pm_last_sync_at', new Date().toISOString())
       } catch {
         // Non-fatal — app works offline from local index
+      } finally {
+        running = false
       }
     }
+
     run()
+    // Re-run every 5 minutes to flush any pending uploads
+    const interval = setInterval(run, 5 * 60_000)
+    return () => clearInterval(interval)
   // Run once on mount
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -321,6 +332,7 @@ function MainApp() {
           <Route path="/profile"             element={<PropertyProfileScreen />} />
           <Route path="/conflicts"           element={<ConflictResolutionScreen />} />
           <Route path="/equipment/:id"       element={<EquipmentDetailScreen />}   />
+          <Route path="/sync"                element={<SyncScreen />}              />
           <Route path="*"                    element={<Navigate to="/" />}     />
         </Routes>
       </AppShell>

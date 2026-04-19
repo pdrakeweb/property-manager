@@ -260,7 +260,7 @@ function SyncPill() {
   if (stats.pending > 0) {
     return (
       <button
-        onClick={() => navigate('/settings')}
+        onClick={() => navigate('/sync')}
         className={cn(
           'flex items-center gap-1 text-white text-xs font-semibold rounded-full px-2.5 py-1 transition-colors shrink-0',
           devMode ? 'bg-green-500 hover:bg-green-600' : 'bg-amber-500 hover:bg-amber-600',
