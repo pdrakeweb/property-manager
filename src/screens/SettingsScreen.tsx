@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Eye, EyeOff, CheckCircle2, XCircle, Wifi, WifiOff,
@@ -8,7 +8,7 @@ import {
 import { cn } from '../utils/cn'
 import { useTheme } from '../contexts/ThemeContext'
 import { getUserEmail, getUserName, signOut, getValidToken, startOAuthFlow, isDev } from '../auth/oauth'
-import { getQueueCount, retryAll } from '../lib/offlineQueue'
+import { getQueueCount } from '../lib/offlineQueue'
 import { propertyStore } from '../lib/propertyStore'
 import { useAppStore } from '../store/AppStoreContext'
 import type { Property, PropertyType } from '../types'
@@ -182,27 +182,7 @@ export function SettingsScreen() {
   }
 
   // ── Offline queue ───────────────────────────────────────────────────────────
-  const [queueCount,   setQueueCount]   = useState(() => getQueueCount())
-  const [retrying,     setRetrying]     = useState(false)
-  const [retryResult,  setRetryResult]  = useState('')
-
-  async function handleRetryAll() {
-    setRetrying(true)
-    setRetryResult('')
-    try {
-      const result = await retryAll(getValidToken)
-      setQueueCount(getQueueCount())
-      setRetryResult(`${result.succeeded} uploaded, ${result.failed} still pending`)
-    } catch {
-      setRetryResult('Retry failed — check connection')
-    } finally {
-      setRetrying(false)
-    }
-  }
-
-  useEffect(() => {
-    setQueueCount(getQueueCount())
-  }, [])
+  const [queueCount] = useState(() => getQueueCount())
 
   // ── Calendar ────────────────────────────────────────────────────────────────
   const hasCalendarScope = !!localStorage.getItem('google_access_token') && !isDev()
@@ -234,7 +214,16 @@ export function SettingsScreen() {
 
   async function syncKnowledgebase(propId: string) {
     const prop = properties.find(p => p.id === propId)
-    if (!prop?.driveRootFolderId || kb(propId).syncing) return
+    // Use form value if this property is being edited and form has a drive root
+    const effectiveRoot = (editingProp?.id === propId ? propForm.driveRootFolderId : '') || prop?.driveRootFolderId
+    if (!effectiveRoot || kb(propId).syncing) return
+
+    // If form has an unsaved drive root, persist it first so exportAllMarkdownToDrive can read it
+    if (prop && effectiveRoot !== prop.driveRootFolderId) {
+      propertyStore.upsert({ ...prop, driveRootFolderId: effectiveRoot })
+      refreshProperties()
+    }
+
     setKb(propId, { syncing: true, result: '', progress: null })
     try {
       const token = await getValidToken()
@@ -244,7 +233,7 @@ export function SettingsScreen() {
       })
       setKb(propId, {
         syncing: false,
-        result: `${result.exported} files synced${result.failed ? `, ${result.failed} failed` : ''}`,
+        result: `${result.exported} created${result.skipped ? `, ${result.skipped} already up to date` : ''}${result.failed ? `, ${result.failed} failed` : ''}`,
         progress: null,
         folderId: result.kbFolderId ?? getKnowledgebaseFolderId(propId),
       })
@@ -343,14 +332,8 @@ export function SettingsScreen() {
           />
           <HubCard
             icon={<RefreshCw className="w-5 h-5" />}
-            title="Sync & Storage"
-            sub={queueCount === 0 ? 'No uploads pending' : `${queueCount} upload${queueCount !== 1 ? 's' : ''} pending`}
-            onClick={() => setView('sync')}
-          />
-          <HubCard
-            icon={<RefreshCw className="w-5 h-5" />}
-            title="Sync History"
-            sub="Drive sync log, conflicts, and knowledgebase"
+            title="Sync"
+            sub={queueCount === 0 ? 'Drive sync, knowledgebase, offline queue' : `${queueCount} upload${queueCount !== 1 ? 's' : ''} pending`}
             onClick={() => navigate('/sync')}
             external
           />
@@ -754,7 +737,7 @@ export function SettingsScreen() {
                             )}
                             <button
                               onClick={() => syncKnowledgebase(p.id)}
-                              disabled={kbStatus.syncing || !p.driveRootFolderId}
+                              disabled={kbStatus.syncing || (!p.driveRootFolderId && !propForm.driveRootFolderId)}
                               className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400 font-medium hover:text-green-700 disabled:opacity-40"
                             >
                               {kbStatus.syncing
@@ -839,40 +822,6 @@ export function SettingsScreen() {
     )
   }
 
-  // ── Sync & Storage ───────────────────────────────────────────────────────────
-  return (
-    <div className="space-y-5 max-w-xl">
-      <BackButton onBack={() => setView('hub')} />
-      <div>
-        <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">Sync & Storage</h1>
-      </div>
-
-      <Section title="Sync & Storage">
-        <Row
-          label="Offline Queue"
-          sub={queueCount === 0 ? 'No uploads pending' : `${queueCount} upload${queueCount !== 1 ? 's' : ''} waiting`}
-        >
-          <div className="flex items-center gap-2">
-            {retryResult && <span className="text-xs text-slate-500 dark:text-slate-400">{retryResult}</span>}
-            <button
-              onClick={handleRetryAll}
-              disabled={retrying || queueCount === 0}
-              className="text-xs text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 font-medium disabled:opacity-40 flex items-center gap-1"
-            >
-              {retrying && <RefreshCw className="w-3 h-3 animate-spin" />}
-              Retry all
-            </button>
-          </div>
-        </Row>
-        <Row label="Activity Log" sub="View sync history and errors">
-          <button
-            onClick={() => navigate('/sync')}
-            className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400 font-medium hover:text-green-700 dark:hover:text-green-300"
-          >
-            Open <ChevronRight className="w-3 h-3" />
-          </button>
-        </Row>
-      </Section>
-    </div>
-  )
+  // Fallback — should not be reached with hub navigation
+  return null
 }

@@ -127,15 +127,14 @@ export function clearFolderCache(): void {
 
 export const DriveClient = {
 
-  /** Find (or create) the `Property Manager` subfolder under the user's chosen root. */
-  async resolvePropertyManagerFolder(token: string, rootFolderId: string): Promise<string> {
-    return findOrCreateFolder(token, PM_FOLDER_NAME, rootFolderId)
+  /** @deprecated No-op — property manager no longer uses a subfolder. Returns root. */
+  async resolvePropertyManagerFolder(_token: string, rootFolderId: string): Promise<string> {
+    return rootFolderId
   },
 
-  /** Find (or create) `Property Manager/Knowledgebase` under the user's chosen root. */
-  async resolveKnowledgebaseFolder(token: string, rootFolderId: string): Promise<string> {
-    const pmFolder = await findOrCreateFolder(token, PM_FOLDER_NAME, rootFolderId)
-    return findOrCreateFolder(token, KB_FOLDER_NAME, pmFolder)
+  /** Knowledgebase lives directly in the property root (no extra subfolder). */
+  async resolveKnowledgebaseFolder(_token: string, rootFolderId: string): Promise<string> {
+    return rootFolderId
   },
 
   /** Generic find-or-create a named folder under any parent. */
@@ -144,13 +143,12 @@ export const DriveClient = {
   },
 
   /**
-   * Find (or create) the category subfolder inside `Property Manager/` under the root.
-   * All JSON sync data lives at `[root]/Property Manager/[Category]/`.
+   * Find (or create) the category subfolder directly under the property root.
+   * All data lives at `[root]/[Category]/`.
    */
   async resolveFolderId(token: string, categoryId: string, rootFolderId: string): Promise<string> {
-    const pmFolder = await findOrCreateFolder(token, PM_FOLDER_NAME, rootFolderId)
     const folderName = CATEGORY_FOLDER_NAMES[categoryId] ?? categoryId
-    return findOrCreateFolder(token, folderName, pmFolder)
+    return findOrCreateFolder(token, folderName, rootFolderId)
   },
 
   /** Search across all app-created files using a Drive query string. */

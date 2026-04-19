@@ -127,6 +127,7 @@ export function exportFilename(record: IndexRecord): string {
 
 export interface MarkdownExportResult {
   exported:       number
+  skipped:        number
   failed:         number
   errors:         string[]
   kbFolderId?:    string
@@ -164,40 +165,78 @@ export async function exportAllMarkdownToDrive(
   onProgress?: (completed: number, total: number) => void,
 ): Promise<MarkdownExportResult> {
   const property = propertyStore.getById(propertyId)
-  if (!property?.driveRootFolderId) return { exported: 0, failed: 0, errors: [] }
+  if (!property?.driveRootFolderId) return { exported: 0, skipped: 0, failed: 0, errors: [] }
 
   const rootFolderId = property.driveRootFolderId
   const records = localIndex.getAllForProperty(propertyId)
   const total   = records.length
 
   let exported = 0
+  let skipped  = 0
   const errors: string[] = []
 
-  // Resolve (or create) Knowledgebase folder
-  const kbFolderId = await drive().resolveKnowledgebaseFolder(token, rootFolderId)
-  localStorage.setItem(kbFolderKey(propertyId), kbFolderId)
+  // KB lives directly in the property root folder (no extra subfolder)
+  localStorage.setItem(kbFolderKey(propertyId), rootFolderId)
 
-  // Cache resolved category folder IDs under Knowledgebase/
-  const folderCache = new Map<string, string>()
-  const categoryCount = new Map<string, number>()
+  // Cache resolved category folder IDs and their existing filenames
+  const folderCache    = new Map<string, string>()
+  const existingFiles  = new Map<string, Set<string>>()  // folderId → Set of filenames
+  const categoryCount  = new Map<string, number>()
+
+  async function getCategoryFolder(categoryId: string, catName: string): Promise<string> {
+    const cached = folderCache.get(categoryId)
+    if (cached) return cached
+    const folderId = await drive().ensureFolder(token, catName, rootFolderId)
+    folderCache.set(categoryId, folderId)
+    return folderId
+  }
+
+  async function getExisting(folderId: string): Promise<Set<string>> {
+    if (existingFiles.has(folderId)) return existingFiles.get(folderId)!
+    const files = await drive().listFiles(token, folderId)
+    const names = new Set(files.map(f => f.name))
+    existingFiles.set(folderId, names)
+    return names
+  }
 
   for (let i = 0; i < records.length; i++) {
     const record = records[i]
     onProgress?.(i, total)
 
     try {
-      const md         = exportMarkdown(record)
       const filename   = exportFilename(record)
       const categoryId = (record.data.categoryId as string) || record.categoryId || record.type
       const catName    = CATEGORY_FOLDER_NAMES[categoryId] ?? categoryId
 
+      // Check existing files before creating the folder — need folder ID for listing
+      // Lazily create the folder only on first file that needs to go there
       let folderId = folderCache.get(categoryId)
-      if (!folderId) {
-        folderId = await drive().ensureFolder(token, catName, kbFolderId)
-        folderCache.set(categoryId, folderId)
+
+      if (folderId) {
+        // Folder already resolved — check if file exists
+        const existing = await getExisting(folderId)
+        if (existing.has(filename)) {
+          skipped++
+          categoryCount.set(catName, (categoryCount.get(catName) ?? 0) + 1)
+          continue
+        }
+      } else {
+        // Folder not yet resolved — check root listing to see if folder exists
+        // but don't create it yet; we'll create when we need to upload
+        // For now, resolve the folder and check
+        folderId = await getCategoryFolder(categoryId, catName)
+        const existing = await getExisting(folderId)
+        if (existing.has(filename)) {
+          skipped++
+          categoryCount.set(catName, (categoryCount.get(catName) ?? 0) + 1)
+          continue
+        }
       }
 
+      const md = exportMarkdown(record)
       await drive().uploadFile(token, folderId, filename, md, 'text/markdown')
+      // Update the cached existing set so we don't re-upload in the same run
+      existingFiles.get(folderId)?.add(filename)
       exported++
       categoryCount.set(catName, (categoryCount.get(catName) ?? 0) + 1)
     } catch (err) {
@@ -205,7 +244,7 @@ export async function exportAllMarkdownToDrive(
     }
   }
 
-  // Generate and upload index.md
+  // Generate and upload index.md directly to root
   try {
     const now = new Date().toLocaleString('en-US', {
       month: 'long', day: 'numeric', year: 'numeric',
@@ -221,7 +260,7 @@ export async function exportAllMarkdownToDrive(
       '',
       `*Last updated: ${now}*`,
       '',
-      `**${exported}** record${exported !== 1 ? 's' : ''} across ${categoryCount.size} categor${categoryCount.size !== 1 ? 'ies' : 'y'}`,
+      `**${exported + skipped}** record${(exported + skipped) !== 1 ? 's' : ''} across ${categoryCount.size} categor${categoryCount.size !== 1 ? 'ies' : 'y'}`,
       '',
       '## Records by Category',
       '',
@@ -233,11 +272,18 @@ export async function exportAllMarkdownToDrive(
       '*Auto-generated by Property Manager. Regenerated every 6 hours when the app is open.*',
     ].join('\n')
 
-    await drive().uploadFile(token, kbFolderId, 'index.md', index, 'text/markdown')
+    // Update index.md if it already exists, create if not
+    const rootFiles = await drive().listFiles(token, rootFolderId)
+    const existingIndex = rootFiles.find(f => f.name === 'index.md')
+    if (existingIndex) {
+      await drive().updateFile(token, existingIndex.id, index, 'text/markdown')
+    } else {
+      await drive().uploadFile(token, rootFolderId, 'index.md', index, 'text/markdown')
+    }
   } catch {
     // Non-fatal — records still exported even if index fails
   }
 
   onProgress?.(total, total)
-  return { exported, failed: errors.length, errors, kbFolderId }
+  return { exported, skipped, failed: errors.length, errors, kbFolderId: rootFolderId }
 }

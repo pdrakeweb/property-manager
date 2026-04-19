@@ -9,7 +9,7 @@
  */
 
 import type { DriveFile, DriveFileWithContent } from './driveClient'
-import { CATEGORY_FOLDER_NAMES, ETagConflictError, PM_FOLDER_NAME, KB_FOLDER_NAME } from './driveClient'
+import { CATEGORY_FOLDER_NAMES, ETagConflictError } from './driveClient'
 
 const STORE_KEY = 'pm_dev_drive_v1'
 
@@ -64,29 +64,18 @@ function findOrCreateFolder(name: string, parentId: string): string {
 export const localDriveAdapter = {
 
   async resolvePropertyManagerFolder(_token: string, rootFolderId: string): Promise<string> {
-    const root = load()
-    if (!root[rootFolderId]) {
-      root[rootFolderId] = { id: rootFolderId, name: 'root', parentId: '', isFolder: true }
-      save(root)
-    }
-    return findOrCreateFolder(PM_FOLDER_NAME, rootFolderId)
+    return rootFolderId
   },
 
   async resolveKnowledgebaseFolder(_token: string, rootFolderId: string): Promise<string> {
-    const root = load()
-    if (!root[rootFolderId]) {
-      root[rootFolderId] = { id: rootFolderId, name: 'root', parentId: '', isFolder: true }
-      save(root)
-    }
-    const pmId = findOrCreateFolder(PM_FOLDER_NAME, rootFolderId)
-    return findOrCreateFolder(KB_FOLDER_NAME, pmId)
+    return rootFolderId
   },
 
   async ensureFolder(_token: string, name: string, parentId: string): Promise<string> {
     return findOrCreateFolder(name, parentId)
   },
 
-  /** Mirrors DriveClient.resolveFolderId — routes through Property Manager/ */
+  /** Mirrors DriveClient.resolveFolderId — category folders directly under root. */
   async resolveFolderId(
     _token:       string,
     categoryId:   string,
@@ -98,8 +87,7 @@ export const localDriveAdapter = {
       root[rootFolderId] = { id: rootFolderId, name: 'root', parentId: '', isFolder: true }
       save(root)
     }
-    const pmId = findOrCreateFolder(PM_FOLDER_NAME, rootFolderId)
-    return findOrCreateFolder(folderName, pmId)
+    return findOrCreateFolder(folderName, rootFolderId)
   },
 
   /** Mirrors DriveClient.searchFiles — supports name='...' queries */

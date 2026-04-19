@@ -1,13 +1,21 @@
 import { useState, useEffect } from 'react'
-import { RefreshCw, CheckCircle2, Clock, AlertTriangle, FileText, ChevronDown, ChevronUp, Trash2 } from 'lucide-react'
+import { RefreshCw, CheckCircle2, Clock, AlertTriangle, ChevronDown, ChevronUp, Trash2, ExternalLink } from 'lucide-react'
 import { localIndex } from '../lib/localIndex'
 import type { SyncStats, IndexRecord } from '../lib/localIndex'
 import { syncAll, syncAuditLog } from '../lib/syncEngine'
-import { exportAllMarkdownToDrive } from '../lib/markdownExport'
+import { exportAllMarkdownToDrive, getKnowledgebaseFolderId } from '../lib/markdownExport'
 import { getValidToken } from '../auth/oauth'
-import { PROPERTIES } from '../data/mockData'
+import { propertyStore } from '../lib/propertyStore'
+import { getQueueCount, retryAll } from '../lib/offlineQueue'
 import { auditLog } from '../lib/auditLog'
 import type { LogEntry } from '../lib/auditLog'
+
+type KbStatus = {
+  syncing: boolean
+  result: string
+  progress: { done: number; total: number } | null
+  folderId: string | null
+}
 
 export function SyncScreen() {
   const [stats,   setStats]   = useState<SyncStats>(() => localIndex.getSyncStats())
@@ -21,15 +29,29 @@ export function SyncScreen() {
   const [logEntries,  setLogEntries]  = useState<LogEntry[]>(() => auditLog.getRecent(50))
   const [logExpanded, setLogExpanded] = useState(false)
 
-  // Markdown export state
-  const [exporting,      setExporting]      = useState(false)
-  const [exportProgress, setExportProgress] = useState<{ done: number; total: number } | null>(null)
-  const [exportResult,   setExportResult]   = useState<string>()
-  const [exportErrors,   setExportErrors]   = useState<string[]>([])
+  // Offline queue
+  const [queueCount,  setQueueCount]  = useState(() => getQueueCount())
+  const [retrying,    setRetrying]    = useState(false)
+  const [retryResult, setRetryResult] = useState('')
+
+  // Per-property KB state
+  const properties = propertyStore.getAll()
+  const [kbByProp, setKbByProp] = useState<Record<string, KbStatus>>({})
+
+  function kb(propId: string): KbStatus {
+    return kbByProp[propId] ?? { syncing: false, result: '', progress: null, folderId: getKnowledgebaseFolderId(propId) }
+  }
+  function setKb(propId: string, update: Partial<KbStatus>) {
+    setKbByProp(s => {
+      const cur = s[propId] ?? { syncing: false, result: '', progress: null, folderId: getKnowledgebaseFolderId(propId) }
+      return { ...s, [propId]: { ...cur, ...update } }
+    })
+  }
 
   function refresh() {
     setStats(localIndex.getSyncStats())
     setPending(localIndex.getPending())
+    setQueueCount(getQueueCount())
   }
 
   async function syncNow() {
@@ -44,7 +66,7 @@ export function SyncScreen() {
       }
       let uploaded = 0, failed = 0, pulled = 0, pullFailed = 0
       const allErrors: string[] = []
-      for (const p of PROPERTIES) {
+      for (const p of properties) {
         const r = await syncAll(token, p.id)
         uploaded   += r.uploaded
         failed     += r.uploadFailed
@@ -70,50 +92,50 @@ export function SyncScreen() {
     }
   }
 
-  async function exportMarkdown() {
-    setExporting(true)
-    setExportResult(undefined)
-    setExportErrors([])
-    setExportProgress(null)
+  async function syncKnowledgebase(propId: string) {
+    if (kb(propId).syncing) return
+    setKb(propId, { syncing: true, result: '', progress: null })
     try {
       const token = await getValidToken()
-      if (!token) {
-        setExportResult('Not signed in — export requires a Google account.')
-        return
-      }
-      let exported = 0, failed = 0
-      const allErrors: string[] = []
-      for (const p of PROPERTIES) {
-        const r = await exportAllMarkdownToDrive(token, p.id, (done, total) => {
-          setExportProgress({ done, total })
-        })
-        exported   += r.exported
-        failed     += r.failed
-        allErrors.push(...r.errors)
-      }
-      setExportErrors(allErrors)
-      setExportResult(
-        `${exported} markdown file${exported !== 1 ? 's' : ''} written to Drive` +
-        (failed > 0 ? ` · ${failed} failed` : ''),
-      )
+      if (!token) { setKb(propId, { syncing: false, result: 'Not signed in' }); return }
+      const result = await exportAllMarkdownToDrive(token, propId, (done, total) => {
+        setKb(propId, { progress: { done, total } })
+      })
+      setKb(propId, {
+        syncing: false,
+        result: `${result.exported} created${result.skipped ? `, ${result.skipped} already up to date` : ''}${result.failed ? `, ${result.failed} failed` : ''}`,
+        progress: null,
+        folderId: result.kbFolderId ?? getKnowledgebaseFolderId(propId),
+      })
     } catch (err) {
-      setExportResult(`Export failed: ${err instanceof Error ? err.message : String(err)}`)
+      setKb(propId, { syncing: false, result: `Error: ${err instanceof Error ? err.message : String(err)}`, progress: null })
+    }
+  }
+
+  async function handleRetryAll() {
+    setRetrying(true)
+    setRetryResult('')
+    try {
+      const result = await retryAll(getValidToken)
+      setQueueCount(getQueueCount())
+      setRetryResult(`${result.succeeded} uploaded, ${result.failed} still pending`)
+    } catch {
+      setRetryResult('Retry failed — check connection')
     } finally {
-      setExporting(false)
-      setExportProgress(null)
+      setRetrying(false)
     }
   }
 
   useEffect(() => { refresh() }, [])
 
   const shown = pending.slice(0, 25)
-  const totalRecords = stats.total
+  const anyKbSyncing = Object.values(kbByProp).some(s => s.syncing)
 
   return (
     <div className="space-y-5 max-w-xl">
 
       <div>
-        <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">Sync Status</h1>
+        <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">Sync</h1>
         <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
           {lastSyncAt
             ? `Last synced ${new Date(lastSyncAt).toLocaleString()}`
@@ -146,7 +168,7 @@ export function SyncScreen() {
           </div>
           <button
             onClick={syncNow}
-            disabled={syncing || exporting}
+            disabled={syncing || anyKbSyncing}
             className="flex items-center gap-1.5 text-sm font-semibold px-4 py-2 rounded-xl bg-green-600 text-white hover:bg-green-700 disabled:opacity-60 transition-colors shrink-0"
           >
             <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
@@ -167,58 +189,108 @@ export function SyncScreen() {
         )}
       </div>
 
-      {/* Knowledgebase sync card */}
-      <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 shadow-sm space-y-3">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <p className="text-sm font-medium text-slate-800 dark:text-slate-200">Sync Knowledgebase</p>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              {(() => {
-                const last = localStorage.getItem('pm_last_md_export_at')
-                return last
-                  ? `Last synced ${new Date(last).toLocaleString()} · auto-runs every 6 h`
-                  : `Write all ${totalRecords} records to Drive as human-readable .md files · auto-runs every 6 h`
-              })()}
-            </p>
-          </div>
-          <button
-            onClick={exportMarkdown}
-            disabled={exporting || syncing}
-            className="flex items-center gap-1.5 text-sm font-semibold px-4 py-2 rounded-xl bg-slate-700 dark:bg-slate-600 text-white hover:bg-slate-800 dark:hover:bg-slate-500 disabled:opacity-60 transition-colors shrink-0"
-          >
-            <FileText className={`w-4 h-4 ${exporting ? 'animate-pulse' : ''}`} />
-            {exporting ? 'Syncing…' : 'Sync'}
-          </button>
-        </div>
-
-        {exporting && exportProgress && (
-          <div className="space-y-1.5">
-            <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400">
-              <span>Writing files…</span>
-              <span>{exportProgress.done} / {exportProgress.total}</span>
+      {/* Per-property Knowledgebase sync */}
+      {properties.filter(p => p.driveRootFolderId).map(p => {
+        const kbStatus = kb(p.id)
+        return (
+          <div key={p.id} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 shadow-sm space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-medium text-slate-800 dark:text-slate-200">{p.shortName} Knowledgebase</p>
+                  {kbStatus.folderId && (
+                    <a
+                      href={`https://drive.google.com/drive/folders/${kbStatus.folderId}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-slate-400 hover:text-green-600 dark:hover:text-green-400"
+                      title="Open in Drive"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                  )}
+                  {p.driveRootFolderId && (
+                    <a
+                      href={`https://drive.google.com/drive/folders/${p.driveRootFolderId}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-400"
+                      title="Open Drive root folder"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                  )}
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Write all records to Drive as human-readable .md files
+                </p>
+              </div>
+              <button
+                onClick={() => syncKnowledgebase(p.id)}
+                disabled={kbStatus.syncing || syncing}
+                className="flex items-center gap-1.5 text-sm font-semibold px-4 py-2 rounded-xl bg-slate-700 dark:bg-slate-600 text-white hover:bg-slate-800 dark:hover:bg-slate-500 disabled:opacity-60 transition-colors shrink-0"
+              >
+                <RefreshCw className={`w-4 h-4 ${kbStatus.syncing ? 'animate-spin' : ''}`} />
+                {kbStatus.syncing ? 'Syncing…' : 'Sync'}
+              </button>
             </div>
-            <div className="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-1.5">
-              <div
-                className="bg-green-500 h-1.5 rounded-full transition-all"
-                style={{ width: exportProgress.total > 0 ? `${(exportProgress.done / exportProgress.total) * 100}%` : '0%' }}
-              />
-            </div>
-          </div>
-        )}
 
-        {exportResult && !exporting && (
-          <div className="border-t border-slate-100 dark:border-slate-700 pt-3 space-y-2">
-            <p className="text-xs text-slate-600 dark:text-slate-400">{exportResult}</p>
-            {exportErrors.length > 0 && (
-              <ul className="space-y-1">
-                {exportErrors.map((e, i) => (
-                  <li key={i} className="text-xs text-red-500 dark:text-red-400 font-mono break-words">{e}</li>
-                ))}
-              </ul>
+            {kbStatus.syncing && kbStatus.progress && (
+              <div className="space-y-1.5">
+                <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400">
+                  <span>Writing files…</span>
+                  <span>{kbStatus.progress.done} / {kbStatus.progress.total}</span>
+                </div>
+                <div className="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-1.5">
+                  <div
+                    className="bg-green-500 h-1.5 rounded-full transition-all"
+                    style={{ width: kbStatus.progress.total > 0 ? `${(kbStatus.progress.done / kbStatus.progress.total) * 100}%` : '0%' }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {kbStatus.result && !kbStatus.syncing && (
+              <div className="border-t border-slate-100 dark:border-slate-700 pt-2">
+                <p className="text-xs text-slate-600 dark:text-slate-400">{kbStatus.result}</p>
+              </div>
             )}
           </div>
-        )}
-      </div>
+        )
+      })}
+
+      {properties.every(p => !p.driveRootFolderId) && (
+        <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-2xl p-4">
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            No Drive folders configured. Set a Drive root folder for each property in Settings → Properties to enable knowledgebase sync.
+          </p>
+        </div>
+      )}
+
+      {/* Offline queue */}
+      {queueCount > 0 && (
+        <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 shadow-sm">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-medium text-slate-800 dark:text-slate-200">Offline Queue</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                {queueCount} upload{queueCount !== 1 ? 's' : ''} waiting to be retried
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              {retryResult && <span className="text-xs text-slate-500 dark:text-slate-400">{retryResult}</span>}
+              <button
+                onClick={handleRetryAll}
+                disabled={retrying}
+                className="flex items-center gap-1.5 text-sm font-semibold px-4 py-2 rounded-xl bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-60 transition-colors shrink-0"
+              >
+                <RefreshCw className={`w-4 h-4 ${retrying ? 'animate-spin' : ''}`} />
+                {retrying ? 'Retrying…' : 'Retry all'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Pending list */}
       {shown.length > 0 && (
