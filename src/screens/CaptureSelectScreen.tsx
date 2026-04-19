@@ -1,13 +1,13 @@
 import { useNavigate } from 'react-router-dom'
 import { CheckCircle2, ChevronRight, Sparkles } from 'lucide-react'
-import { CATEGORIES, PROPERTIES } from '../data/mockData'
+import { CATEGORIES } from '../data/mockData'
 import { useAppStore } from '../store/AppStoreContext'
 
 export function CaptureSelectScreen() {
   const navigate = useNavigate()
-  const { activePropertyId } = useAppStore()
+  const { activePropertyId, properties } = useAppStore()
 
-  const activeProperty = PROPERTIES.find(p => p.id === activePropertyId) ?? PROPERTIES[0]
+  const activeProperty = properties.find(p => p.id === activePropertyId) ?? properties[0]
   const propertyCategories = CATEGORIES.filter(c => c.propertyTypes.includes(activeProperty.type))
 
   const withRecords    = propertyCategories.filter(c => c.recordCount && c.recordCount > 0)

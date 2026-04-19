@@ -9,7 +9,7 @@ import type { IndexRecord } from './localIndex'
 import { localIndex } from './localIndex'
 import { DriveClient } from './driveClient'
 import { localDriveAdapter } from './localDriveAdapter'
-import { PROPERTIES } from '../data/mockData'
+import { getPropertyById } from './propertyStore'
 import {
   formatMaintenanceTask,
   formatCompletedEvent,
@@ -143,7 +143,7 @@ export async function exportAllMarkdownToDrive(
   propertyId:  string,
   onProgress?: (completed: number, total: number) => void,
 ): Promise<MarkdownExportResult> {
-  const property = PROPERTIES.find(p => p.id === propertyId)
+  const property = getPropertyById(propertyId)
   if (!property?.driveRootFolderId) return { exported: 0, failed: 0, errors: [] }
 
   const rootFolderId = property.driveRootFolderId

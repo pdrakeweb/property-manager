@@ -5,7 +5,6 @@ import {
 } from 'lucide-react'
 import { cn } from '../utils/cn'
 import { useAppStore } from '../store/AppStoreContext'
-import { PROPERTIES } from '../data/mockData'
 import {
   insuranceStore, getPoliciesForProperty,
   getExpiringPolicies, getExpiredPolicies,
@@ -455,14 +454,14 @@ function PolicyCard({
 // ── Main Screen ───────────────────────────────────────────────────────────────
 
 export function InsuranceScreen() {
-  const { activePropertyId } = useAppStore()
+  const { activePropertyId, properties } = useAppStore()
   const [tick,      setTick]      = useState(0)
   const [showForm,  setShowForm]  = useState(false)
   const [editPolicy, setEditPolicy] = useState<InsurancePolicy | undefined>()
 
   function refresh() { setTick(t => t + 1) }
 
-  const activeProperty = PROPERTIES.find(p => p.id === activePropertyId) ?? PROPERTIES[0]
+  const activeProperty = properties.find(p => p.id === activePropertyId) ?? properties[0]
   const policies       = getPoliciesForProperty(activePropertyId)
   const expiring       = getExpiringPolicies(activePropertyId, 30)
   const expired        = getExpiredPolicies(activePropertyId)

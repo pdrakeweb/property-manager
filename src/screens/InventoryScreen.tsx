@@ -5,7 +5,7 @@ import {
   Camera, AlertTriangle, Wifi,
 } from 'lucide-react'
 import { cn } from '../utils/cn'
-import { CATEGORIES, PROPERTIES } from '../data/mockData'
+import { CATEGORIES } from '../data/mockData'
 import { useAppStore } from '../store/AppStoreContext'
 import { localIndex } from '../lib/localIndex'
 
@@ -13,11 +13,11 @@ type FilterMode = 'all' | 'documented' | 'missing'
 
 export function InventoryScreen() {
   const navigate    = useNavigate()
-  const { activePropertyId } = useAppStore()
+  const { activePropertyId, properties } = useAppStore()
   const [filter, setFilter]   = useState<FilterMode>('all')
   const [search, setSearch]   = useState('')
 
-  const activeProperty = PROPERTIES.find(p => p.id === activePropertyId) ?? PROPERTIES[0]
+  const activeProperty = properties.find(p => p.id === activePropertyId) ?? properties[0]
   const propertyCategories = CATEGORIES.filter(c => c.propertyTypes.includes(activeProperty.type))
 
   // Count documented categories from localIndex (not Drive file counts from mockData)

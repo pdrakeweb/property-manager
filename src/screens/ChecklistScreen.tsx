@@ -14,7 +14,7 @@ import {
   startRun,
 } from '../lib/checklistStore'
 import { useAppStore } from '../store/AppStoreContext'
-import { PROPERTIES } from '../data/mockData'
+import { getPropertyById } from '../lib/propertyStore'
 import type { Season } from '../types/checklist'
 
 // ── Season helpers ───────────────────────────────────────────────────────────
@@ -266,7 +266,7 @@ function RecentRunsSection() {
     <div className="card-surface rounded-2xl shadow-sm card-divider">
       {recent.map(run => {
         const meta = SEASON_META[run.season]
-        const property = PROPERTIES.find(p => p.id === run.propertyId)
+        const property = getPropertyById(run.propertyId)
         const doneCount = run.items.filter(i => i.done).length
         const totalCount = run.items.length
         const { Icon } = meta
@@ -302,11 +302,12 @@ function RecentRunsSection() {
 const SEASON_ORDER: Season[] = ['spring', 'summer', 'fall', 'winter']
 
 export function ChecklistScreen() {
-  const { activePropertyId } = useAppStore()
+  const { activePropertyId, properties } = useAppStore()
   const [, forceUpdate] = useState(0)
   const refresh = useCallback(() => forceUpdate(n => n + 1), [])
 
-  const property = PROPERTIES.find(p => p.id === activePropertyId) ?? PROPERTIES[0]
+  const property = properties.find(p => p.id === activePropertyId) ?? properties[0]
+  if (!property) return null
   const currentSeason = getCurrentSeason()
 
   return (

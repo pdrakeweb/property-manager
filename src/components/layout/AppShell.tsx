@@ -8,7 +8,6 @@ import {
   Sun, Moon, Monitor, DollarSign, HardHat, BookOpen,
 } from 'lucide-react'
 import { cn } from '../../utils/cn'
-import { PROPERTIES } from '../../data/mockData'
 import { useAppStore } from '../../store/AppStoreContext'
 import { localIndex } from '../../lib/localIndex'
 import type { SyncStats } from '../../lib/localIndex'
@@ -134,9 +133,11 @@ function ThemeToggle() {
 }
 
 function PropertySwitcher() {
+  const navigate = useNavigate()
   const [open, setOpen] = useState(false)
-  const { activePropertyId, setActivePropertyId } = useAppStore()
-  const active = PROPERTIES.find(p => p.id === activePropertyId) ?? PROPERTIES[0]
+  const { activePropertyId, setActivePropertyId, properties } = useAppStore()
+  const active = properties.find(p => p.id === activePropertyId) ?? properties[0]
+  if (!active) return null
   const Icon = PROPERTY_ICONS[active.type]
 
   return (
@@ -155,7 +156,7 @@ function PropertySwitcher() {
 
       {open && (
         <div className="absolute left-0 right-0 top-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-xl z-50 overflow-hidden">
-          {PROPERTIES.map(p => {
+          {properties.map(p => {
             const PIcon = PROPERTY_ICONS[p.type]
             return (
               <button
@@ -175,7 +176,10 @@ function PropertySwitcher() {
             )
           })}
           <div className="border-t border-slate-600 px-3 py-2">
-            <button className="text-xs text-green-400 hover:text-green-300 transition-colors">
+            <button
+              onClick={() => { navigate('/settings'); setOpen(false) }}
+              className="text-xs text-green-400 hover:text-green-300 transition-colors"
+            >
               + Add property
             </button>
           </div>
@@ -187,8 +191,9 @@ function PropertySwitcher() {
 
 function MobilePropertySwitcher() {
   const [open, setOpen] = useState(false)
-  const { activePropertyId, setActivePropertyId } = useAppStore()
-  const active = PROPERTIES.find(p => p.id === activePropertyId) ?? PROPERTIES[0]
+  const { activePropertyId, setActivePropertyId, properties } = useAppStore()
+  const active = properties.find(p => p.id === activePropertyId) ?? properties[0]
+  if (!active) return null
   const Icon = PROPERTY_ICONS[active.type]
 
   return (
@@ -206,7 +211,7 @@ function MobilePropertySwitcher() {
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
           <div className="absolute right-0 top-full mt-1 w-56 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-50 overflow-hidden">
-            {PROPERTIES.map(p => {
+            {properties.map(p => {
               const PIcon = PROPERTY_ICONS[p.type]
               return (
                 <button

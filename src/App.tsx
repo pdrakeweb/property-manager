@@ -35,12 +35,13 @@ import { SyncScreen }                  from './screens/SyncScreen'
 
 import { syncAll, seedTasksForProperty } from './lib/syncEngine'
 import { exportAllMarkdownToDrive } from './lib/markdownExport'
-import { PROPERTIES } from './data/mockData'
+import { getAllProperties, seedPropertiesIfEmpty } from './lib/propertyStore'
 import {
   isAuthenticated,
   startOAuthFlow,
   handleOAuthCallback,
   getClientId,
+  getValidToken,
 } from './auth/oauth'
 import { getOpenRouterKey, setSetting, SETTINGS } from './store/settings'
 
@@ -263,8 +264,14 @@ function OAuthCallbackHandler({ onDone }: { onDone: (ok: boolean) => void }) {
 
 function useStartupSync() {
   useEffect(() => {
+    // 0. Seed properties on first run so the store has the defaults ready
+    //    (AppStoreProvider also does this; harmless to repeat).
+    seedPropertiesIfEmpty()
+
+    const properties = getAllProperties()
+
     // 1. Seed tasks for all properties immediately (no network needed)
-    for (const p of PROPERTIES) seedTasksForProperty(p.id)
+    for (const p of properties) seedTasksForProperty(p.id)
 
     // 2. Async Drive sync — pull remote files into index, push any pending
     let running = false
@@ -272,11 +279,10 @@ function useStartupSync() {
       if (running) return
       running = true
       try {
-        const { getValidToken } = await import('./auth/oauth')
         const token = await getValidToken()
         if (!token) return
         // Sync all properties in sequence (rate-limit friendly)
-        for (const p of PROPERTIES) {
+        for (const p of properties) {
           await syncAll(token, p.id)
         }
         localStorage.setItem('pm_last_sync_at', new Date().toISOString())
@@ -313,10 +319,9 @@ function useScheduledMarkdownExport() {
 
       running = true
       try {
-        const { getValidToken } = await import('./auth/oauth')
         const token = await getValidToken()
         if (!token) return
-        for (const p of PROPERTIES) {
+        for (const p of getAllProperties()) {
           await exportAllMarkdownToDrive(token, p.id)
         }
         localStorage.setItem(MD_EXPORT_KEY, new Date().toISOString())

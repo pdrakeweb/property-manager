@@ -2,7 +2,8 @@
 // Routes between googleCalendarAdapter (prod) and localCalendarAdapter (dev bypass).
 
 import { isDev } from '../auth/oauth'
-import type { IndexRecord } from './localIndex'
+import { localIndex, type IndexRecord } from './localIndex'
+import { reconcileCalendar } from './calendarReconciliation'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -154,9 +155,6 @@ export async function syncAllToCalendar(
   propertyName: string,
   dryRun        = false,
 ): Promise<CalendarSyncResult | DryRunResult> {
-  const { reconcileCalendar } = await import('./calendarReconciliation')
-  const { localIndex } = await import('./localIndex')
-
   const meta       = await getOrCreatePropertyCalendar(token, propertyId, propertyName)
   const tasks      = localIndex.getAll('task', propertyId)
   return reconcileCalendar(token, meta.calendarId, tasks, propertyName, dryRun)
@@ -170,8 +168,6 @@ export async function addTaskToCalendar(
   task:         IndexRecord,
   propertyName: string,
 ): Promise<void> {
-  const { reconcileCalendar } = await import('./calendarReconciliation')
-
   const data      = task.data as Record<string, unknown>
   const propertyId = task.propertyId
   const status    = (data['status'] as string | undefined) ?? ''

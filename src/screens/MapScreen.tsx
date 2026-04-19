@@ -8,7 +8,6 @@ import { cn } from '../utils/cn'
 import { BaseMap } from '../components/map/BaseMap'
 import { PropertyMarker } from '../components/map/PropertyMarker'
 import { useAppStore } from '../store/AppStoreContext'
-import { PROPERTIES } from '../data/mockData'
 import {
   fetchClimateAverages, fetchCurrentWeather,
   weatherCodeToDescription, weatherCodeToIcon,
@@ -36,15 +35,15 @@ function FitBounds({ properties }: { properties: GeolocatedProperty[] }) {
 }
 
 export function MapScreen() {
-  const { activePropertyId, setActivePropertyId } = useAppStore()
-  const activeProperty = PROPERTIES.find(p => p.id === activePropertyId) ?? PROPERTIES[0]
+  const { activePropertyId, setActivePropertyId, properties } = useAppStore()
+  const activeProperty = properties.find(p => p.id === activePropertyId) ?? properties[0]
   const [climate, setClimate] = useState<ClimateData | null>(null)
   const [weather, setWeather] = useState<CurrentWeather | null>(null)
   const [loading, setLoading] = useState(false)
 
   const geoProperties = useMemo(
-    () => PROPERTIES.filter((p): p is GeolocatedProperty => p.latitude != null && p.longitude != null),
-    [],
+    () => properties.filter((p): p is GeolocatedProperty => p.latitude != null && p.longitude != null),
+    [properties],
   )
 
   const hasCoords = activeProperty.latitude != null && activeProperty.longitude != null
