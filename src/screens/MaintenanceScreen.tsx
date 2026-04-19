@@ -267,7 +267,7 @@ function DoneModal({ task, propertyId, onConfirm, onClose }: DoneModalProps) {
 
 interface DelayModalProps {
   task: MaintenanceTask
-  onSaved: () => void
+  onSaved: (newDueDate: string) => void
   onClose: () => void
 }
 
@@ -276,13 +276,15 @@ function DelayModal({ task, onSaved, onClose }: DelayModalProps) {
   const [customDate, setCustomDate] = useState('')
 
   function applyDelay(newDate: string) {
-    setTaskDelay(task, newDate)
-    onSaved()
-    onClose()
+    onSaved(newDate)
   }
 
   function addDays(n: number): string {
-    return new Date(Date.now() + n * 86_400_000).toISOString().slice(0, 10)
+    const today = new Date().toISOString().slice(0, 10)
+    const base  = task.dueDate > today ? task.dueDate : today
+    const d = new Date(base + 'T12:00:00')
+    d.setDate(d.getDate() + n)
+    return d.toISOString().slice(0, 10)
   }
 
   return (
@@ -328,7 +330,7 @@ function DelayModal({ task, onSaved, onClose }: DelayModalProps) {
 
 interface ScheduleModalProps {
   task: MaintenanceTask
-  onSaved: () => void
+  onSaved: (newDueDate: string, recurrence: string) => void
   onClose: () => void
 }
 
@@ -337,11 +339,7 @@ function ScheduleModal({ task, onSaved, onClose }: ScheduleModalProps) {
   const [recurrence, setRecurrence] = useState(task.recurrence ?? '')
 
   function save() {
-    const withDate = { ...task, dueDate }
-    setTaskDelay(withDate, dueDate)
-    setTaskRecurrence(withDate, recurrence)
-    onSaved()
-    onClose()
+    onSaved(dueDate, recurrence)
   }
 
   return (
@@ -574,7 +572,8 @@ interface TaskCardProps {
   onMutate: () => void
 }
 
-function TaskCard({ task, propertyId, onMutate }: TaskCardProps) {
+function TaskCard({ task: initialTask, propertyId, onMutate }: TaskCardProps) {
+  const [task,           setTask]           = useState(initialTask)
   const [expanded,       setExpanded]       = useState(false)
   const [done,           setDone]           = useState(false)
   const [showDoneModal,  setShowDoneModal]  = useState(false)
@@ -583,6 +582,21 @@ function TaskCard({ task, propertyId, onMutate }: TaskCardProps) {
   const pconf   = priorityConfig(task.priority)
   const src     = sourceLabel(task.source)
   const SrcIcon = src.icon
+
+  function handleDelayed(newDueDate: string) {
+    setTaskDelay(task, newDueDate)
+    setTask(t => ({ ...t, dueDate: newDueDate }))
+    setShowDelayModal(false)
+    onMutate()
+  }
+
+  function handleScheduled(newDueDate: string, recurrence: string) {
+    setTaskDelay(task, newDueDate)
+    setTaskRecurrence({ ...task, dueDate: newDueDate }, recurrence)
+    setTask(t => ({ ...t, dueDate: newDueDate, recurrence: recurrence || undefined }))
+    setShowSchedModal(false)
+    onMutate()
+  }
 
   if (done) {
     return (
@@ -673,14 +687,14 @@ function TaskCard({ task, propertyId, onMutate }: TaskCardProps) {
       {showDelayModal && (
         <DelayModal
           task={task}
-          onSaved={onMutate}
+          onSaved={handleDelayed}
           onClose={() => setShowDelayModal(false)}
         />
       )}
       {showSchedModal && (
         <ScheduleModal
           task={task}
-          onSaved={onMutate}
+          onSaved={handleScheduled}
           onClose={() => setShowSchedModal(false)}
         />
       )}
