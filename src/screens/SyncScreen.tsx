@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react'
-import { RefreshCw, CheckCircle2, Clock, AlertTriangle } from 'lucide-react'
+import { RefreshCw, CheckCircle2, Clock, AlertTriangle, FileText } from 'lucide-react'
 import { localIndex } from '../lib/localIndex'
 import type { SyncStats, IndexRecord } from '../lib/localIndex'
 import { syncAll } from '../lib/syncEngine'
+import { exportAllMarkdownToDrive } from '../lib/markdownExport'
 import { getValidToken } from '../auth/oauth'
-import { getAllProperties } from '../lib/propertyStore'
+import { PROPERTIES } from '../data/mockData'
 
 export function SyncScreen() {
   const [stats,   setStats]   = useState<SyncStats>(() => localIndex.getSyncStats())
@@ -15,6 +16,12 @@ export function SyncScreen() {
   const [lastSyncAt, setLastSyncAt] = useState(
     () => localStorage.getItem('pm_last_sync_at') ?? '',
   )
+
+  // Markdown export state
+  const [exporting,      setExporting]      = useState(false)
+  const [exportProgress, setExportProgress] = useState<{ done: number; total: number } | null>(null)
+  const [exportResult,   setExportResult]   = useState<string>()
+  const [exportErrors,   setExportErrors]   = useState<string[]>([])
 
   function refresh() {
     setStats(localIndex.getSyncStats())
@@ -33,7 +40,7 @@ export function SyncScreen() {
       }
       let uploaded = 0, failed = 0, pulled = 0, pullFailed = 0
       const allErrors: string[] = []
-      for (const p of getAllProperties()) {
+      for (const p of PROPERTIES) {
         const r = await syncAll(token, p.id)
         uploaded   += r.uploaded
         failed     += r.uploadFailed
@@ -57,9 +64,44 @@ export function SyncScreen() {
     }
   }
 
+  async function exportMarkdown() {
+    setExporting(true)
+    setExportResult(undefined)
+    setExportErrors([])
+    setExportProgress(null)
+    try {
+      const token = await getValidToken()
+      if (!token) {
+        setExportResult('Not signed in — export requires a Google account.')
+        return
+      }
+      let exported = 0, failed = 0
+      const allErrors: string[] = []
+      for (const p of PROPERTIES) {
+        const r = await exportAllMarkdownToDrive(token, p.id, (done, total) => {
+          setExportProgress({ done, total })
+        })
+        exported   += r.exported
+        failed     += r.failed
+        allErrors.push(...r.errors)
+      }
+      setExportErrors(allErrors)
+      setExportResult(
+        `${exported} markdown file${exported !== 1 ? 's' : ''} written to Drive` +
+        (failed > 0 ? ` · ${failed} failed` : ''),
+      )
+    } catch (err) {
+      setExportResult(`Export failed: ${err instanceof Error ? err.message : String(err)}`)
+    } finally {
+      setExporting(false)
+      setExportProgress(null)
+    }
+  }
+
   useEffect(() => { refresh() }, [])
 
   const shown = pending.slice(0, 25)
+  const totalRecords = stats.total
 
   return (
     <div className="space-y-5 max-w-xl">
@@ -87,7 +129,7 @@ export function SyncScreen() {
         ))}
       </div>
 
-      {/* Sync action card */}
+      {/* Drive Sync card */}
       <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 shadow-sm space-y-3">
         <div className="flex items-center justify-between gap-3">
           <div>
@@ -98,7 +140,7 @@ export function SyncScreen() {
           </div>
           <button
             onClick={syncNow}
-            disabled={syncing}
+            disabled={syncing || exporting}
             className="flex items-center gap-1.5 text-sm font-semibold px-4 py-2 rounded-xl bg-green-600 text-white hover:bg-green-700 disabled:opacity-60 transition-colors shrink-0"
           >
             <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
@@ -111,9 +153,55 @@ export function SyncScreen() {
             {syncErrors.length > 0 && (
               <ul className="space-y-1">
                 {syncErrors.map((e, i) => (
-                  <li key={i} className="text-xs text-red-500 dark:text-red-400 font-mono break-words">
-                    {e}
-                  </li>
+                  <li key={i} className="text-xs text-red-500 dark:text-red-400 font-mono break-words">{e}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Markdown Export card */}
+      <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 shadow-sm space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-medium text-slate-800 dark:text-slate-200">Export as Markdown</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              Write all {totalRecords} records to Drive as human-readable .md files
+            </p>
+          </div>
+          <button
+            onClick={exportMarkdown}
+            disabled={exporting || syncing}
+            className="flex items-center gap-1.5 text-sm font-semibold px-4 py-2 rounded-xl bg-slate-700 dark:bg-slate-600 text-white hover:bg-slate-800 dark:hover:bg-slate-500 disabled:opacity-60 transition-colors shrink-0"
+          >
+            <FileText className={`w-4 h-4 ${exporting ? 'animate-pulse' : ''}`} />
+            {exporting ? 'Exporting…' : 'Export'}
+          </button>
+        </div>
+
+        {exporting && exportProgress && (
+          <div className="space-y-1.5">
+            <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400">
+              <span>Writing files…</span>
+              <span>{exportProgress.done} / {exportProgress.total}</span>
+            </div>
+            <div className="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-1.5">
+              <div
+                className="bg-green-500 h-1.5 rounded-full transition-all"
+                style={{ width: exportProgress.total > 0 ? `${(exportProgress.done / exportProgress.total) * 100}%` : '0%' }}
+              />
+            </div>
+          </div>
+        )}
+
+        {exportResult && !exporting && (
+          <div className="border-t border-slate-100 dark:border-slate-700 pt-3 space-y-2">
+            <p className="text-xs text-slate-600 dark:text-slate-400">{exportResult}</p>
+            {exportErrors.length > 0 && (
+              <ul className="space-y-1">
+                {exportErrors.map((e, i) => (
+                  <li key={i} className="text-xs text-red-500 dark:text-red-400 font-mono break-words">{e}</li>
                 ))}
               </ul>
             )}

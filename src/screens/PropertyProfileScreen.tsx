@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { FileText, CheckCircle2, Sparkles } from 'lucide-react'
 import { cn } from '../utils/cn'
 import { useAppStore } from '../store/AppStoreContext'
+import { PROPERTIES } from '../data/mockData'
 import {
   NARRATIVE_QUESTIONS,
   getNarrativeEntry,
@@ -74,8 +75,8 @@ function QuestionCard({
 }
 
 export function PropertyProfileScreen() {
-  const { activePropertyId, properties } = useAppStore()
-  const property = properties.find(p => p.id === activePropertyId) ?? properties[0]
+  const { activePropertyId } = useAppStore()
+  const property = PROPERTIES.find(p => p.id === activePropertyId) ?? PROPERTIES[0]
   const [showPreview, setShowPreview] = useState(false)
   const [previewTick, setPreviewTick] = useState(0)
 

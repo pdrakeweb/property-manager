@@ -22,7 +22,7 @@ import type { DryRunResult } from '../lib/calendarClient'
 import { DryRunModal } from '../components/DryRunModal'
 import { TaskCalendarChip } from '../components/TaskCalendarChip'
 import { getValidToken, isDev } from '../auth/oauth'
-import { getPropertyById } from '../lib/propertyStore'
+import { PROPERTIES } from '../data/mockData'
 import type { MaintenanceTask, Priority } from '../types'
 import type { EventPhoto } from '../schemas'
 
@@ -699,7 +699,7 @@ export function MaintenanceScreen() {
   function onMutate() { setTick(t => t + 1) }
 
   async function handleCalendarSync() {
-    const propertyName = getPropertyById(activePropertyId)?.name ?? activePropertyId
+    const propertyName = PROPERTIES.find(p => p.id === activePropertyId)?.name ?? activePropertyId
     if (isDev()) {
       setCalSyncing(true)
       try {

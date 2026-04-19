@@ -2,8 +2,7 @@ import { DriveClient, ETagConflictError, CATEGORY_FOLDER_NAMES } from './driveCl
 import { localDriveAdapter } from './localDriveAdapter'
 import { localIndex } from './localIndex'
 import type { IndexRecord, IndexRecordType } from './localIndex'
-import { MAINTENANCE_TASKS } from '../data/mockData'
-import { getPropertyById } from './propertyStore'
+import { MAINTENANCE_TASKS, PROPERTIES } from '../data/mockData'
 import type { MaintenanceTask } from '../types'
 
 /** Returns the real DriveClient in production, or the localStorage adapter in dev bypass mode */
@@ -60,17 +59,23 @@ export async function pushPending(token: string): Promise<{ uploaded: number; fa
   const errors: string[] = []
 
   for (const record of pending) {
-    const { filename, rootFolderId, categoryId } = record.data as {
-      filename:     string
-      rootFolderId: string
-      categoryId:   string
+    const d = record.data as Record<string, unknown>
+
+    // Heal missing Drive metadata from the IndexRecord itself
+    const filename     = (d.filename     as string) || `${record.type}_${record.id}.json`
+    const categoryId   = (d.categoryId   as string) || record.categoryId || record.type
+    const property     = PROPERTIES.find(p => p.id === record.propertyId)
+    const rootFolderId = (d.rootFolderId as string) || property?.driveRootFolderId || ''
+
+    if (!rootFolderId) continue  // Property has no Drive root — silently skip, not an error
+
+    // If we healed any fields, persist them so future runs don't need to re-derive
+    if (!d.filename || !d.categoryId || !d.rootFolderId) {
+      localIndex.upsert({ ...record, data: { ...d, filename, categoryId, rootFolderId } })
     }
 
-    // Records missing Drive metadata can't be uploaded — skip silently (not a failure)
-    if (!filename || !rootFolderId || !categoryId) continue
-
     // Serialize the full IndexRecord as JSON — lossless, no markdown parsing needed on pull
-    const content = JSON.stringify(record)
+    const content = JSON.stringify({ ...record, data: { ...d, filename, categoryId, rootFolderId } })
 
     try {
       const folderId = await drive().resolveFolderId(token, categoryId, rootFolderId)
@@ -198,7 +203,7 @@ export async function pullFromDrive(
   token: string,
   propertyId: string,
 ): Promise<{ pulled: number; failed: number }> {
-  const property = getPropertyById(propertyId)
+  const property = PROPERTIES.find(p => p.id === propertyId)
   if (!property?.driveRootFolderId) return { pulled: 0, failed: 0 }
 
   const rootFolderId = property.driveRootFolderId
@@ -271,7 +276,7 @@ export function seedTasksForProperty(propertyId: string): void {
     return 'upcoming'
   }
 
-  const property = getPropertyById(propertyId)
+  const property = PROPERTIES.find(p => p.id === propertyId)
   const rootFolderId = property?.driveRootFolderId ?? ''
 
   function buildTaskData(task: MaintenanceTask, status: MaintenanceTask['status']): Record<string, unknown> {

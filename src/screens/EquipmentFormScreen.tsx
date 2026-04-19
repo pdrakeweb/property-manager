@@ -5,8 +5,7 @@ import {
   Loader2, X, ChevronLeft, Cloud, Image as ImageIcon, WifiOff, Settings,
 } from 'lucide-react'
 import { cn } from '../utils/cn'
-import { CATEGORIES } from '../data/mockData'
-import { getAllProperties } from '../lib/propertyStore'
+import { CATEGORIES, PROPERTIES } from '../data/mockData'
 import { getValidToken } from '../auth/oauth'
 import { DriveClient } from '../lib/driveClient'
 import { formatFileStem, formatRecord } from '../lib/markdownFormatter'
@@ -217,8 +216,7 @@ export function EquipmentFormScreen() {
 
   // Read active property from localStorage (set by AppShell property switcher)
   const activePropertyId = localStorage.getItem('active_property_id') ?? 'tannerville'
-  const properties = getAllProperties()
-  const activeProperty   = properties.find(p => p.id === activePropertyId) ?? properties[0]
+  const activeProperty   = PROPERTIES.find(p => p.id === activePropertyId) ?? PROPERTIES[0]
 
   // ── AI extraction via hook ─────────────────────────────────────────────────
 

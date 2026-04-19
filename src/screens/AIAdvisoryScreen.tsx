@@ -6,7 +6,7 @@ import {
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { cn } from '../utils/cn'
-import { SUGGESTED_PROMPTS } from '../data/mockData'
+import { SUGGESTED_PROMPTS, PROPERTIES } from '../data/mockData'
 import { useAppStore } from '../store/AppStoreContext'
 import { getOpenRouterKey, getModelForTask, getDevModelOverride } from '../store/settings'
 import { chatWithTools, OpenRouterError } from '../services/openRouterClient'
@@ -189,8 +189,8 @@ function MessageBubble({ msg }: { msg: AIMessage }) {
 
 export function AIAdvisoryScreen() {
   const navigate = useNavigate()
-  const { activePropertyId, properties } = useAppStore()
-  const activeProperty = properties.find(p => p.id === activePropertyId) ?? properties[0]
+  const { activePropertyId } = useAppStore()
+  const activeProperty = PROPERTIES.find(p => p.id === activePropertyId) ?? PROPERTIES[0]
 
   const devOverride = getDevModelOverride()
   const [model,    setModel]    = useState(() => devOverride || getModelForTask('advisory', 'anthropic/claude-opus-4-6'))
@@ -225,14 +225,10 @@ export function AIAdvisoryScreen() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, streamingContent, toolStatus])
 
-  const [propertyContext, setPropertyContext] = useState<string>('')
-  useEffect(() => {
-    let cancelled = false
-    buildPropertyContext(activePropertyId).then(ctx => {
-      if (!cancelled) setPropertyContext(ctx)
-    })
-    return () => { cancelled = true }
-  }, [activePropertyId])
+  const propertyContext = useMemo(
+    () => buildPropertyContext(activePropertyId),
+    [activePropertyId],
+  )
 
   const recordsAPI = useMemo(
     () => new PropertyRecordsAPI(activePropertyId, null),

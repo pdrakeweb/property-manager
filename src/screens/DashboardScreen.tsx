@@ -7,9 +7,8 @@ import {
 } from 'lucide-react'
 import { cn } from '../utils/cn'
 import {
-  HA_STATUS, CATEGORIES,
+  CAPITAL_ITEMS, HA_STATUS, CATEGORIES, PROPERTIES,
 } from '../data/mockData'
-import { getAllCapitalItems, getCapitalItemsForProperty } from '../lib/capitalItemStore'
 import { getYTDSpend, costStore } from '../lib/costStore'
 import { getUpcomingExpiries } from '../lib/expiryStore'
 import { ExpiryWidget } from '../components/ExpiryWidget'
@@ -101,8 +100,7 @@ function Card({ children, className }: { children: ReactNode; className?: string
 // ── Quick-Add Maintenance Modal ───────────────────────────────────────────────
 
 function QuickAddModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
-  const { properties } = useAppStore()
-  const [propertyId, setPropertyId] = useState(properties[0]?.id ?? '')
+  const [propertyId, setPropertyId] = useState(PROPERTIES[0].id)
   const [title,      setTitle]      = useState('')
   const [system,     setSystem]     = useState('')
   const [dueDate,    setDueDate]    = useState(new Date().toISOString().slice(0, 10))
@@ -139,7 +137,7 @@ function QuickAddModal({ onClose, onSaved }: { onClose: () => void; onSaved: () 
         <div>
           <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5">Property</label>
           <select value={propertyId} onChange={e => setPropertyId(e.target.value)} className={cn(inp, 'bg-white dark:bg-slate-800')}>
-            {properties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            {PROPERTIES.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
         </div>
 
@@ -200,7 +198,7 @@ const PROP_ICONS = { residence: Building2, camp: TreePine, land: Building2 }
 
 export function DashboardScreen() {
   const navigate = useNavigate()
-  const { activePropertyId, setActivePropertyId, properties } = useAppStore()
+  const { activePropertyId, setActivePropertyId } = useAppStore()
 
   const [showQuickAdd,  setShowQuickAdd]  = useState(false)
   const [detailOpen,    setDetailOpen]    = useState(true)
@@ -221,7 +219,7 @@ export function DashboardScreen() {
   const in30Days    = new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10)
 
   // All tasks across all properties from local index (seeds on first call per property)
-  const allTasks = properties.flatMap(p => getActiveTasks(p.id))
+  const allTasks = PROPERTIES.flatMap(p => getActiveTasks(p.id))
 
   // ── Cross-property aggregates ──────────────────────────────────────────────
 
@@ -229,7 +227,7 @@ export function DashboardScreen() {
   const allDue30   = allTasks.filter(t => t.status !== 'completed' && t.dueDate >= today && t.dueDate <= in30Days)
 
   // Property health data
-  const propHealth = properties.map(p => {
+  const propHealth = PROPERTIES.map(p => {
     const overdueCount = allOverdue.filter(t => t.propertyId === p.id).length
     // Count documented categories from local index (accurate offline)
     const cats         = CATEGORIES.filter(c => c.propertyTypes.includes(p.type))
@@ -245,7 +243,7 @@ export function DashboardScreen() {
   })
 
   // Group overdue by property
-  const overdueByProp = properties.map(p => ({
+  const overdueByProp = PROPERTIES.map(p => ({
     property: p,
     tasks:    allOverdue.filter(t => t.propertyId === p.id)
       .sort((a, b) => {
@@ -256,10 +254,9 @@ export function DashboardScreen() {
 
   // ── Per-property detail data ───────────────────────────────────────────────
 
-  const activeProperty = properties.find(p => p.id === activePropertyId) ?? properties[0]
-  if (!activeProperty) return null
+  const activeProperty = PROPERTIES.find(p => p.id === activePropertyId) ?? PROPERTIES[0]
   const tasks     = allTasks.filter(t => t.propertyId === activePropertyId)
-  const items     = getCapitalItemsForProperty(activePropertyId)
+  const items     = CAPITAL_ITEMS.filter(i => i.propertyId === activePropertyId)
   const cats      = CATEGORIES.filter(c => c.propertyTypes.includes(activeProperty.type))
   const dueTasks     = tasks.filter(t => t.status === 'due' || t.status === 'overdue')
   const topCapital   = items.filter(c => c.priority === 'critical' || c.priority === 'high')
@@ -328,7 +325,7 @@ export function DashboardScreen() {
         <div>
           <h2 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">Property Health</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {properties.map(p => (
+            {PROPERTIES.map(p => (
               <PropertyHealthCard key={p.id} property={p} onSelect={handlePropertySelect} />
             ))}
           </div>
@@ -433,7 +430,7 @@ export function DashboardScreen() {
           <Card>
             <div className="divide-y divide-slate-100 dark:divide-slate-700">
               {allDue30.slice(0, 6).map(task => {
-                const prop = properties.find(p => p.id === task.propertyId)
+                const prop = PROPERTIES.find(p => p.id === task.propertyId)
                 return (
                   <div
                     key={task.id}
@@ -464,15 +461,15 @@ export function DashboardScreen() {
       )}
 
       {/* ── Capital Projects — All Properties (All mode only) ─────────── */}
-      {dashboardMode === 'all' && getAllCapitalItems().filter(i => i.priority === 'critical' || i.priority === 'high').length > 0 && (
+      {dashboardMode === 'all' && CAPITAL_ITEMS.filter(i => i.priority === 'critical' || i.priority === 'high').length > 0 && (
         <div>
           <h2 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">
             Capital Projects — All Properties
           </h2>
           <Card>
             <div className="divide-y divide-slate-100 dark:divide-slate-700">
-              {getAllCapitalItems().filter(i => i.priority === 'critical' || i.priority === 'high').slice(0, 5).map(item => {
-                const prop = properties.find(p => p.id === item.propertyId)
+              {CAPITAL_ITEMS.filter(i => i.priority === 'critical' || i.priority === 'high').slice(0, 5).map(item => {
+                const prop = PROPERTIES.find(p => p.id === item.propertyId)
                 return (
                   <div key={item.id} className="flex items-center gap-3 px-4 py-3">
                     <div className={cn('shrink-0 text-xs font-semibold px-2 py-0.5 rounded-md border', priorityColor(item.priority))}>

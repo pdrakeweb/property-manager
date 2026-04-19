@@ -2,14 +2,14 @@
  * Human-readable markdown export for IndexRecord objects.
  *
  * Drive sync uses JSON (full IndexRecord) as the wire format — see syncEngine.ts.
- * This module is for on-demand export only (e.g., "Export to readable files" feature).
- *
- * Usage:
- *   import { exportMarkdown } from './markdownExport'
- *   const md = exportMarkdown(record)   // call when user requests a readable export
+ * This module handles on-demand export of readable .md files to Drive.
  */
 
 import type { IndexRecord } from './localIndex'
+import { localIndex } from './localIndex'
+import { DriveClient } from './driveClient'
+import { localDriveAdapter } from './localDriveAdapter'
+import { PROPERTIES } from '../data/mockData'
 import {
   formatMaintenanceTask,
   formatCompletedEvent,
@@ -40,6 +40,12 @@ import type { Permit } from '../types/permits'
 import type { RoadEvent } from '../types/road'
 import type { GeneratorRecord } from '../types/generator'
 import type { CapitalTransaction } from '../types'
+
+function drive(): typeof DriveClient {
+  return localStorage.getItem('google_access_token') === 'dev_token'
+    ? (localDriveAdapter as typeof DriveClient)
+    : DriveClient
+}
 
 /**
  * Render a localIndex record as human-readable markdown.
@@ -101,15 +107,77 @@ export function exportMarkdown(record: IndexRecord): string {
       return formatGenerator(d as unknown as GeneratorRecord)
 
     default:
-      // Generic fallback — JSON with a title header
       return `# ${record.title}\n\n\`\`\`json\n${JSON.stringify(record.data, null, 2)}\n\`\`\`\n\n---\n*Exported by Property Manager · ${new Date().toISOString()}*\n`
   }
 }
 
-/**
- * Derive a suggested markdown filename for a record.
- * Uses the existing domainMarkdown filename functions where available.
- */
+/** Derive a safe .md filename for a record. */
 export function exportFilename(record: IndexRecord): string {
-  return `${record.type}_${record.id.slice(0, 8)}.md`
+  // Equipment records already have a well-formed .md filename from capture
+  const existing = record.data.filename as string | undefined
+  if (existing?.endsWith('.md')) return existing
+
+  const safe = record.title
+    .replace(/[^a-zA-Z0-9\s-]/g, '')
+    .trim()
+    .replace(/\s+/g, '_')
+    .slice(0, 50)
+  return `${record.type}_${safe}_${record.id.slice(0, 8)}.md`
+}
+
+export interface MarkdownExportResult {
+  exported: number
+  failed:   number
+  errors:   string[]
+}
+
+/**
+ * Export all records for a property as human-readable markdown files to Drive.
+ * Equipment records reuse their existing .md filename; all others derive one.
+ * Skips records with no Drive root folder configured.
+ *
+ * @param onProgress  called after each record: (completed, total)
+ */
+export async function exportAllMarkdownToDrive(
+  token:       string,
+  propertyId:  string,
+  onProgress?: (completed: number, total: number) => void,
+): Promise<MarkdownExportResult> {
+  const property = PROPERTIES.find(p => p.id === propertyId)
+  if (!property?.driveRootFolderId) return { exported: 0, failed: 0, errors: [] }
+
+  const rootFolderId = property.driveRootFolderId
+  const records = localIndex.getAllForProperty(propertyId)
+  const total   = records.length
+
+  let exported = 0
+  const errors: string[] = []
+
+  // Cache resolved folder IDs to avoid redundant Drive API calls
+  const folderCache = new Map<string, string>()
+
+  for (let i = 0; i < records.length; i++) {
+    const record = records[i]
+    onProgress?.(i, total)
+
+    try {
+      const md         = exportMarkdown(record)
+      const filename   = exportFilename(record)
+      const categoryId = (record.data.categoryId as string) || record.categoryId || record.type
+
+      let folderId = folderCache.get(categoryId)
+      if (!folderId) {
+        folderId = await drive().resolveFolderId(token, categoryId, rootFolderId)
+        folderCache.set(categoryId, folderId)
+      }
+
+      await drive().uploadFile(token, folderId, filename, md, 'text/markdown')
+      exported++
+    } catch (err) {
+      errors.push(`${record.title}: ${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
+
+  onProgress?.(total, total)
+  return { exported, failed: errors.length, errors }
 }

@@ -1,6 +1,6 @@
 import { localIndex } from './localIndex'
 import { seedTasksForProperty } from './syncEngine'
-import { getPropertyById } from './propertyStore'
+import { PROPERTIES } from '../data/mockData'
 import type { MaintenanceTask } from '../types'
 
 // ── Status recalculation ──────────────────────────────────────────────────────
@@ -58,7 +58,7 @@ export function markTaskDone(taskId: string): void {
 // ── Add task (writes to local index with Drive sync metadata) ─────────────────
 
 function addToIndex(task: MaintenanceTask, syncState: 'pending_upload' | 'local_only' = 'pending_upload'): void {
-  const property = getPropertyById(task.propertyId)
+  const property = PROPERTIES.find(p => p.id === task.propertyId)
   const rootFolderId = property?.driveRootFolderId ?? ''
 
   localIndex.upsert({
