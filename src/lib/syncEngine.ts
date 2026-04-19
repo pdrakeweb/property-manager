@@ -16,6 +16,7 @@ function drive(): typeof DriveClient {
 export interface SyncResult {
   uploaded: number
   uploadFailed: number
+  uploadErrors: string[]
   pulled: number
   pullFailed: number
 }
@@ -52,9 +53,10 @@ function overlappingMutations(
  *  - Existing file (has driveEtag): upload with If-Match
  *  - 412 / ETagConflictError → auto-merge if no field overlap, else surface conflict
  */
-export async function pushPending(token: string): Promise<{ uploaded: number; failed: number }> {
+export async function pushPending(token: string): Promise<{ uploaded: number; failed: number; errors: string[] }> {
   const pending = localIndex.getPending()
   let uploaded = 0
+  const errors: string[] = []
 
   for (const record of pending) {
     const { filename, rootFolderId, categoryId } = record.data as {
@@ -63,6 +65,7 @@ export async function pushPending(token: string): Promise<{ uploaded: number; fa
       categoryId:   string
     }
 
+    // Records missing Drive metadata can't be uploaded — skip silently (not a failure)
     if (!filename || !rootFolderId || !categoryId) continue
 
     // Serialize the full IndexRecord as JSON — lossless, no markdown parsing needed on pull
@@ -80,7 +83,9 @@ export async function pushPending(token: string): Promise<{ uploaded: number; fa
 
     } catch (err) {
       if (!(err instanceof ETagConflictError)) {
-        // Non-conflict error — leave pending for next retry
+        // Non-conflict error — leave pending for next retry, surface the message
+        const msg = err instanceof Error ? err.message : String(err)
+        errors.push(`${record.title}: ${msg}`)
         continue
       }
 
@@ -89,8 +94,7 @@ export async function pushPending(token: string): Promise<{ uploaded: number; fa
     }
   }
 
-  const failed = localIndex.getPending().length
-  return { uploaded, failed }
+  return { uploaded, failed: errors.length, errors }
 }
 
 async function resolveConflict(
@@ -327,9 +331,9 @@ export async function syncAll(token: string, propertyId: string): Promise<SyncRe
   const { pulled, failed: pullFailed } = await pullFromDrive(token, propertyId)
 
   // Push pending local records → Drive
-  const { uploaded, failed: uploadFailed } = await pushPending(token)
+  const { uploaded, failed: uploadFailed, errors: uploadErrors } = await pushPending(token)
 
-  return { uploaded, uploadFailed, pulled, pullFailed }
+  return { uploaded, uploadFailed, uploadErrors, pulled, pullFailed }
 }
 
 // Re-export IndexRecordType for callers that imported it from here

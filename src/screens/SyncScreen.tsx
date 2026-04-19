@@ -11,6 +11,7 @@ export function SyncScreen() {
   const [pending, setPending] = useState<IndexRecord[]>(() => localIndex.getPending())
   const [syncing, setSyncing] = useState(false)
   const [lastResult, setLastResult] = useState<string>()
+  const [syncErrors, setSyncErrors] = useState<string[]>([])
   const [lastSyncAt, setLastSyncAt] = useState(
     () => localStorage.getItem('pm_last_sync_at') ?? '',
   )
@@ -23,26 +24,31 @@ export function SyncScreen() {
   async function syncNow() {
     setSyncing(true)
     setLastResult(undefined)
+    setSyncErrors([])
     try {
       const token = await getValidToken()
       if (!token) {
         setLastResult('Not signed in — sync requires a Google account.')
         return
       }
-      let uploaded = 0, failed = 0, pulled = 0
+      let uploaded = 0, failed = 0, pulled = 0, pullFailed = 0
+      const allErrors: string[] = []
       for (const p of PROPERTIES) {
         const r = await syncAll(token, p.id)
-        uploaded += r.uploaded
-        failed   += r.uploadFailed
-        pulled   += r.pulled
+        uploaded   += r.uploaded
+        failed     += r.uploadFailed
+        pulled     += r.pulled
+        pullFailed += r.pullFailed
+        allErrors.push(...r.uploadErrors)
       }
       const now = new Date().toISOString()
       localStorage.setItem('pm_last_sync_at', now)
       setLastSyncAt(now)
-      setLastResult(
-        `↑ ${uploaded} uploaded · ↓ ${pulled} pulled` +
-        (failed > 0 ? ` · ${failed} failed` : ''),
-      )
+      setSyncErrors(allErrors)
+      const parts = [`↑ ${uploaded} uploaded`, `↓ ${pulled} pulled`]
+      if (failed > 0)     parts.push(`${failed} upload error${failed > 1 ? 's' : ''}`)
+      if (pullFailed > 0) parts.push(`${pullFailed} pull error${pullFailed > 1 ? 's' : ''}`)
+      setLastResult(parts.join(' · '))
     } catch (err) {
       setLastResult(`Sync failed: ${err instanceof Error ? err.message : String(err)}`)
     } finally {
@@ -100,9 +106,18 @@ export function SyncScreen() {
           </button>
         </div>
         {lastResult && (
-          <p className="text-xs text-slate-600 dark:text-slate-400 border-t border-slate-100 dark:border-slate-700 pt-3">
-            {lastResult}
-          </p>
+          <div className="border-t border-slate-100 dark:border-slate-700 pt-3 space-y-2">
+            <p className="text-xs text-slate-600 dark:text-slate-400">{lastResult}</p>
+            {syncErrors.length > 0 && (
+              <ul className="space-y-1">
+                {syncErrors.map((e, i) => (
+                  <li key={i} className="text-xs text-red-500 dark:text-red-400 font-mono break-words">
+                    {e}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         )}
       </div>
 
