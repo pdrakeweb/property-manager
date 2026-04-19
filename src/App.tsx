@@ -34,6 +34,7 @@ import { EquipmentDetailScreen }       from './screens/EquipmentDetailScreen'
 import { SyncScreen }                  from './screens/SyncScreen'
 
 import { syncAll, seedTasksForProperty, syncPropertyConfig, syncAuditLog } from './lib/syncEngine'
+import { ActivityScreen } from './screens/ActivityScreen'
 import { exportAllMarkdownToDrive } from './lib/markdownExport'
 import { propertyStore, seedPropertiesFromMock } from './lib/propertyStore'
 import {
@@ -383,6 +384,7 @@ function MainApp() {
           <Route path="/conflicts"           element={<ConflictResolutionScreen />} />
           <Route path="/equipment/:id"       element={<EquipmentDetailScreen />}   />
           <Route path="/sync"                element={<SyncScreen />}              />
+          <Route path="/activity"            element={<ActivityScreen />}          />
           <Route path="*"                    element={<Navigate to="/" />}     />
         </Routes>
       </AppShell>

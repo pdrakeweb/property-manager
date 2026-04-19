@@ -167,16 +167,16 @@ export function SyncScreen() {
         )}
       </div>
 
-      {/* Markdown Export card */}
+      {/* Knowledgebase sync card */}
       <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 shadow-sm space-y-3">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <p className="text-sm font-medium text-slate-800 dark:text-slate-200">Export as Markdown</p>
+            <p className="text-sm font-medium text-slate-800 dark:text-slate-200">Sync Knowledgebase</p>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
               {(() => {
                 const last = localStorage.getItem('pm_last_md_export_at')
                 return last
-                  ? `Last exported ${new Date(last).toLocaleString()} · auto-runs every 6 h`
+                  ? `Last synced ${new Date(last).toLocaleString()} · auto-runs every 6 h`
                   : `Write all ${totalRecords} records to Drive as human-readable .md files · auto-runs every 6 h`
               })()}
             </p>
@@ -187,7 +187,7 @@ export function SyncScreen() {
             className="flex items-center gap-1.5 text-sm font-semibold px-4 py-2 rounded-xl bg-slate-700 dark:bg-slate-600 text-white hover:bg-slate-800 dark:hover:bg-slate-500 disabled:opacity-60 transition-colors shrink-0"
           >
             <FileText className={`w-4 h-4 ${exporting ? 'animate-pulse' : ''}`} />
-            {exporting ? 'Exporting…' : 'Export'}
+            {exporting ? 'Syncing…' : 'Sync'}
           </button>
         </div>
 
@@ -261,7 +261,7 @@ export function SyncScreen() {
         </div>
       )}
 
-      {/* Activity Log */}
+      {/* Sync History */}
       <div>
         <div className="flex items-center justify-between mb-2 px-1">
           <button
@@ -269,7 +269,7 @@ export function SyncScreen() {
             className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
           >
             {logExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-            Activity Log ({logEntries.length})
+            Sync History ({logEntries.length})
           </button>
           {logExpanded && (
             <button

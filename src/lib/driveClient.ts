@@ -3,6 +3,9 @@
 const DRIVE_API   = 'https://www.googleapis.com/drive/v3'
 const UPLOAD_API  = 'https://www.googleapis.com/upload/drive/v3'
 
+export const PM_FOLDER_NAME = 'Property Manager'
+export const KB_FOLDER_NAME = 'Knowledgebase'
+
 /** Maps category IDs to human-readable Drive folder names */
 export const CATEGORY_FOLDER_NAMES: Record<string, string> = {
   generator:     'Generator',
@@ -67,49 +70,87 @@ function authHeaders(token: string): HeadersInit {
   return { Authorization: `Bearer ${token}` }
 }
 
-/** Search for a folder by name inside a parent; create it if not found */
+/**
+ * Session-level cache of in-flight and completed findOrCreateFolder calls.
+ * Key: `${parentId}::${name}`. Stores the Promise so concurrent callers
+ * awaiting the same folder share one network round-trip and never race to
+ * create duplicates (Drive's list endpoint has eventual consistency, so a
+ * freshly created folder may not appear in a search issued milliseconds later).
+ */
+const folderCache = new Map<string, Promise<string>>()
+
+/** Search for a folder by name inside a parent; create it if not found. */
 async function findOrCreateFolder(token: string, name: string, parentId: string): Promise<string> {
-  const escaped = name.replace(/'/g, "\\'")
-  const q = `name='${escaped}' and '${parentId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`
+  const key = `${parentId}::${name}`
+  const cached = folderCache.get(key)
+  if (cached) return cached
 
-  const searchUrl = new URL(`${DRIVE_API}/files`)
-  searchUrl.searchParams.set('q',         q)
-  searchUrl.searchParams.set('fields',    'files(id,name)')
-  searchUrl.searchParams.set('pageSize',  '1')
+  const promise = (async () => {
+    const escaped = name.replace(/'/g, "\\'")
+    const q = `name='${escaped}' and '${parentId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`
 
-  const searchResp = await fetch(searchUrl.toString(), { headers: authHeaders(token) })
-  if (!searchResp.ok) throw new Error(`Drive folder search failed: ${searchResp.status}`)
+    const searchUrl = new URL(`${DRIVE_API}/files`)
+    searchUrl.searchParams.set('q',        q)
+    searchUrl.searchParams.set('fields',   'files(id,name)')
+    searchUrl.searchParams.set('pageSize', '1')
 
-  const { files } = await searchResp.json() as { files: DriveFile[] }
-  if (files && files.length > 0) return files[0].id
+    const searchResp = await fetch(searchUrl.toString(), { headers: authHeaders(token) })
+    if (!searchResp.ok) throw new Error(`Drive folder search failed: ${searchResp.status}`)
 
-  // Create the folder
-  const createResp = await fetch(`${DRIVE_API}/files`, {
-    method:  'POST',
-    headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
-    body:    JSON.stringify({
-      name,
-      mimeType: 'application/vnd.google-apps.folder',
-      parents:  [parentId],
-    }),
-  })
-  if (!createResp.ok) throw new Error(`Drive folder creation failed: ${createResp.status}`)
+    const { files } = await searchResp.json() as { files: DriveFile[] }
+    if (files && files.length > 0) return files[0].id
 
-  const folder = await createResp.json() as DriveFile
-  return folder.id
+    const createResp = await fetch(`${DRIVE_API}/files`, {
+      method:  'POST',
+      headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ name, mimeType: 'application/vnd.google-apps.folder', parents: [parentId] }),
+    })
+    if (!createResp.ok) throw new Error(`Drive folder creation failed: ${createResp.status}`)
+
+    const folder = await createResp.json() as DriveFile
+    return folder.id
+  })()
+
+  // Cache immediately so any concurrent caller awaits the same promise
+  folderCache.set(key, promise)
+  // On failure, evict so a retry can try again
+  promise.catch(() => folderCache.delete(key))
+  return promise
+}
+
+/** Clear the in-memory folder cache (e.g. after sign-out or token refresh). */
+export function clearFolderCache(): void {
+  folderCache.clear()
 }
 
 // ── Public API ───────────────────────────────────────────────────────────────
 
 export const DriveClient = {
 
+  /** Find (or create) the `Property Manager` subfolder under the user's chosen root. */
+  async resolvePropertyManagerFolder(token: string, rootFolderId: string): Promise<string> {
+    return findOrCreateFolder(token, PM_FOLDER_NAME, rootFolderId)
+  },
+
+  /** Find (or create) `Property Manager/Knowledgebase` under the user's chosen root. */
+  async resolveKnowledgebaseFolder(token: string, rootFolderId: string): Promise<string> {
+    const pmFolder = await findOrCreateFolder(token, PM_FOLDER_NAME, rootFolderId)
+    return findOrCreateFolder(token, KB_FOLDER_NAME, pmFolder)
+  },
+
+  /** Generic find-or-create a named folder under any parent. */
+  async ensureFolder(token: string, name: string, parentId: string): Promise<string> {
+    return findOrCreateFolder(token, name, parentId)
+  },
+
   /**
-   * Find (or create) the category subfolder inside the property's root Drive folder.
-   * Returns the folder ID to use for uploads.
+   * Find (or create) the category subfolder inside `Property Manager/` under the root.
+   * All JSON sync data lives at `[root]/Property Manager/[Category]/`.
    */
   async resolveFolderId(token: string, categoryId: string, rootFolderId: string): Promise<string> {
+    const pmFolder = await findOrCreateFolder(token, PM_FOLDER_NAME, rootFolderId)
     const folderName = CATEGORY_FOLDER_NAMES[categoryId] ?? categoryId
-    return findOrCreateFolder(token, folderName, rootFolderId)
+    return findOrCreateFolder(token, folderName, pmFolder)
   },
 
   /** Search across all app-created files using a Drive query string. */
@@ -120,6 +161,46 @@ export const DriveClient = {
     url.searchParams.set('pageSize', '10')
     const resp = await fetch(url.toString(), { headers: authHeaders(token) })
     if (!resp.ok) throw new Error(`Drive search failed: ${resp.status}`)
+    const { files } = await resp.json() as { files: DriveFile[] }
+    return files ?? []
+  },
+
+  /** Search for folders whose names contain the given term. */
+  async searchFolders(token: string, term: string): Promise<DriveFile[]> {
+    const escaped = term.replace(/'/g, "\\'")
+    const q = `name contains '${escaped}' and mimeType='application/vnd.google-apps.folder' and trashed=false`
+    const url = new URL(`${DRIVE_API}/files`)
+    url.searchParams.set('q',       q)
+    url.searchParams.set('fields',  'files(id,name)')
+    url.searchParams.set('orderBy', 'name')
+    url.searchParams.set('pageSize','10')
+    const resp = await fetch(url.toString(), { headers: authHeaders(token) })
+    if (!resp.ok) throw new Error(`Drive folder search failed: ${resp.status}`)
+    const { files } = await resp.json() as { files: DriveFile[] }
+    return files ?? []
+  },
+
+  /** Fetch a folder's name given its ID (for display after pasting an ID/URL). */
+  async getFolderName(token: string, folderId: string): Promise<string> {
+    const resp = await fetch(
+      `${DRIVE_API}/files/${folderId}?fields=name`,
+      { headers: authHeaders(token) },
+    )
+    if (!resp.ok) throw new Error(`Drive getFolderName failed: ${resp.status}`)
+    const { name } = await resp.json() as { name: string }
+    return name
+  },
+
+  /** List all folders (not files) directly inside a parent folder. */
+  async listFolders(token: string, parentId: string): Promise<DriveFile[]> {
+    const q = `'${parentId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`
+    const url = new URL(`${DRIVE_API}/files`)
+    url.searchParams.set('q',       q)
+    url.searchParams.set('fields',  'files(id,name)')
+    url.searchParams.set('orderBy', 'name')
+    url.searchParams.set('pageSize','50')
+    const resp = await fetch(url.toString(), { headers: authHeaders(token) })
+    if (!resp.ok) throw new Error(`Drive listFolders failed: ${resp.status}`)
     const { files } = await resp.json() as { files: DriveFile[] }
     return files ?? []
   },

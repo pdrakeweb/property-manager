@@ -20,6 +20,7 @@ import {
 } from '../store/settings'
 import { chatCompletion } from '../services/openRouterClient'
 import { exportAllMarkdownToDrive, getKnowledgebaseFolderId } from '../lib/markdownExport'
+import { DriveRootInput } from '../components/DriveRootInput'
 
 const MODELS_BY_TASK = [
   { key: 'nameplate',    task: 'Nameplate Extraction',        default: 'anthropic/claude-sonnet-4-6'  },
@@ -212,38 +213,43 @@ export function SettingsScreen() {
     await startOAuthFlow()
   }
 
-  // ── Knowledgebase sync ──────────────────────────────────────────────────────
-  const [kbSyncing,    setKbSyncing]    = useState(false)
-  const [kbResult,     setKbResult]     = useState('')
-  const [kbProgress,   setKbProgress]   = useState<{ done: number; total: number } | null>(null)
-  const [kbFolderId,   setKbFolderId]   = useState<string | null>(null)
-
   // ── Properties ──────────────────────────────────────────────────────────────
   const { activePropertyId, properties, refreshProperties } = useAppStore()
-  const activeProperty = properties.find(p => p.id === activePropertyId) ?? properties[0]
+  const _activeProperty = properties.find(p => p.id === activePropertyId) ?? properties[0]
+  void _activeProperty  // retained for potential future use
 
-  useEffect(() => {
-    setKbFolderId(getKnowledgebaseFolderId(activeProperty.id))
-  }, [activeProperty.id])
+  // ── Knowledgebase sync (per-property) ──────────────────────────────────────
+  type KbStatus = { syncing: boolean; result: string; progress: { done: number; total: number } | null; folderId: string | null }
+  const [kbByProp, setKbByProp] = useState<Record<string, KbStatus>>({})
 
-  async function syncKnowledgebase() {
-    if (kbSyncing || !activeProperty.driveRootFolderId) return
-    setKbSyncing(true)
-    setKbResult('')
-    setKbProgress(null)
+  function kb(propId: string): KbStatus {
+    return kbByProp[propId] ?? { syncing: false, result: '', progress: null, folderId: getKnowledgebaseFolderId(propId) }
+  }
+  function setKb(propId: string, update: Partial<KbStatus>) {
+    setKbByProp(s => {
+      const cur = s[propId] ?? { syncing: false, result: '', progress: null, folderId: getKnowledgebaseFolderId(propId) }
+      return { ...s, [propId]: { ...cur, ...update } }
+    })
+  }
+
+  async function syncKnowledgebase(propId: string) {
+    const prop = properties.find(p => p.id === propId)
+    if (!prop?.driveRootFolderId || kb(propId).syncing) return
+    setKb(propId, { syncing: true, result: '', progress: null })
     try {
       const token = await getValidToken()
-      if (!token) { setKbResult('Not signed in'); return }
-      const result = await exportAllMarkdownToDrive(token, activeProperty.id, (done, total) => {
-        setKbProgress({ done, total })
+      if (!token) { setKb(propId, { syncing: false, result: 'Not signed in' }); return }
+      const result = await exportAllMarkdownToDrive(token, propId, (done, total) => {
+        setKb(propId, { progress: { done, total } })
       })
-      if (result.kbFolderId) setKbFolderId(result.kbFolderId)
-      setKbResult(`${result.exported} files synced${result.failed ? `, ${result.failed} failed` : ''}`)
+      setKb(propId, {
+        syncing: false,
+        result: `${result.exported} files synced${result.failed ? `, ${result.failed} failed` : ''}`,
+        progress: null,
+        folderId: result.kbFolderId ?? getKnowledgebaseFolderId(propId),
+      })
     } catch (err) {
-      setKbResult(`Error: ${err instanceof Error ? err.message : String(err)}`)
-    } finally {
-      setKbSyncing(false)
-      setKbProgress(null)
+      setKb(propId, { syncing: false, result: `Error: ${err instanceof Error ? err.message : String(err)}`, progress: null })
     }
   }
 
@@ -342,10 +348,17 @@ export function SettingsScreen() {
             onClick={() => setView('sync')}
           />
           <HubCard
+            icon={<RefreshCw className="w-5 h-5" />}
+            title="Sync History"
+            sub="Drive sync log, conflicts, and knowledgebase"
+            onClick={() => navigate('/sync')}
+            external
+          />
+          <HubCard
             icon={<ScrollText className="w-5 h-5" />}
             title="Activity Log"
-            sub="Sync history, errors, and audit trail"
-            onClick={() => navigate('/sync')}
+            sub="All user interactions — adds, updates, removals"
+            onClick={() => navigate('/activity')}
             external
           />
           <HubCard
@@ -458,67 +471,6 @@ export function SettingsScreen() {
           </Row>
         </Section>
 
-        <Section title="Drive">
-          <Row
-            label="Drive Root"
-            sub={`${activeProperty.name} · ${activeProperty.driveRootFolderId ? `ID: ${activeProperty.driveRootFolderId.slice(0, 12)}…` : 'Not configured'}`}
-          >
-            <div className="flex items-center gap-2 shrink-0">
-              {activeProperty.driveRootFolderId ? (
-                <a
-                  href={`https://drive.google.com/drive/folders/${activeProperty.driveRootFolderId}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-slate-400 dark:text-slate-500 hover:text-green-600 dark:hover:text-green-400"
-                >
-                  <ExternalLink className="w-4 h-4" />
-                </a>
-              ) : (
-                <button
-                  onClick={() => setView('properties')}
-                  className="text-xs text-green-600 dark:text-green-400 font-medium hover:text-green-700 dark:hover:text-green-300 flex items-center gap-1"
-                >
-                  Configure <ChevronRight className="w-3 h-3" />
-                </button>
-              )}
-            </div>
-          </Row>
-          <Row
-            label="Knowledgebase"
-            sub={kbFolderId
-              ? `Property Manager/Knowledgebase · ${activeProperty.name}`
-              : `Not synced yet · ${activeProperty.name}`}
-          >
-            <div className="flex items-center gap-2 shrink-0">
-              {kbFolderId && (
-                <a
-                  href={`https://drive.google.com/drive/folders/${kbFolderId}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-slate-400 dark:text-slate-500 hover:text-green-600 dark:hover:text-green-400"
-                  title="Open Knowledgebase folder in Drive"
-                >
-                  <ExternalLink className="w-4 h-4" />
-                </a>
-              )}
-              <button
-                onClick={syncKnowledgebase}
-                disabled={kbSyncing || !activeProperty.driveRootFolderId}
-                className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400 font-medium hover:text-green-700 dark:hover:text-green-300 disabled:opacity-40"
-              >
-                {kbSyncing
-                  ? <><Loader2 className="w-3 h-3 animate-spin" />{kbProgress ? `${kbProgress.done}/${kbProgress.total}` : 'Syncing…'}</>
-                  : <><RefreshCw className="w-3 h-3" />Sync now</>
-                }
-              </button>
-            </div>
-          </Row>
-          {kbResult && (
-            <div className="px-4 py-2 text-xs text-slate-500 dark:text-slate-400 border-t border-slate-100 dark:border-slate-700">
-              {kbResult}
-            </div>
-          )}
-        </Section>
       </div>
     )
   }
@@ -724,69 +676,119 @@ export function SettingsScreen() {
         </div>
 
         <Section title="Properties">
-          {properties.map(p => (
-            <div key={p.id}>
-              <Row label={p.name} sub={`${p.type} · ${p.address || 'No address'}`}>
-                <div className="flex items-center gap-1 shrink-0">
-                  <button
-                    onClick={() => openEdit(p)}
-                    className="text-xs text-green-600 dark:text-green-400 font-medium hover:text-green-700 dark:hover:text-green-300 flex items-center gap-1"
-                  >
-                    Edit <ChevronRight className="w-3 h-3" />
-                  </button>
-                  {properties.length > 1 && (
-                    <button onClick={() => deleteProp(p.id)} className="text-slate-400 hover:text-red-400 ml-1">
-                      <Trash2 className="w-3.5 h-3.5" />
+          {properties.map(p => {
+            const kbStatus = kb(p.id)
+            return (
+              <div key={p.id}>
+                <Row
+                  label={p.name}
+                  sub={`${p.type} · ${p.address || 'No address'} · Drive: ${p.driveRootFolderId ? '✓' : 'not set'}`}
+                >
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      onClick={() => openEdit(p)}
+                      className="text-xs text-green-600 dark:text-green-400 font-medium hover:text-green-700 dark:hover:text-green-300 flex items-center gap-1"
+                    >
+                      Edit <ChevronRight className="w-3 h-3" />
                     </button>
-                  )}
-                </div>
-              </Row>
+                    {properties.length > 1 && (
+                      <button onClick={() => deleteProp(p.id)} className="text-slate-400 hover:text-red-400 ml-1">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                </Row>
 
-              {(editingProp?.id === p.id) && (
-                <div className="px-4 py-3 bg-slate-50 dark:bg-slate-900/40 border-t border-slate-100 dark:border-slate-700 space-y-2">
-                  {([
-                    { label: 'Full name',     key: 'name'              },
-                    { label: 'Short name',    key: 'shortName'         },
-                    { label: 'Address',       key: 'address'           },
-                    { label: 'Drive folder ID', key: 'driveRootFolderId' },
-                  ] as { label: string; key: keyof PropForm }[]).map(({ label, key }) => (
-                    <div key={key} className="flex items-center gap-2">
-                      <span className="text-xs text-slate-500 dark:text-slate-400 w-28 shrink-0">{label}</span>
-                      <input
-                        className="flex-1 text-xs border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-green-300"
-                        value={propForm[key] as string}
-                        onChange={e => setPropForm(f => ({ ...f, [key]: e.target.value }))}
+                {(editingProp?.id === p.id) && (
+                  <div className="px-4 py-3 bg-slate-50 dark:bg-slate-900/40 border-t border-slate-100 dark:border-slate-700 space-y-2">
+                    {([
+                      { label: 'Full name',  key: 'name'      },
+                      { label: 'Short name', key: 'shortName' },
+                      { label: 'Address',    key: 'address'   },
+                    ] as { label: string; key: keyof PropForm }[]).map(({ label, key }) => (
+                      <div key={key} className="flex items-center gap-2">
+                        <span className="text-xs text-slate-500 dark:text-slate-400 w-28 shrink-0">{label}</span>
+                        <input
+                          className="flex-1 text-xs border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-green-300"
+                          value={propForm[key] as string}
+                          onChange={e => setPropForm(f => ({ ...f, [key]: e.target.value }))}
+                        />
+                      </div>
+                    ))}
+                    <div className="flex items-start gap-2">
+                      <span className="text-xs text-slate-500 dark:text-slate-400 w-28 shrink-0 pt-1.5">Drive folder</span>
+                      <DriveRootInput
+                        value={propForm.driveRootFolderId}
+                        onChange={id => setPropForm(f => ({ ...f, driveRootFolderId: id }))}
                       />
                     </div>
-                  ))}
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-slate-500 dark:text-slate-400 w-28 shrink-0">Type</span>
-                    <select
-                      value={propForm.type}
-                      onChange={e => setPropForm(f => ({ ...f, type: e.target.value as PropertyType }))}
-                      className="text-xs border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 bg-white dark:bg-slate-800 focus:outline-none focus:ring-1 focus:ring-green-300"
-                    >
-                      <option value="residence">Residence</option>
-                      <option value="camp">Camp</option>
-                      <option value="land">Land</option>
-                    </select>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-slate-500 dark:text-slate-400 w-28 shrink-0">Type</span>
+                      <select
+                        value={propForm.type}
+                        onChange={e => setPropForm(f => ({ ...f, type: e.target.value as PropertyType }))}
+                        className="text-xs border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 bg-white dark:bg-slate-800 focus:outline-none focus:ring-1 focus:ring-green-300"
+                      >
+                        <option value="residence">Residence</option>
+                        <option value="camp">Camp</option>
+                        <option value="land">Land</option>
+                      </select>
+                    </div>
+
+                    {/* Knowledgebase sync — only shown when Drive folder is set */}
+                    {(propForm.driveRootFolderId || p.driveRootFolderId) && (
+                      <div className="pt-1 border-t border-slate-200 dark:border-slate-700 space-y-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs text-slate-500 dark:text-slate-400">Knowledgebase</span>
+                          <div className="flex items-center gap-2">
+                            {kbStatus.folderId && (
+                              <a
+                                href={`https://drive.google.com/drive/folders/${kbStatus.folderId}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-slate-400 hover:text-green-600 dark:hover:text-green-400"
+                                title="Open in Drive"
+                              >
+                                <ExternalLink className="w-3.5 h-3.5" />
+                              </a>
+                            )}
+                            <button
+                              onClick={() => syncKnowledgebase(p.id)}
+                              disabled={kbStatus.syncing || !p.driveRootFolderId}
+                              className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400 font-medium hover:text-green-700 disabled:opacity-40"
+                            >
+                              {kbStatus.syncing
+                                ? <><Loader2 className="w-3 h-3 animate-spin" />{kbStatus.progress ? `${kbStatus.progress.done}/${kbStatus.progress.total}` : 'Syncing…'}</>
+                                : <><RefreshCw className="w-3 h-3" />Sync Knowledgebase</>
+                              }
+                            </button>
+                          </div>
+                        </div>
+                        {kbStatus.result && (
+                          <p className="text-xs text-slate-500 dark:text-slate-400">{kbStatus.result}</p>
+                        )}
+                        {!kbStatus.folderId && !kbStatus.syncing && (
+                          <p className="text-xs text-slate-400 dark:text-slate-500">Not synced yet — click Sync Knowledgebase to generate markdown files in Drive.</p>
+                        )}
+                      </div>
+                    )}
+
+                    <div className="flex gap-2 pt-1">
+                      <button onClick={saveProp} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-green-600 text-white hover:bg-green-700">Save</button>
+                      <button onClick={() => setEditingProp(null)} className="text-xs px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600">Cancel</button>
+                    </div>
                   </div>
-                  <div className="flex gap-2 pt-1">
-                    <button onClick={saveProp} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-green-600 text-white hover:bg-green-700">Save</button>
-                    <button onClick={() => setEditingProp(null)} className="text-xs px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600">Cancel</button>
-                  </div>
-                </div>
-              )}
-            </div>
-          ))}
+                )}
+              </div>
+            )
+          })}
 
           {addingProp ? (
             <div className="px-4 py-3 bg-slate-50 dark:bg-slate-900/40 border-t border-slate-100 dark:border-slate-700 space-y-2">
               {([
-                { label: 'Full name',       key: 'name'              },
-                { label: 'Short name',      key: 'shortName'         },
-                { label: 'Address',         key: 'address'           },
-                { label: 'Drive folder ID', key: 'driveRootFolderId' },
+                { label: 'Full name',  key: 'name'      },
+                { label: 'Short name', key: 'shortName' },
+                { label: 'Address',    key: 'address'   },
               ] as { label: string; key: keyof PropForm }[]).map(({ label, key }) => (
                 <div key={key} className="flex items-center gap-2">
                   <span className="text-xs text-slate-500 dark:text-slate-400 w-28 shrink-0">{label}</span>
@@ -797,6 +799,13 @@ export function SettingsScreen() {
                   />
                 </div>
               ))}
+              <div className="flex items-start gap-2">
+                <span className="text-xs text-slate-500 dark:text-slate-400 w-28 shrink-0 pt-1.5">Drive folder</span>
+                <DriveRootInput
+                  value={propForm.driveRootFolderId}
+                  onChange={id => setPropForm(f => ({ ...f, driveRootFolderId: id }))}
+                />
+              </div>
               <div className="flex items-center gap-2">
                 <span className="text-xs text-slate-500 dark:text-slate-400 w-28 shrink-0">Type</span>
                 <select
