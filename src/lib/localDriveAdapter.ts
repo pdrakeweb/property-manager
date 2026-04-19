@@ -78,6 +78,32 @@ export const localDriveAdapter = {
     return findOrCreateFolder(folderName, rootFolderId)
   },
 
+  /** Mirrors DriveClient.searchFiles — supports name='...' queries */
+  async searchFiles(_token: string, query: string): Promise<DriveFile[]> {
+    const nameMatch = query.match(/name='([^']+)'/)
+    if (!nameMatch) return []
+    const name  = nameMatch[1]
+    const store = load()
+    return Object.values(store)
+      .filter(e => !e.isFolder && e.name === name)
+      .map(e => ({ id: e.id, name: e.name }))
+  },
+
+  /** Mirrors DriveClient.updateFile */
+  async updateFile(
+    _token:   string,
+    fileId:   string,
+    content:  string,
+    _mimeType: string,
+  ): Promise<void> {
+    const store = load()
+    const entry = store[fileId]
+    if (!entry || entry.isFolder) throw new Error(`Dev adapter: file ${fileId} not found`)
+    entry.content = content
+    entry.etag    = nextEtag(entry.etag)
+    save(store)
+  },
+
   /** Mirrors DriveClient.listFiles */
   async listFiles(_token: string, folderId: string): Promise<DriveFile[]> {
     const store = load()

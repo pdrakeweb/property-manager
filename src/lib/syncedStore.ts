@@ -9,7 +9,8 @@
 
 import { makeStore } from './localStore'
 import { localIndex, type IndexRecordType } from './localIndex'
-import { getPropertyById } from './propertyStore'
+import { propertyStore } from './propertyStore'
+import { auditLog } from './auditLog'
 
 /**
  * Create a store that automatically syncs records to Drive via localIndex.
@@ -32,7 +33,7 @@ export function makeSyncedStore<T extends { id: string }>(
   function syncToIndex(item: T): void {
     const propId = resolvePropertyId(item)
     if (!propId) return
-    const property = getPropertyById(propId)
+    const property = propertyStore.getById(propId)
     const rootFolderId = property?.driveRootFolderId ?? ''
 
     // Don't queue if no Drive root (e.g. Camp with empty driveRootFolderId)
@@ -69,11 +70,19 @@ export function makeSyncedStore<T extends { id: string }>(
     add(item: T): void {
       store.add(item)
       syncToIndex(item)
+      const propId = resolvePropertyId(item)
+      const typed  = item as Record<string, unknown>
+      const title  = String(typed['label'] ?? typed['name'] ?? typed['title'] ?? typed['provider'] ?? typed['taskTitle'] ?? item.id)
+      auditLog.info(`${indexType}.add`, `Added: ${title}`, propId || undefined)
     },
 
     update(item: T): void {
       store.update(item)
       syncToIndex(item)
+      const propId = resolvePropertyId(item)
+      const typed  = item as Record<string, unknown>
+      const title  = String(typed['label'] ?? typed['name'] ?? typed['title'] ?? typed['provider'] ?? typed['taskTitle'] ?? item.id)
+      auditLog.info(`${indexType}.update`, `Updated: ${title}`, propId || undefined)
     },
 
     upsert(item: T): void {
@@ -82,8 +91,15 @@ export function makeSyncedStore<T extends { id: string }>(
     },
 
     remove(id: string): void {
+      const existing = store.getById(id)
       store.remove(id)
       localIndex.softDelete(id)
+      if (existing) {
+        const propId = resolvePropertyId(existing)
+        const typed  = existing as Record<string, unknown>
+        const title  = String(typed['label'] ?? typed['name'] ?? typed['title'] ?? typed['provider'] ?? typed['taskTitle'] ?? id)
+        auditLog.info(`${indexType}.remove`, `Removed: ${title}`, propId || undefined)
+      }
     },
   }
 }

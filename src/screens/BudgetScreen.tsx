@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import {
   TrendingUp, Plus, Info, AlertTriangle, CheckCircle2,
-  ArrowLeft, Trash2, ChevronDown, ChevronUp, AlertCircle, X,
+  ArrowLeft, Trash2, ChevronDown, ChevronUp, AlertCircle,
 } from 'lucide-react'
 import { cn } from '../utils/cn'
-import { SERVICE_RECORDS } from '../data/mockData'
+import { CAPITAL_ITEMS, SERVICE_RECORDS } from '../data/mockData'
 import { useAppStore } from '../store/AppStoreContext'
 import type { Priority, CapitalItem, CapitalTransaction } from '../types'
 import {
@@ -15,7 +15,6 @@ import {
   getOverride,
   setOverride,
 } from '../lib/capitalStore'
-import { capitalItemStore, getCapitalItemsForProperty } from '../lib/capitalItemStore'
 
 type Horizon = '1yr' | '3yr' | '10yr'
 
@@ -74,14 +73,10 @@ function CapitalItemDetail({
   item,
   onBack,
   onMutate,
-  onEdit,
-  onDelete,
 }: {
   item: CapitalItem
   onBack: () => void
   onMutate: () => void
-  onEdit: () => void
-  onDelete: () => void
 }) {
   const [tick, setTick] = useState(0)
   const [showAddTx, setShowAddTx] = useState(false)
@@ -164,19 +159,6 @@ function CapitalItemDetail({
           <span className={cn('text-xs font-medium px-2 py-0.5 rounded-full border mt-1', pconf.badge)}>
             {pconf.label}
           </span>
-          <button
-            onClick={onEdit}
-            className="text-xs text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 px-2 py-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700"
-          >
-            Edit
-          </button>
-          <button
-            onClick={onDelete}
-            title="Delete capital item"
-            className="text-slate-400 dark:text-slate-500 hover:text-red-500 dark:hover:text-red-400 p-1 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
         </div>
       </div>
 
@@ -496,196 +478,17 @@ function YearRow({
   )
 }
 
-// ── Capital item add/edit modal ─────────────────────────────────────────────
-
-interface CapFormState {
-  title: string
-  categoryId: string
-  priority: Priority
-  estimatedYear: string
-  costLow: string
-  costHigh: string
-  installYear: string
-  notes: string
-}
-
-function toCapForm(item?: CapitalItem): CapFormState {
-  return {
-    title:         item?.title ?? '',
-    categoryId:    item?.categoryId ?? 'service_record',
-    priority:      item?.priority ?? 'medium',
-    estimatedYear: String(item?.estimatedYear ?? CURRENT_YEAR + 1),
-    costLow:       item?.costLow  != null ? String(item.costLow)  : '',
-    costHigh:      item?.costHigh != null ? String(item.costHigh) : '',
-    installYear:   item?.installYear != null ? String(item.installYear) : '',
-    notes:         item?.notes ?? '',
-  }
-}
-
-function CapitalItemModal({
-  initial, propertyId, onSave, onClose,
-}: {
-  initial?: CapitalItem
-  propertyId: string
-  onSave: (item: CapitalItem) => void
-  onClose: () => void
-}) {
-  const [form, setForm] = useState<CapFormState>(() => toCapForm(initial))
-  const [error, setError] = useState<string | null>(null)
-  const isNew = !initial
-
-  function set<K extends keyof CapFormState>(k: K, v: CapFormState[K]) {
-    setForm(f => ({ ...f, [k]: v }))
-  }
-
-  function submit() {
-    if (!form.title.trim()) { setError('Title is required'); return }
-    const year = Number(form.estimatedYear)
-    if (!Number.isFinite(year) || year < 1900) { setError('Enter a valid estimated year'); return }
-    const low  = form.costLow.trim()  ? Number(form.costLow)  : 0
-    const high = form.costHigh.trim() ? Number(form.costHigh) : 0
-    if (!Number.isFinite(low) || !Number.isFinite(high) || low < 0 || high < 0) {
-      setError('Costs must be non-negative numbers'); return
-    }
-    if (high < low) { setError('High cost must be ≥ low cost'); return }
-
-    const installYear = form.installYear.trim() ? Number(form.installYear) : undefined
-    const ageYears    = installYear != null ? Math.max(0, new Date().getFullYear() - installYear) : undefined
-
-    const saved: CapitalItem = {
-      id:             initial?.id ?? `cap_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-      propertyId,
-      title:          form.title.trim(),
-      categoryId:     form.categoryId,
-      priority:       form.priority,
-      estimatedYear:  year,
-      costLow:        low,
-      costHigh:       high,
-      source:         initial?.source ?? 'manual',
-      ...(installYear != null ? { installYear, ageYears } : {}),
-      ...(form.notes.trim()    ? { notes: form.notes.trim() } : {}),
-    }
-    onSave(saved)
-  }
-
-  const inp = 'w-full text-sm border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-green-300'
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 px-4 pb-4">
-      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-md p-5 space-y-4 max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between">
-          <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
-            {isNew ? 'Add Capital Item' : 'Edit Capital Item'}
-          </h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        <div className="space-y-3">
-          <div>
-            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Title *</label>
-            <input value={form.title} onChange={e => set('title', e.target.value)} placeholder="e.g. Water heater replacement" className={inp} />
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Priority</label>
-              <select value={form.priority} onChange={e => set('priority', e.target.value as Priority)} className={inp}>
-                <option value="critical">Critical</option>
-                <option value="high">High</option>
-                <option value="medium">Medium</option>
-                <option value="low">Low</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Estimated year</label>
-              <input type="number" value={form.estimatedYear} onChange={e => set('estimatedYear', e.target.value)} className={inp} />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Cost low ($)</label>
-              <input type="number" value={form.costLow} onChange={e => set('costLow', e.target.value)} placeholder="1200" className={inp} />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Cost high ($)</label>
-              <input type="number" value={form.costHigh} onChange={e => set('costHigh', e.target.value)} placeholder="2000" className={inp} />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Install year (optional)</label>
-            <input type="number" value={form.installYear} onChange={e => set('installYear', e.target.value)} placeholder="2009" className={inp} />
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Category</label>
-            <input value={form.categoryId} onChange={e => set('categoryId', e.target.value)} placeholder="hvac, roof, water_heater…" className={cn(inp, 'font-mono')} />
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Notes</label>
-            <textarea
-              value={form.notes}
-              onChange={e => set('notes', e.target.value)}
-              rows={3}
-              placeholder="Context, alternatives, quotes, etc."
-              className={cn(inp, 'resize-none')}
-            />
-          </div>
-        </div>
-
-        {error && (
-          <p className="text-xs text-red-600 dark:text-red-400">{error}</p>
-        )}
-
-        <div className="flex gap-3 pt-1">
-          <button onClick={onClose} className="flex-1 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-sm font-semibold hover:bg-slate-200 dark:hover:bg-slate-600">
-            Cancel
-          </button>
-          <button
-            onClick={submit}
-            disabled={!form.title.trim()}
-            className="flex-[2] py-2.5 rounded-xl bg-green-600 text-white text-sm font-semibold hover:bg-green-700 disabled:bg-green-300"
-          >
-            {isNew ? 'Add Item' : 'Save Changes'}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 // ── Main BudgetScreen ───────────────────────────────────────────────────────
 
 export function BudgetScreen() {
   const { activePropertyId } = useAppStore()
   const [horizon, setHorizon] = useState<Horizon>('3yr')
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null)
-  const [editItem, setEditItem]   = useState<CapitalItem | null>(null)
-  const [showAdd,  setShowAdd]    = useState(false)
   const [tick, setTick] = useState(0)
+  void tick
 
-  const propertyCapitalItems  = (() => { void tick; return getCapitalItemsForProperty(activePropertyId) })()
+  const propertyCapitalItems  = CAPITAL_ITEMS.filter(i => i.propertyId === activePropertyId)
   const propertyServiceRecords = SERVICE_RECORDS.filter(r => r.propertyId === activePropertyId)
-
-  function refresh() { setTick(t => t + 1) }
-
-  function handleSaveItem(item: CapitalItem) {
-    capitalItemStore.upsert(item)
-    setShowAdd(false)
-    setEditItem(null)
-    refresh()
-  }
-
-  function handleDeleteItem(item: CapitalItem) {
-    capitalItemStore.remove(item.id)
-    setEditItem(null)
-    setSelectedItemId(null)
-    refresh()
-  }
 
   const maxYear = horizon === '1yr' ? CURRENT_YEAR : horizon === '3yr' ? CURRENT_YEAR + 2 : CURRENT_YEAR + 9
   const grouped = groupByYear(propertyCapitalItems, maxYear)
@@ -705,23 +508,11 @@ export function BudgetScreen() {
     const item = propertyCapitalItems.find(i => i.id === selectedItemId)
     if (item) {
       return (
-        <>
-          <CapitalItemDetail
-            item={item}
-            onBack={() => setSelectedItemId(null)}
-            onMutate={refresh}
-            onEdit={() => setEditItem(item)}
-            onDelete={() => handleDeleteItem(item)}
-          />
-          {editItem && (
-            <CapitalItemModal
-              initial={editItem}
-              propertyId={activePropertyId}
-              onSave={handleSaveItem}
-              onClose={() => setEditItem(null)}
-            />
-          )}
-        </>
+        <CapitalItemDetail
+          item={item}
+          onBack={() => setSelectedItemId(null)}
+          onMutate={() => setTick(t => t + 1)}
+        />
       )
     }
   }
@@ -844,30 +635,10 @@ export function BudgetScreen() {
       </div>
 
       {/* Add capital item */}
-      <button
-        onClick={() => setShowAdd(true)}
-        className="w-full py-3.5 rounded-2xl border border-dashed border-slate-300 text-sm font-medium text-slate-500 dark:text-slate-400 hover:border-green-300 dark:hover:border-green-700 hover:text-green-600 dark:hover:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors flex items-center justify-center gap-2"
-      >
+      <button className="w-full py-3.5 rounded-2xl border border-dashed border-slate-300 text-sm font-medium text-slate-500 dark:text-slate-400 hover:border-green-300 dark:hover:border-green-700 hover:text-green-600 dark:hover:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors flex items-center justify-center gap-2">
         <Plus className="w-4 h-4" />
         Add capital item
       </button>
-
-      {showAdd && (
-        <CapitalItemModal
-          propertyId={activePropertyId}
-          onSave={handleSaveItem}
-          onClose={() => setShowAdd(false)}
-        />
-      )}
-
-      {editItem && (
-        <CapitalItemModal
-          initial={editItem}
-          propertyId={activePropertyId}
-          onSave={handleSaveItem}
-          onClose={() => setEditItem(null)}
-        />
-      )}
 
     </div>
   )

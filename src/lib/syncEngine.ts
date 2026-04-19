@@ -2,8 +2,9 @@ import { DriveClient, ETagConflictError, CATEGORY_FOLDER_NAMES } from './driveCl
 import { localDriveAdapter } from './localDriveAdapter'
 import { localIndex } from './localIndex'
 import type { IndexRecord, IndexRecordType } from './localIndex'
-import { MAINTENANCE_TASKS } from '../data/mockData'
-import { getPropertyById } from './propertyStore'
+import { propertyStore } from './propertyStore'
+import { auditLog } from './auditLog'
+import type { LogEntry } from './auditLog'
 import type { MaintenanceTask } from '../types'
 
 /** Returns the real DriveClient in production, or the localStorage adapter in dev bypass mode */
@@ -60,17 +61,23 @@ export async function pushPending(token: string): Promise<{ uploaded: number; fa
   const errors: string[] = []
 
   for (const record of pending) {
-    const { filename, rootFolderId, categoryId } = record.data as {
-      filename:     string
-      rootFolderId: string
-      categoryId:   string
+    const d = record.data as Record<string, unknown>
+
+    // Heal missing Drive metadata from the IndexRecord itself
+    const filename     = (d.filename     as string) || `${record.type}_${record.id}.json`
+    const categoryId   = (d.categoryId   as string) || record.categoryId || record.type
+    const property     = propertyStore.getById(record.propertyId)
+    const rootFolderId = (d.rootFolderId as string) || property?.driveRootFolderId || ''
+
+    if (!rootFolderId) continue  // Property has no Drive root — silently skip, not an error
+
+    // If we healed any fields, persist them so future runs don't need to re-derive
+    if (!d.filename || !d.categoryId || !d.rootFolderId) {
+      localIndex.upsert({ ...record, data: { ...d, filename, categoryId, rootFolderId } })
     }
 
-    // Records missing Drive metadata can't be uploaded — skip silently (not a failure)
-    if (!filename || !rootFolderId || !categoryId) continue
-
     // Serialize the full IndexRecord as JSON — lossless, no markdown parsing needed on pull
-    const content = JSON.stringify(record)
+    const content = JSON.stringify({ ...record, data: { ...d, filename, categoryId, rootFolderId } })
 
     try {
       const folderId = await drive().resolveFolderId(token, categoryId, rootFolderId)
@@ -87,6 +94,7 @@ export async function pushPending(token: string): Promise<{ uploaded: number; fa
         // Non-conflict error — leave pending for next retry, surface the message
         const msg = err instanceof Error ? err.message : String(err)
         errors.push(`${record.title}: ${msg}`)
+        auditLog.error('sync.upload', `Upload failed: ${record.title} — ${msg}`, record.propertyId)
         continue
       }
 
@@ -139,6 +147,7 @@ async function resolveConflict(
         new Date().toISOString(),
         (mergedFile as { etag?: string }).etag,
       )
+      auditLog.info('sync.conflict', `Auto-merged: ${record.title}`, record.propertyId)
     } catch {
       // If merge upload failed, leave as pending for next retry
     }
@@ -182,6 +191,7 @@ async function resolveConflict(
         conflictWithId: v2Id,
       })
     }
+    auditLog.warn('sync.conflict', `Conflict: ${record.title} saved as v2 (fields: ${overlap.join(', ')})`, record.propertyId)
   }
 }
 
@@ -198,7 +208,7 @@ export async function pullFromDrive(
   token: string,
   propertyId: string,
 ): Promise<{ pulled: number; failed: number }> {
-  const property = getPropertyById(propertyId)
+  const property = propertyStore.getById(propertyId)
   if (!property?.driveRootFolderId) return { pulled: 0, failed: 0 }
 
   const rootFolderId = property.driveRootFolderId
@@ -248,6 +258,11 @@ export async function pullFromDrive(
     }
   }
 
+  if (pulled > 0 || failed > 0) {
+    const msg = `Pulled ${pulled} record${pulled !== 1 ? 's' : ''}` + (failed > 0 ? `, ${failed} failed` : '')
+    auditLog.info('sync.pull', msg, propertyId)
+  }
+
   return { pulled, failed }
 }
 
@@ -258,7 +273,7 @@ export async function pullFromDrive(
  * Seeded tasks are 'local_only' — they won't be uploaded to Drive.
  * Also migrates any existing customTaskStore (pm_tasks / pm_custom_tasks) records.
  */
-export function seedTasksForProperty(propertyId: string): void {
+export async function seedTasksForProperty(propertyId: string): Promise<void> {
   if (localIndex.hasAny('task', propertyId)) return
 
   const today     = new Date().toISOString().slice(0, 10)
@@ -271,7 +286,7 @@ export function seedTasksForProperty(propertyId: string): void {
     return 'upcoming'
   }
 
-  const property = getPropertyById(propertyId)
+  const property = propertyStore.getById(propertyId)
   const rootFolderId = property?.driveRootFolderId ?? ''
 
   function buildTaskData(task: MaintenanceTask, status: MaintenanceTask['status']): Record<string, unknown> {
@@ -284,7 +299,8 @@ export function seedTasksForProperty(propertyId: string): void {
     } as unknown as Record<string, unknown>
   }
 
-  // Seed static mock tasks
+  // Seed static mock tasks (only for properties that have them)
+  const { MAINTENANCE_TASKS } = await import('../data/mockData')
   for (const task of MAINTENANCE_TASKS.filter(t => t.propertyId === propertyId)) {
     const status = calcStatus(task)
     localIndex.upsert({
@@ -326,7 +342,7 @@ export function seedTasksForProperty(propertyId: string): void {
 
 export async function syncAll(token: string, propertyId: string): Promise<SyncResult> {
   // Seed tasks first (no-op if already seeded)
-  seedTasksForProperty(propertyId)
+  await seedTasksForProperty(propertyId)
 
   // Pull Drive files → add to index
   const { pulled, failed: pullFailed } = await pullFromDrive(token, propertyId)
@@ -334,7 +350,95 @@ export async function syncAll(token: string, propertyId: string): Promise<SyncRe
   // Push pending local records → Drive
   const { uploaded, failed: uploadFailed, errors: uploadErrors } = await pushPending(token)
 
+  const summary = `Sync complete: ↑${uploaded} uploaded ↓${pulled} pulled` +
+    (uploadFailed + pullFailed > 0 ? ` · ${uploadFailed + pullFailed} errors` : '')
+  auditLog.info('sync', summary, propertyId)
+
   return { uploaded, uploadFailed, uploadErrors, pulled, pullFailed }
+}
+
+// ── Property config sync ──────────────────────────────────────────────────────
+
+const PROPERTY_CONFIG_FILENAME = 'pm_properties.json'
+
+/**
+ * Pull property config from Drive (find by name among app-created files),
+ * merge any unknown properties into the local store, then push the current
+ * full list back to Drive (create or update).
+ *
+ * Called once per session from the startup sync, not per-property.
+ */
+export async function syncPropertyConfig(token: string): Promise<void> {
+  // ── Pull ────────────────────────────────────────────────────────────────────
+  try {
+    const files = await drive().searchFiles(
+      token,
+      `name='${PROPERTY_CONFIG_FILENAME}' and trashed=false`,
+    )
+    if (files.length > 0) {
+      const fileData = await drive().downloadFile(token, files[0].id)
+      const remote   = JSON.parse(fileData.content) as import('../types').Property[]
+      const localIds = new Set(propertyStore.getAll().map(p => p.id))
+      for (const p of remote) {
+        if (!localIds.has(p.id)) propertyStore.upsert(p)
+      }
+      propertyStore.setDriveFileId(files[0].id)
+    }
+  } catch { /* non-fatal — local store is authoritative */ }
+
+  // ── Push ────────────────────────────────────────────────────────────────────
+  try {
+    const content      = JSON.stringify(propertyStore.getAll())
+    const existingId   = propertyStore.getDriveFileId()
+
+    if (existingId) {
+      await drive().updateFile(token, existingId, content, 'application/json')
+    } else {
+      // Create at Drive root so it's findable on any device
+      const file = await drive().uploadFile(token, 'root', PROPERTY_CONFIG_FILENAME, content, 'application/json')
+      propertyStore.setDriveFileId(file.id)
+    }
+  } catch { /* non-fatal */ }
+}
+
+// ── Audit log sync ───────────────────────────────────────────────────────────
+
+const AUDIT_LOG_FILENAME = 'pm_audit_log.json'
+
+/**
+ * Sync the audit log with Drive — pull remote entries (merge/dedup), then push
+ * the full merged log back. File lives at Drive root, not in a property folder.
+ */
+export async function syncAuditLog(token: string): Promise<void> {
+  // Pull remote log and merge with local
+  try {
+    const existingId = auditLog.getDriveFileId()
+    let remoteFileId = existingId
+
+    if (!remoteFileId) {
+      const files = await drive().searchFiles(token, `name='${AUDIT_LOG_FILENAME}' and trashed=false`)
+      if (files.length > 0) remoteFileId = files[0].id
+    }
+
+    if (remoteFileId) {
+      const fileData = await drive().downloadFile(token, remoteFileId)
+      const remote   = JSON.parse(fileData.content) as LogEntry[]
+      auditLog.merge(remote)
+      auditLog.setDriveFileId(remoteFileId)
+    }
+  } catch { /* non-fatal */ }
+
+  // Push merged log to Drive
+  try {
+    const content  = JSON.stringify(auditLog.getAll())
+    const fileId   = auditLog.getDriveFileId()
+    if (fileId) {
+      await drive().updateFile(token, fileId, content, 'application/json')
+    } else {
+      const file = await drive().uploadFile(token, 'root', AUDIT_LOG_FILENAME, content, 'application/json')
+      auditLog.setDriveFileId(file.id)
+    }
+  } catch { /* non-fatal */ }
 }
 
 // Re-export IndexRecordType for callers that imported it from here

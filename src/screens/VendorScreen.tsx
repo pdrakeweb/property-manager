@@ -3,8 +3,8 @@ import { Plus, Star, Phone, Trash2, Edit2, X, Users, ChevronLeft } from 'lucide-
 import { cn } from '../utils/cn'
 import { vendorStore } from '../lib/vendorStore'
 import { costStore } from '../lib/costStore'
-import { getPropertyById } from '../lib/propertyStore'
 import { useAppStore } from '../store/AppStoreContext'
+import { propertyStore } from '../lib/propertyStore'
 import type { Vendor } from '../schemas'
 
 const VENDOR_TYPES = [
@@ -78,7 +78,6 @@ interface VendorModalProps {
 }
 
 function VendorModal({ initial, onSave, onClose }: VendorModalProps) {
-  const { properties } = useAppStore()
   const [form, setForm] = useState<VendorFormData>(initial ? vendorToForm(initial) : emptyForm())
 
   useEffect(() => {
@@ -191,7 +190,7 @@ function VendorModal({ initial, onSave, onClose }: VendorModalProps) {
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-2">Properties served</label>
             <div className="space-y-2">
-              {properties.map(p => (
+              {propertyStore.getAll().map(p => (
                 <label key={p.id} className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"
@@ -275,7 +274,7 @@ function VendorDetail({ vendor, onEdit, onDelete, onBack }: {
         {vendor.propertyIds.length > 0 && (
           <div className="flex flex-wrap gap-1 pt-1">
             {vendor.propertyIds.map(pid => {
-              const prop = getPropertyById(pid)
+              const prop = propertyStore.getById(pid)
               return prop ? (
                 <span key={pid} className="text-xs bg-sky-50 text-sky-700 rounded-full px-2.5 py-0.5 border border-sky-100">
                   {prop.shortName}

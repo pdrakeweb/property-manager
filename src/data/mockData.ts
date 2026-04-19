@@ -5,13 +5,7 @@ import type {
 
 // ── Properties ──────────────────────────────────────────────────────────────
 
-/**
- * Seed data for the property list. Copied into `propertyStore` on first load;
- * after that, the user-editable store is the source of truth. Consumers that
- * need the live list should call `getAllProperties()` or use the `useProperties()`
- * hook — never import this constant directly.
- */
-export const DEFAULT_PROPERTIES: Property[] = [
+export const PROPERTIES: Property[] = [
   {
     id: 'tannerville',
     name: '2392 Tannerville Rd',

@@ -17,12 +17,10 @@ export interface Vendor {
 export interface EventPhoto {
   id: string
   role: 'before' | 'after' | 'general'
-  /** Base-64 data URL — present only before Drive upload succeeds, or on
-   *  legacy records written before photos were uploaded to Drive. */
-  localDataUrl?: string
+  /** Base-64 data URL stored locally until Drive upload completes */
+  localDataUrl: string
   driveFileId?: string
-  mimeType?:    string
-  caption?:     string
+  caption?: string
 }
 
 export interface CompletedEvent {

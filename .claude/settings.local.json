@@ -7,7 +7,11 @@
       "Bash(cmd.exe /c \"where node\")",
       "Bash(cmd.exe /c \"where node && node --version && npm --version\")",
       "Bash(cd *)",
-      "Bash(git *)"
+      "Bash(git *)",
+      "Bash(/c/nvm4w/nodejs/npm install *)",
+      "Bash(/c/nvm4w/nodejs/npm run *)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(netstat -ano)"
     ]
   }
 }

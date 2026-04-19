@@ -4,6 +4,7 @@ import {
 } from 'lucide-react'
 import { cn } from '../utils/cn'
 import { useAppStore } from '../store/AppStoreContext'
+
 import {
   permitStore, getPermitsForProperty,
   getExpiringPermits, getOpenPermits,

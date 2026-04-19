@@ -225,14 +225,10 @@ export function AIAdvisoryScreen() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, streamingContent, toolStatus])
 
-  const [propertyContext, setPropertyContext] = useState<string>('')
-  useEffect(() => {
-    let cancelled = false
-    buildPropertyContext(activePropertyId).then(ctx => {
-      if (!cancelled) setPropertyContext(ctx)
-    })
-    return () => { cancelled = true }
-  }, [activePropertyId])
+  const propertyContext = useMemo(
+    () => buildPropertyContext(activePropertyId),
+    [activePropertyId],
+  )
 
   const recordsAPI = useMemo(
     () => new PropertyRecordsAPI(activePropertyId, null),

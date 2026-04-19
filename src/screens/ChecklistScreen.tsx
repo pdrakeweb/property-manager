@@ -14,7 +14,7 @@ import {
   startRun,
 } from '../lib/checklistStore'
 import { useAppStore } from '../store/AppStoreContext'
-import { getPropertyById } from '../lib/propertyStore'
+
 import type { Season } from '../types/checklist'
 
 // ── Season helpers ───────────────────────────────────────────────────────────
@@ -43,42 +43,42 @@ const SEASON_META: Record<
   spring: {
     label: 'Spring',
     Icon: Leaf,
-    cardBg: 'bg-emerald-50',
-    iconBg: 'bg-emerald-100',
-    iconColor: 'text-emerald-600',
-    badgeColor: 'bg-emerald-100 text-emerald-700',
-    borderColor: 'border-emerald-100',
-    activeBorder: 'border-emerald-400 ring-1 ring-emerald-300',
+    cardBg: 'bg-emerald-50 dark:bg-emerald-950/30',
+    iconBg: 'bg-emerald-100 dark:bg-emerald-900/40',
+    iconColor: 'text-emerald-600 dark:text-emerald-400',
+    badgeColor: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
+    borderColor: 'border-emerald-100 dark:border-emerald-900/50',
+    activeBorder: 'border-emerald-400 ring-1 ring-emerald-300 dark:border-emerald-500 dark:ring-emerald-700',
   },
   summer: {
     label: 'Summer',
     Icon: Sun,
-    cardBg: 'bg-amber-50',
-    iconBg: 'bg-amber-100',
-    iconColor: 'text-amber-600',
-    badgeColor: 'bg-amber-100 text-amber-700',
-    borderColor: 'border-amber-100',
-    activeBorder: 'border-amber-400 ring-1 ring-amber-300',
+    cardBg: 'bg-amber-50 dark:bg-amber-950/30',
+    iconBg: 'bg-amber-100 dark:bg-amber-900/40',
+    iconColor: 'text-amber-600 dark:text-amber-400',
+    badgeColor: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+    borderColor: 'border-amber-100 dark:border-amber-900/50',
+    activeBorder: 'border-amber-400 ring-1 ring-amber-300 dark:border-amber-500 dark:ring-amber-700',
   },
   fall: {
     label: 'Fall',
     Icon: Flame,
-    cardBg: 'bg-orange-50',
-    iconBg: 'bg-orange-100',
-    iconColor: 'text-orange-600',
-    badgeColor: 'bg-orange-100 text-orange-700',
-    borderColor: 'border-orange-100',
-    activeBorder: 'border-orange-400 ring-1 ring-orange-300',
+    cardBg: 'bg-orange-50 dark:bg-orange-950/30',
+    iconBg: 'bg-orange-100 dark:bg-orange-900/40',
+    iconColor: 'text-orange-600 dark:text-orange-400',
+    badgeColor: 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300',
+    borderColor: 'border-orange-100 dark:border-orange-900/50',
+    activeBorder: 'border-orange-400 ring-1 ring-orange-300 dark:border-orange-500 dark:ring-orange-700',
   },
   winter: {
     label: 'Winter',
     Icon: CloudSnow,
-    cardBg: 'bg-sky-50',
-    iconBg: 'bg-sky-100',
-    iconColor: 'text-sky-600',
-    badgeColor: 'bg-sky-100 text-sky-700',
-    borderColor: 'border-sky-100',
-    activeBorder: 'border-sky-400 ring-1 ring-sky-300',
+    cardBg: 'bg-sky-50 dark:bg-sky-950/30',
+    iconBg: 'bg-sky-100 dark:bg-sky-900/40',
+    iconColor: 'text-sky-600 dark:text-sky-400',
+    badgeColor: 'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300',
+    borderColor: 'border-sky-100 dark:border-sky-900/50',
+    activeBorder: 'border-sky-400 ring-1 ring-sky-300 dark:border-sky-500 dark:ring-sky-700',
   },
 }
 
@@ -266,7 +266,7 @@ function RecentRunsSection() {
     <div className="card-surface rounded-2xl shadow-sm card-divider">
       {recent.map(run => {
         const meta = SEASON_META[run.season]
-        const property = getPropertyById(run.propertyId)
+        const property = properties.find(p => p.id === run.propertyId)
         const doneCount = run.items.filter(i => i.done).length
         const totalCount = run.items.length
         const { Icon } = meta
@@ -307,7 +307,6 @@ export function ChecklistScreen() {
   const refresh = useCallback(() => forceUpdate(n => n + 1), [])
 
   const property = properties.find(p => p.id === activePropertyId) ?? properties[0]
-  if (!property) return null
   const currentSeason = getCurrentSeason()
 
   return (

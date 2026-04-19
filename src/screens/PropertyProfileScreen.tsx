@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { FileText, CheckCircle2, Sparkles } from 'lucide-react'
 import { cn } from '../utils/cn'
 import { useAppStore } from '../store/AppStoreContext'
+
 import {
   NARRATIVE_QUESTIONS,
   getNarrativeEntry,

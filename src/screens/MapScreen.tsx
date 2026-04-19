@@ -8,6 +8,7 @@ import { cn } from '../utils/cn'
 import { BaseMap } from '../components/map/BaseMap'
 import { PropertyMarker } from '../components/map/PropertyMarker'
 import { useAppStore } from '../store/AppStoreContext'
+
 import {
   fetchClimateAverages, fetchCurrentWeather,
   weatherCodeToDescription, weatherCodeToIcon,
@@ -43,7 +44,7 @@ export function MapScreen() {
 
   const geoProperties = useMemo(
     () => properties.filter((p): p is GeolocatedProperty => p.latitude != null && p.longitude != null),
-    [properties],
+    [],
   )
 
   const hasCoords = activeProperty.latitude != null && activeProperty.longitude != null

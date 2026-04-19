@@ -33,15 +33,14 @@ import { PropertyProfileScreen }       from './screens/PropertyProfileScreen'
 import { EquipmentDetailScreen }       from './screens/EquipmentDetailScreen'
 import { SyncScreen }                  from './screens/SyncScreen'
 
-import { syncAll, seedTasksForProperty } from './lib/syncEngine'
+import { syncAll, seedTasksForProperty, syncPropertyConfig, syncAuditLog } from './lib/syncEngine'
 import { exportAllMarkdownToDrive } from './lib/markdownExport'
-import { getAllProperties, seedPropertiesIfEmpty } from './lib/propertyStore'
+import { propertyStore, seedPropertiesFromMock } from './lib/propertyStore'
 import {
   isAuthenticated,
   startOAuthFlow,
   handleOAuthCallback,
   getClientId,
-  getValidToken,
 } from './auth/oauth'
 import { getOpenRouterKey, setSetting, SETTINGS } from './store/settings'
 
@@ -264,27 +263,31 @@ function OAuthCallbackHandler({ onDone }: { onDone: (ok: boolean) => void }) {
 
 function useStartupSync() {
   useEffect(() => {
-    // 0. Seed properties on first run so the store has the defaults ready
-    //    (AppStoreProvider also does this; harmless to repeat).
-    seedPropertiesIfEmpty()
+    // 1. Migrate: seed properties from mock data if localStorage is empty
+    seedPropertiesFromMock()
 
-    const properties = getAllProperties()
+    // 2. Seed tasks for all properties immediately (no network needed)
+    const seedAll = async () => {
+      for (const p of propertyStore.getAll()) await seedTasksForProperty(p.id)
+    }
+    seedAll()
 
-    // 1. Seed tasks for all properties immediately (no network needed)
-    for (const p of properties) seedTasksForProperty(p.id)
-
-    // 2. Async Drive sync — pull remote files into index, push any pending
+    // 3. Async Drive sync — sync property config, pull remote files, push pending
     let running = false
     async function run() {
       if (running) return
       running = true
       try {
+        const { getValidToken } = await import('./auth/oauth')
         const token = await getValidToken()
         if (!token) return
+        // Sync property config first so we have all properties before syncing records
+        await syncPropertyConfig(token)
         // Sync all properties in sequence (rate-limit friendly)
-        for (const p of properties) {
+        for (const p of propertyStore.getAll()) {
           await syncAll(token, p.id)
         }
+        await syncAuditLog(token)
         localStorage.setItem('pm_last_sync_at', new Date().toISOString())
       } catch {
         // Non-fatal — app works offline from local index
@@ -319,9 +322,10 @@ function useScheduledMarkdownExport() {
 
       running = true
       try {
+        const { getValidToken } = await import('./auth/oauth')
         const token = await getValidToken()
         if (!token) return
-        for (const p of getAllProperties()) {
+        for (const p of propertyStore.getAll()) {
           await exportAllMarkdownToDrive(token, p.id)
         }
         localStorage.setItem(MD_EXPORT_KEY, new Date().toISOString())

@@ -112,6 +112,39 @@ export const DriveClient = {
     return findOrCreateFolder(token, folderName, rootFolderId)
   },
 
+  /** Search across all app-created files using a Drive query string. */
+  async searchFiles(token: string, query: string): Promise<DriveFile[]> {
+    const url = new URL(`${DRIVE_API}/files`)
+    url.searchParams.set('q',        query)
+    url.searchParams.set('fields',   'files(id,name)')
+    url.searchParams.set('pageSize', '10')
+    const resp = await fetch(url.toString(), { headers: authHeaders(token) })
+    if (!resp.ok) throw new Error(`Drive search failed: ${resp.status}`)
+    const { files } = await resp.json() as { files: DriveFile[] }
+    return files ?? []
+  },
+
+  /** Update the content of an existing file in-place (no parent change). */
+  async updateFile(
+    token:    string,
+    fileId:   string,
+    content:  string,
+    mimeType: string,
+  ): Promise<void> {
+    const resp = await fetch(
+      `${UPLOAD_API}/files/${fileId}?uploadType=media`,
+      {
+        method:  'PATCH',
+        headers: { ...authHeaders(token) as Record<string, string>, 'Content-Type': mimeType },
+        body:    content,
+      },
+    )
+    if (!resp.ok) {
+      const text = await resp.text()
+      throw new Error(`Drive updateFile failed (${resp.status}): ${text}`)
+    }
+  },
+
   /** List all non-trashed files in a folder */
   async listFiles(token: string, folderId: string): Promise<DriveFile[]> {
     const url = new URL(`${DRIVE_API}/files`)

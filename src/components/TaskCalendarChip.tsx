@@ -4,7 +4,7 @@ import { cn } from '../utils/cn'
 import { isDev, getValidToken } from '../auth/oauth'
 import { addTaskToCalendar, syncAllToCalendar } from '../lib/calendarClient'
 import type { DryRunResult } from '../lib/calendarClient'
-import { getPropertyById } from '../lib/propertyStore'
+import { propertyStore } from '../lib/propertyStore'
 import type { IndexRecord } from '../lib/localIndex'
 import { DryRunModal } from './DryRunModal'
 
@@ -20,7 +20,7 @@ export function TaskCalendarChip({ task, propertyId }: TaskCalendarChipProps) {
 
   const hasEvent      = (task.calendarEventIds?.length ?? 0) > 0 || !!task.calendarEventId
   const syncState     = task.calendarSyncState
-  const propertyName  = getPropertyById(propertyId)?.name ?? propertyId
+  const propertyName  = propertyStore.getById(propertyId)?.name ?? propertyId
 
   async function handleClick() {
     if (syncing) return

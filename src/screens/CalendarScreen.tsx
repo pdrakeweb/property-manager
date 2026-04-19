@@ -3,9 +3,8 @@ import {
   ChevronLeft, ChevronRight, X, CheckCircle2, Plus, Clock,
 } from 'lucide-react'
 import { cn } from '../utils/cn'
-import { MAINTENANCE_TASKS } from '../data/mockData'
 import { costStore } from '../lib/costStore'
-import { customTaskStore, getAllCustomTasks } from '../lib/maintenanceStore'
+import { customTaskStore, getAllTasksAllProperties } from '../lib/maintenanceStore'
 import { VendorSelector } from '../components/VendorSelector'
 import { useAppStore } from '../store/AppStoreContext'
 import type { MaintenanceTask, Priority } from '../types'

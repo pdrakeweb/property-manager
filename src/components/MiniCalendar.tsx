@@ -2,9 +2,8 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { cn } from '../utils/cn'
-import { MAINTENANCE_TASKS } from '../data/mockData'
 import { costStore } from '../lib/costStore'
-import { getAllCustomTasks } from '../lib/maintenanceStore'
+import { getActiveTasks } from '../lib/maintenanceStore'
 
 function daysInMonth(year: number, month: number): number {
   return new Date(year, month + 1, 0).getDate()
@@ -30,8 +29,7 @@ export function MiniCalendar({ propertyId }: MiniCalendarProps) {
   const [year,  setYear]  = useState(todayDate.getFullYear())
   const [month, setMonth] = useState(todayDate.getMonth())
 
-  const customTasks  = getAllCustomTasks()
-  const allTasks     = [...MAINTENANCE_TASKS, ...customTasks].filter(t => t.propertyId === propertyId)
+  const allTasks     = getActiveTasks(propertyId)
   const completedAll = costStore.getAll().filter(e => e.propertyId === propertyId)
 
   function prevMonth() {

@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react'
-import { RefreshCw, CheckCircle2, Clock, AlertTriangle, FileText } from 'lucide-react'
+import { RefreshCw, CheckCircle2, Clock, AlertTriangle, FileText, ChevronDown, ChevronUp, Trash2 } from 'lucide-react'
 import { localIndex } from '../lib/localIndex'
 import type { SyncStats, IndexRecord } from '../lib/localIndex'
-import { syncAll } from '../lib/syncEngine'
+import { syncAll, syncAuditLog } from '../lib/syncEngine'
 import { exportAllMarkdownToDrive } from '../lib/markdownExport'
 import { getValidToken } from '../auth/oauth'
-import { getAllProperties } from '../lib/propertyStore'
+import { PROPERTIES } from '../data/mockData'
+import { auditLog } from '../lib/auditLog'
+import type { LogEntry } from '../lib/auditLog'
 
 export function SyncScreen() {
   const [stats,   setStats]   = useState<SyncStats>(() => localIndex.getSyncStats())
@@ -16,6 +18,8 @@ export function SyncScreen() {
   const [lastSyncAt, setLastSyncAt] = useState(
     () => localStorage.getItem('pm_last_sync_at') ?? '',
   )
+  const [logEntries,  setLogEntries]  = useState<LogEntry[]>(() => auditLog.getRecent(50))
+  const [logExpanded, setLogExpanded] = useState(false)
 
   // Markdown export state
   const [exporting,      setExporting]      = useState(false)
@@ -40,7 +44,7 @@ export function SyncScreen() {
       }
       let uploaded = 0, failed = 0, pulled = 0, pullFailed = 0
       const allErrors: string[] = []
-      for (const p of getAllProperties()) {
+      for (const p of PROPERTIES) {
         const r = await syncAll(token, p.id)
         uploaded   += r.uploaded
         failed     += r.uploadFailed
@@ -48,6 +52,7 @@ export function SyncScreen() {
         pullFailed += r.pullFailed
         allErrors.push(...r.uploadErrors)
       }
+      await syncAuditLog(token)
       const now = new Date().toISOString()
       localStorage.setItem('pm_last_sync_at', now)
       setLastSyncAt(now)
@@ -61,6 +66,7 @@ export function SyncScreen() {
     } finally {
       setSyncing(false)
       refresh()
+      setLogEntries(auditLog.getRecent(50))
     }
   }
 
@@ -77,7 +83,7 @@ export function SyncScreen() {
       }
       let exported = 0, failed = 0
       const allErrors: string[] = []
-      for (const p of getAllProperties()) {
+      for (const p of PROPERTIES) {
         const r = await exportAllMarkdownToDrive(token, p.id, (done, total) => {
           setExportProgress({ done, total })
         })
@@ -254,6 +260,52 @@ export function SyncScreen() {
           All records are synced to Drive.
         </div>
       )}
+
+      {/* Activity Log */}
+      <div>
+        <div className="flex items-center justify-between mb-2 px-1">
+          <button
+            onClick={() => setLogExpanded(v => !v)}
+            className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
+          >
+            {logExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+            Activity Log ({logEntries.length})
+          </button>
+          {logExpanded && (
+            <button
+              onClick={() => { auditLog.clear(); setLogEntries([]) }}
+              className="flex items-center gap-1 text-xs text-slate-400 hover:text-red-500 dark:hover:text-red-400 transition-colors"
+            >
+              <Trash2 className="w-3 h-3" />
+              Clear
+            </button>
+          )}
+        </div>
+        {logExpanded && (
+          logEntries.length === 0
+            ? <p className="text-xs text-slate-400 dark:text-slate-500 px-1">No log entries yet.</p>
+            : <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden divide-y divide-slate-100 dark:divide-slate-700 shadow-sm">
+                {logEntries.map(entry => (
+                  <div key={entry.id} className="flex items-start gap-2.5 px-3 py-2">
+                    <span className={`mt-0.5 shrink-0 text-xs font-semibold uppercase w-10 ${
+                      entry.level === 'error' ? 'text-red-500' :
+                      entry.level === 'warn'  ? 'text-amber-500' :
+                      'text-slate-400 dark:text-slate-500'
+                    }`}>{entry.level}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-slate-700 dark:text-slate-300 break-words">{entry.message}</p>
+                      <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+                        {entry.action}
+                        {entry.propertyId ? ` · ${entry.propertyId}` : ''}
+                        {' · '}
+                        {new Date(entry.ts).toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+        )}
+      </div>
 
     </div>
   )

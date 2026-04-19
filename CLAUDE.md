@@ -20,8 +20,8 @@ Without it, the login screen will show credential input fields and OAuth will fa
 - Build: `npx vite build` (use `/c/nvm4w/nodejs/npx.cmd` on this machine)
 - The npm binary is at `/c/nvm4w/nodejs/npm`
 
-*IMPORTANT* When working in a worktree and not directly in the main source directory, choose a random high numbered port and run on that port to avoid conflicts:
-`npm run dev -- --port 36482`
+*IMPORTANT* When working in a worktree and not directly in the main source directory, choose an available port (5170-5179) and run on that port to avoid conflicts:
+`npm run dev -- --port 5176`
 
 ## Important Rules
 
