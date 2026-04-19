@@ -196,7 +196,7 @@ export function createToolExecutor(api: PropertyRecordsAPI) {
       }
 
       case 'get_ha_status': {
-        const status = api.getHAStatus()
+        const status = await api.getHAStatus()
         return JSON.stringify({ sensors: status })
       }
 

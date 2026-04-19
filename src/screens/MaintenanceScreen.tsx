@@ -23,6 +23,9 @@ import { DryRunModal } from '../components/DryRunModal'
 import { TaskCalendarChip } from '../components/TaskCalendarChip'
 import { SystemLabelCombobox } from '../components/SystemLabelCombobox'
 import { getValidToken, isDev } from '../auth/oauth'
+import { propertyStore } from '../lib/propertyStore'
+import { dataUrlToBlob, uploadPhotoBlob } from '../lib/photoStorage'
+import { PhotoThumb } from '../components/PhotoThumb'
 
 import type { MaintenanceTask, Priority } from '../types'
 import type { EventPhoto } from '../schemas'
@@ -142,7 +145,39 @@ function DoneModal({ task, propertyId, onConfirm, onClose }: DoneModalProps) {
     e.target.value = ''
   }
 
-  function handleConfirm() {
+  async function handleConfirm() {
+    // Upload any pending photos to Drive before persisting, so the record
+    // stores driveFileIds instead of bloating localStorage with base64.
+    const property     = propertyStore.getById(propertyId)
+    const rootFolderId = property?.driveRootFolderId ?? ''
+    const token        = rootFolderId ? await getValidToken().catch(() => null) : null
+
+    const uploadedPhotos: EventPhoto[] = []
+    for (const p of photos) {
+      if (!p.localDataUrl || p.driveFileId) { uploadedPhotos.push(p); continue }
+      if (!token) {
+        // Offline or unauthenticated — keep the base64 inline so the photo
+        // isn't lost. TODO: retry via offlineQueue when connectivity returns
+        // (see planning/AUDIT-FOLLOWUPS.md).
+        uploadedPhotos.push(p)
+        continue
+      }
+      try {
+        const blob = dataUrlToBlob(p.localDataUrl)
+        if (!blob) { uploadedPhotos.push(p); continue }
+        const { driveFileId, mimeType } = await uploadPhotoBlob(token, rootFolderId, p.id, blob)
+        uploadedPhotos.push({
+          id:          p.id,
+          role:        p.role,
+          driveFileId,
+          mimeType,
+          ...(p.caption ? { caption: p.caption } : {}),
+        })
+      } catch {
+        uploadedPhotos.push(p)
+      }
+    }
+
     costStore.add({
       id: crypto.randomUUID(),
       taskId: task.id,
@@ -157,7 +192,7 @@ function DoneModal({ task, propertyId, onConfirm, onClose }: DoneModalProps) {
       contractor: doneContractor || undefined,
       laborWarrantyExpiry: laborWarrantyExpiry || undefined,
       notes: doneNotes || undefined,
-      photos: photos.length > 0 ? photos : undefined,
+      photos: uploadedPhotos.length > 0 ? uploadedPhotos : undefined,
     })
     // Mark the task completed in localIndex
     markTaskDone(task.id)
@@ -242,7 +277,7 @@ function DoneModal({ task, propertyId, onConfirm, onClose }: DoneModalProps) {
               <div className="grid grid-cols-3 gap-2 mt-2">
                 {photos.map(p => (
                   <div key={p.id} className="relative rounded-xl overflow-hidden aspect-square">
-                    <img src={p.localDataUrl} alt={p.role} className="w-full h-full object-cover" />
+                    <PhotoThumb photo={p} alt={p.role} className="w-full h-full object-cover" />
                     <div className={cn('absolute bottom-0 inset-x-0 text-[10px] font-semibold text-center py-0.5 capitalize', photoRoleBadge(p.role))}>{p.role}</div>
                     <button type="button" onClick={() => setPhotos(prev => prev.filter(ph => ph.id !== p.id))}
                       className="absolute top-1 right-1 w-5 h-5 bg-black/60 text-white rounded-full flex items-center justify-center hover:bg-black/80">
@@ -529,7 +564,7 @@ function EventHistoryCard({ event }: { event: ReturnType<typeof costStore.getAll
                     {photos.length > 0
                       ? photos.map(p => (
                           <div key={p.id} className={cn('rounded-xl overflow-hidden border mb-2', border)}>
-                            <img src={p.localDataUrl} alt={label} className="w-full object-cover" />
+                            <PhotoThumb photo={p} alt={label} className="w-full object-cover" />
                           </div>
                         ))
                       : <div className="aspect-square rounded-xl bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-slate-300 dark:text-slate-600">
@@ -547,7 +582,7 @@ function EventHistoryCard({ event }: { event: ReturnType<typeof costStore.getAll
               <div className="grid grid-cols-3 gap-2">
                 {generalPhotos.map(p => (
                   <div key={p.id} className="rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700">
-                    <img src={p.localDataUrl} alt="General" className="w-full aspect-square object-cover" />
+                    <PhotoThumb photo={p} alt="General" className="w-full aspect-square object-cover" />
                   </div>
                 ))}
               </div>

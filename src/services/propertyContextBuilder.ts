@@ -5,7 +5,7 @@
 
 import { PropertyRecordsAPI } from './PropertyRecordsAPI'
 
-export function buildPropertyContext(propertyId: string, driveToken?: string | null): string {
+export async function buildPropertyContext(propertyId: string, driveToken?: string | null): Promise<string> {
   const api = new PropertyRecordsAPI(propertyId, driveToken)
   const prop = api.getProperty()
   if (!prop) return 'No property data available.'
@@ -90,7 +90,7 @@ export function buildPropertyContext(propertyId: string, driveToken?: string | n
   }
 
   // ── HA status ────────────────────────────────────────────────────────────
-  const ha = api.getHAStatus()
+  const ha = await api.getHAStatus()
   if (ha.length > 0) {
     lines.push('HOME ASSISTANT LIVE STATUS:')
     for (const sensor of ha) {

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import {
   Eye, EyeOff, CheckCircle2, XCircle, Wifi, WifiOff,
-  ExternalLink, ChevronRight, Building2, Loader2, RefreshCw, Sparkles, Calendar,
+  ExternalLink, ChevronRight, Loader2, RefreshCw, Sparkles, Calendar,
   Sun, Moon, Monitor, Trash2, Plus,
 } from 'lucide-react'
 import { cn } from '../utils/cn'
