@@ -5,7 +5,14 @@
       "Read(//usr/local/bin/**)",
       "Read(//c/Users/pdrak/.nvm/versions/**)",
       "Bash(cmd.exe /c \"where node\")",
-      "Bash(cmd.exe /c \"where node && node --version && npm --version\")"
+      "Bash(cmd.exe /c \"where node && node --version && npm --version\")",
+      "Bash(/c/nvm4w/nodejs/npm install *)",
+      "Bash(/c/nvm4w/nodejs/npm run *)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(netstat -ano)",
+      "Bash(taskkill //PID 24492 //F)",
+      "Bash(taskkill //PID 21944 //F)",
+      "Bash(taskkill //PID 31376 //F)"
     ]
   }
 }
