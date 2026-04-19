@@ -252,6 +252,7 @@ function SeasonCard({
 
 function RecentRunsSection() {
   const navigate = useNavigate()
+  const { properties } = useAppStore()
   const recent = getAllCompletedRuns().slice(0, 5)
 
   if (recent.length === 0) {
