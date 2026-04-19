@@ -258,21 +258,25 @@ export function EquipmentFormScreen() {
     const mdFilename = `${fileStem}.md`
     const mdContent  = formatRecord(cat, values, docs.map(d => d.name), capturedAt)
 
+    const title       = [values['brand'], values['model'] || values['model_number']].filter(Boolean).join(' ') || cat.label
+    const jsonFilename = `equipment_${recordId}.json`
+
     // 1. Write to local index immediately — visible to all screens right away.
-    //    Includes Drive upload metadata so syncEngine.pushPending() can retry later.
+    //    filename is set to .json so pushPending() retries correctly when offline.
     localIndex.upsert({
       id:         recordId,
       type:       'equipment',
       categoryId,
       propertyId: activePropertyId,
-      title:      [values['brand'], values['model'] || values['model_number']].filter(Boolean).join(' ') || cat.label,
+      title,
       data: {
         values,
         categoryId,
         propertyId:   activePropertyId,
         capturedAt:   capturedAt.toISOString(),
         mdContent,
-        filename:     mdFilename,
+        mdFilename,
+        filename:     jsonFilename,
         rootFolderId: activeProperty.driveRootFolderId,
       },
       syncState: 'pending_upload',
@@ -288,10 +292,34 @@ export function EquipmentFormScreen() {
       }
 
       const folderId = await DriveClient.resolveFolderId(token, categoryId, activeProperty.driveRootFolderId)
-      const mdFile   = await DriveClient.uploadFile(token, folderId, mdFilename, mdContent, 'text/markdown')
+
+      // Upload human-readable .md file
+      const mdFile = await DriveClient.uploadFile(token, folderId, mdFilename, mdContent, 'text/markdown')
       setDriveLink(`https://drive.google.com/file/d/${mdFile.id}/view`)
 
-      // Upload photos (best-effort — failures don't block the md record)
+      // Upload .json sidecar for programmatic restore on fresh browser login
+      const jsonContent = JSON.stringify({
+        id:         recordId,
+        type:       'equipment' as const,
+        categoryId,
+        propertyId: activePropertyId,
+        title,
+        data: {
+          values,
+          categoryId,
+          propertyId:   activePropertyId,
+          capturedAt:   capturedAt.toISOString(),
+          mdFilename,
+          filename:     jsonFilename,
+          rootFolderId: activeProperty.driveRootFolderId,
+        },
+        syncState:      'synced' as const,
+        driveUpdatedAt: new Date().toISOString(),
+        localUpdatedAt: new Date().toISOString(),
+      })
+      const jsonFile = await DriveClient.uploadFile(token, folderId, jsonFilename, jsonContent, 'application/json')
+
+      // Upload photos (best-effort — failures don't block the records)
       for (const doc of docs) {
         const ext     = doc.name.split('.').pop() ?? 'jpg'
         const docName = `${fileStem}_${doc.name}`
@@ -299,13 +327,13 @@ export function EquipmentFormScreen() {
         try { await DriveClient.uploadFile(token, folderId, docName, doc.blob, mime) } catch { /* non-fatal */ }
       }
 
-      localIndex.markSynced(recordId, mdFile.id, new Date().toISOString())
+      localIndex.markSynced(recordId, jsonFile.id, new Date().toISOString())
       setSaveState('saved')
       setTimeout(() => navigate('/capture'), 2000)
 
     } catch (err) {
       // Drive failed — record stays pending_upload in local index.
-      // syncEngine.pushPending() will retry it on the next sync.
+      // syncEngine.pushPending() will retry it on the next 5-minute sync.
       setSaveState('offline')
       setSaveError(String(err))
     }

@@ -63,8 +63,10 @@ export async function pushPending(token: string): Promise<{ uploaded: number; fa
   for (const record of pending) {
     const d = record.data as Record<string, unknown>
 
-    // Heal missing Drive metadata from the IndexRecord itself
-    const filename     = (d.filename     as string) || `${record.type}_${record.id}.json`
+    // Heal missing Drive metadata from the IndexRecord itself.
+    // If filename is a .md (equipment form legacy), use .json so pullFromDrive can restore it.
+    const rawFilename  = (d.filename as string) || ''
+    const filename     = rawFilename && !rawFilename.endsWith('.md') ? rawFilename : `${record.type}_${record.id}.json`
     const categoryId   = (d.categoryId   as string) || record.categoryId || record.type
     const property     = propertyStore.getById(record.propertyId)
     const rootFolderId = (d.rootFolderId as string) || property?.driveRootFolderId || ''
