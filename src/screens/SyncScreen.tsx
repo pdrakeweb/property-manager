@@ -167,7 +167,12 @@ export function SyncScreen() {
           <div>
             <p className="text-sm font-medium text-slate-800 dark:text-slate-200">Export as Markdown</p>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Write all {totalRecords} records to Drive as human-readable .md files
+              {(() => {
+                const last = localStorage.getItem('pm_last_md_export_at')
+                return last
+                  ? `Last exported ${new Date(last).toLocaleString()} · auto-runs every 6 h`
+                  : `Write all ${totalRecords} records to Drive as human-readable .md files · auto-runs every 6 h`
+              })()}
             </p>
           </div>
           <button

@@ -34,6 +34,7 @@ import { EquipmentDetailScreen }       from './screens/EquipmentDetailScreen'
 import { SyncScreen }                  from './screens/SyncScreen'
 
 import { syncAll, seedTasksForProperty } from './lib/syncEngine'
+import { exportAllMarkdownToDrive } from './lib/markdownExport'
 import { PROPERTIES } from './data/mockData'
 import {
   isAuthenticated,
@@ -295,10 +296,50 @@ function useStartupSync() {
   }, [])
 }
 
+const MD_EXPORT_KEY    = 'pm_last_md_export_at'
+const MD_EXPORT_INTERVAL_MS = 6 * 60 * 60_000   // 6 hours
+
+// ── Scheduled markdown export hook ──────────────────────────────────────────
+
+function useScheduledMarkdownExport() {
+  useEffect(() => {
+    let running = false
+
+    async function maybeExport() {
+      if (running) return
+      const last = localStorage.getItem(MD_EXPORT_KEY)
+      const due  = !last || (Date.now() - new Date(last).getTime()) >= MD_EXPORT_INTERVAL_MS
+      if (!due) return
+
+      running = true
+      try {
+        const { getValidToken } = await import('./auth/oauth')
+        const token = await getValidToken()
+        if (!token) return
+        for (const p of PROPERTIES) {
+          await exportAllMarkdownToDrive(token, p.id)
+        }
+        localStorage.setItem(MD_EXPORT_KEY, new Date().toISOString())
+      } catch {
+        // Non-fatal
+      } finally {
+        running = false
+      }
+    }
+
+    maybeExport()
+    // Check every hour; actually exports only if 6 h have elapsed
+    const interval = setInterval(maybeExport, 60 * 60_000)
+    return () => clearInterval(interval)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+}
+
 // ── Main app routes ──────────────────────────────────────────────────────────
 
 function MainApp() {
   useStartupSync()
+  useScheduledMarkdownExport()
 
   return (
     <HashRouter>
