@@ -2,7 +2,8 @@ import { DriveClient, ETagConflictError, CATEGORY_FOLDER_NAMES } from './driveCl
 import { localDriveAdapter } from './localDriveAdapter'
 import { localIndex } from './localIndex'
 import type { IndexRecord, IndexRecordType } from './localIndex'
-import { MAINTENANCE_TASKS, PROPERTIES } from '../data/mockData'
+import { MAINTENANCE_TASKS } from '../data/mockData'
+import { getPropertyById } from './propertyStore'
 import type { MaintenanceTask } from '../types'
 
 /** Returns the real DriveClient in production, or the localStorage adapter in dev bypass mode */
@@ -197,7 +198,7 @@ export async function pullFromDrive(
   token: string,
   propertyId: string,
 ): Promise<{ pulled: number; failed: number }> {
-  const property = PROPERTIES.find(p => p.id === propertyId)
+  const property = getPropertyById(propertyId)
   if (!property?.driveRootFolderId) return { pulled: 0, failed: 0 }
 
   const rootFolderId = property.driveRootFolderId
@@ -270,7 +271,7 @@ export function seedTasksForProperty(propertyId: string): void {
     return 'upcoming'
   }
 
-  const property = PROPERTIES.find(p => p.id === propertyId)
+  const property = getPropertyById(propertyId)
   const rootFolderId = property?.driveRootFolderId ?? ''
 
   function buildTaskData(task: MaintenanceTask, status: MaintenanceTask['status']): Record<string, unknown> {

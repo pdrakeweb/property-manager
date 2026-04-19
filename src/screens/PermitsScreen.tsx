@@ -4,7 +4,6 @@ import {
 } from 'lucide-react'
 import { cn } from '../utils/cn'
 import { useAppStore } from '../store/AppStoreContext'
-import { PROPERTIES } from '../data/mockData'
 import {
   permitStore, getPermitsForProperty,
   getExpiringPermits, getOpenPermits,
@@ -428,7 +427,7 @@ function PermitCard({
 // ── Main Screen ───────────────────────────────────────────────────────────────
 
 export function PermitsScreen() {
-  const { activePropertyId } = useAppStore()
+  const { activePropertyId, properties } = useAppStore()
   const [tick,       setTick]       = useState(0)
   const [showForm,   setShowForm]   = useState(false)
   const [editPermit, setEditPermit] = useState<Permit | undefined>()
@@ -436,7 +435,7 @@ export function PermitsScreen() {
 
   function refresh() { setTick(t => t + 1) }
 
-  const activeProperty = PROPERTIES.find(p => p.id === activePropertyId) ?? PROPERTIES[0]
+  const activeProperty = properties.find(p => p.id === activePropertyId) ?? properties[0]
   const allPermits     = getPermitsForProperty(activePropertyId)
   const expiring       = getExpiringPermits(activePropertyId, 30)
   const openPermits    = getOpenPermits(activePropertyId)

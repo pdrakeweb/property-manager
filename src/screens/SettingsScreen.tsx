@@ -2,13 +2,14 @@ import { useState, useEffect } from 'react'
 import {
   Eye, EyeOff, CheckCircle2, XCircle, Wifi, WifiOff,
   ExternalLink, ChevronRight, Building2, Loader2, RefreshCw, Sparkles, Calendar,
-  Sun, Moon, Monitor,
+  Sun, Moon, Monitor, Trash2, X,
 } from 'lucide-react'
 import { cn } from '../utils/cn'
 import { useTheme } from '../contexts/ThemeContext'
 import { getUserEmail, getUserName, signOut, getValidToken, startOAuthFlow, isDev } from '../auth/oauth'
 import { getQueueCount, retryAll } from '../lib/offlineQueue'
-import { PROPERTIES } from '../data/mockData'
+import { useAppStore } from '../store/AppStoreContext'
+import type { Property, PropertyType } from '../types'
 import {
   hasDevModelOverride, getDevModelOverride,
   getModelForTask, setModelForTask,
@@ -49,8 +50,167 @@ function Row({ label, children, sub }: { label: string; children?: React.ReactNo
   )
 }
 
+// ── Property add/edit modal ───────────────────────────────────────────────────
+
+interface PropertyFormState {
+  id: string
+  name: string
+  shortName: string
+  type: PropertyType
+  address: string
+  driveRootFolderId: string
+  latitude?: string
+  longitude?: string
+}
+
+function toFormState(p?: Property): PropertyFormState {
+  return {
+    id:                 p?.id ?? '',
+    name:               p?.name ?? '',
+    shortName:          p?.shortName ?? '',
+    type:               p?.type ?? 'residence',
+    address:            p?.address ?? '',
+    driveRootFolderId:  p?.driveRootFolderId ?? '',
+    latitude:           p?.latitude  != null ? String(p.latitude)  : '',
+    longitude:          p?.longitude != null ? String(p.longitude) : '',
+  }
+}
+
+function slugify(name: string): string {
+  return name.toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 40) || `prop_${Date.now()}`
+}
+
+function PropertyFormModal({
+  initial, existingIds, onSave, onClose,
+}: {
+  initial?: Property
+  existingIds: string[]
+  onSave: (p: Property) => void
+  onClose: () => void
+}) {
+  const [form, setForm] = useState<PropertyFormState>(() => toFormState(initial))
+  const [error, setError] = useState<string | null>(null)
+  const isNew = !initial
+
+  function set<K extends keyof PropertyFormState>(k: K, v: PropertyFormState[K]) {
+    setForm(f => ({ ...f, [k]: v }))
+  }
+
+  function handleSave() {
+    if (!form.name.trim()) { setError('Name is required'); return }
+
+    const id = isNew
+      ? (() => {
+          const base = slugify(form.name.trim())
+          let candidate = base
+          let n = 2
+          while (existingIds.includes(candidate)) candidate = `${base}_${n++}`
+          return candidate
+        })()
+      : form.id
+
+    const lat = form.latitude?.trim()  ? Number(form.latitude)  : undefined
+    const lon = form.longitude?.trim() ? Number(form.longitude) : undefined
+    if (lat !== undefined && (Number.isNaN(lat) || lat < -90 || lat > 90)) {
+      setError('Latitude must be between -90 and 90'); return
+    }
+    if (lon !== undefined && (Number.isNaN(lon) || lon < -180 || lon > 180)) {
+      setError('Longitude must be between -180 and 180'); return
+    }
+
+    const saved: Property = {
+      id,
+      name:      form.name.trim(),
+      shortName: form.shortName.trim() || form.name.trim(),
+      type:      form.type,
+      address:   form.address.trim(),
+      driveRootFolderId: form.driveRootFolderId.trim(),
+      stats:     initial?.stats ?? { documented: 0, total: 0 },
+      ...(lat !== undefined ? { latitude:  lat } : {}),
+      ...(lon !== undefined ? { longitude: lon } : {}),
+    }
+    onSave(saved)
+  }
+
+  const inp = 'w-full text-sm border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-green-300'
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 px-4 pb-4">
+      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-sm p-5 space-y-4 max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between">
+          <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
+            {isNew ? 'Add Property' : 'Edit Property'}
+          </h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="space-y-3">
+          <div>
+            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Name *</label>
+            <input value={form.name} onChange={e => set('name', e.target.value)} placeholder="e.g. 2392 Tannerville Rd" className={inp} />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Short name</label>
+            <input value={form.shortName} onChange={e => set('shortName', e.target.value)} placeholder="Tannerville" className={inp} />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Type</label>
+            <select value={form.type} onChange={e => set('type', e.target.value as PropertyType)} className={inp}>
+              <option value="residence">Residence</option>
+              <option value="camp">Camp</option>
+              <option value="land">Land</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Address</label>
+            <input value={form.address} onChange={e => set('address', e.target.value)} placeholder="Orrville, OH 44667" className={inp} />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Drive root folder ID</label>
+            <input value={form.driveRootFolderId} onChange={e => set('driveRootFolderId', e.target.value)} placeholder="Google Drive folder ID (optional)" className={cn(inp, 'font-mono')} />
+            <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">Records for this property will be synced inside this Drive folder.</p>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Latitude</label>
+              <input value={form.latitude ?? ''} onChange={e => set('latitude', e.target.value)} placeholder="40.8" className={inp} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Longitude</label>
+              <input value={form.longitude ?? ''} onChange={e => set('longitude', e.target.value)} placeholder="-81.8" className={inp} />
+            </div>
+          </div>
+        </div>
+
+        {error && (
+          <p className="text-xs text-red-600 dark:text-red-400">{error}</p>
+        )}
+
+        <div className="flex gap-3 pt-1">
+          <button onClick={onClose} className="flex-1 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-sm font-semibold hover:bg-slate-200 dark:hover:bg-slate-600">
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={!form.name.trim()}
+            className="flex-[2] py-2.5 rounded-xl bg-green-600 text-white text-sm font-semibold hover:bg-green-700 disabled:bg-green-300"
+          >
+            {isNew ? 'Add Property' : 'Save Changes'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export function SettingsScreen() {
   const { theme, setTheme } = useTheme()
+  const { properties, addProperty, updateProperty, removeProperty, activePropertyId } = useAppStore()
 
   // ── Auth ────────────────────────────────────────────────────────────────────
   const [userEmail] = useState(() => getUserEmail())
@@ -167,8 +327,24 @@ export function SettingsScreen() {
   }
 
   // ── Active property (for Drive Root display) ────────────────────────────────
-  const activePropertyId = localStorage.getItem('active_property_id') ?? 'tannerville'
-  const activeProperty   = PROPERTIES.find(p => p.id === activePropertyId) ?? PROPERTIES[0]
+  const activeProperty = properties.find(p => p.id === activePropertyId) ?? properties[0]
+
+  // ── Property add/edit/remove ────────────────────────────────────────────────
+  const [propertyModal, setPropertyModal] = useState<{ mode: 'add' } | { mode: 'edit'; property: Property } | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState<Property | null>(null)
+
+  function handleSaveProperty(p: Property) {
+    const exists = properties.some(x => x.id === p.id)
+    if (exists) updateProperty(p)
+    else        addProperty(p)
+    setPropertyModal(null)
+  }
+
+  function handleDeleteProperty(p: Property) {
+    if (properties.length <= 1) return   // never delete the last one
+    removeProperty(p.id)
+    setConfirmDelete(null)
+  }
 
   // ── Sign out ────────────────────────────────────────────────────────────────
   function handleSignOut() {
@@ -445,20 +621,72 @@ export function SettingsScreen() {
 
       {/* Properties */}
       <Section title="Properties">
-        {PROPERTIES.map(p => (
+        {properties.map(p => (
           <Row key={p.id} label={p.name} sub={`${p.type} · ${p.address || 'No address'}`}>
-            <button className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 font-medium hover:text-slate-700 dark:hover:text-slate-300">
-              Edit <ChevronRight className="w-3 h-3" />
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setPropertyModal({ mode: 'edit', property: p })}
+                className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 font-medium hover:text-slate-700 dark:hover:text-slate-300 px-2 py-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700"
+              >
+                Edit <ChevronRight className="w-3 h-3" />
+              </button>
+              {properties.length > 1 && (
+                <button
+                  onClick={() => setConfirmDelete(p)}
+                  title="Delete property"
+                  className="text-slate-400 dark:text-slate-500 hover:text-red-500 dark:hover:text-red-400 p-1 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
           </Row>
         ))}
         <div className="px-4 py-3">
-          <button className="text-xs text-green-600 dark:text-green-400 font-medium hover:text-green-700 dark:hover:text-green-300 flex items-center gap-1">
+          <button
+            onClick={() => setPropertyModal({ mode: 'add' })}
+            className="text-xs text-green-600 dark:text-green-400 font-medium hover:text-green-700 dark:hover:text-green-300 flex items-center gap-1"
+          >
             <Building2 className="w-3.5 h-3.5" />
             + Add property
           </button>
         </div>
       </Section>
+
+      {propertyModal && (
+        <PropertyFormModal
+          initial={propertyModal.mode === 'edit' ? propertyModal.property : undefined}
+          existingIds={properties.map(p => p.id)}
+          onSave={handleSaveProperty}
+          onClose={() => setPropertyModal(null)}
+        />
+      )}
+
+      {confirmDelete && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 px-4 pb-4">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-sm p-5 space-y-4">
+            <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">Delete property?</h2>
+            <p className="text-sm text-slate-600 dark:text-slate-400">
+              Remove <strong>{confirmDelete.name}</strong> from the app? Records already on Google Drive are not touched;
+              they just won't appear in the UI.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConfirmDelete(null)}
+                className="flex-1 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-sm font-semibold hover:bg-slate-200 dark:hover:bg-slate-600"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleDeleteProperty(confirmDelete)}
+                className="flex-1 py-2.5 rounded-xl bg-red-600 text-white text-sm font-semibold hover:bg-red-700"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Sync & Storage */}
       <Section title="Sync & Storage">

@@ -4,7 +4,7 @@ import { localIndex } from '../lib/localIndex'
 import type { SyncStats, IndexRecord } from '../lib/localIndex'
 import { syncAll } from '../lib/syncEngine'
 import { getValidToken } from '../auth/oauth'
-import { PROPERTIES } from '../data/mockData'
+import { getAllProperties } from '../lib/propertyStore'
 
 export function SyncScreen() {
   const [stats,   setStats]   = useState<SyncStats>(() => localIndex.getSyncStats())
@@ -33,7 +33,7 @@ export function SyncScreen() {
       }
       let uploaded = 0, failed = 0, pulled = 0, pullFailed = 0
       const allErrors: string[] = []
-      for (const p of PROPERTIES) {
+      for (const p of getAllProperties()) {
         const r = await syncAll(token, p.id)
         uploaded   += r.uploaded
         failed     += r.uploadFailed

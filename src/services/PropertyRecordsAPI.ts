@@ -2,16 +2,17 @@
  * Property Records API — provides structured access to property data.
  *
  * The AI interacts with this service rather than raw stores directly.
- * Pulls from localIndex + individual store modules + mock data.
+ * All reads go through user-editable stores (propertyStore, capitalItemStore,
+ * localIndex equipment records, costStore completed events, live HA client).
  */
 
-import {
-  PROPERTIES, EQUIPMENT, CAPITAL_ITEMS,
-  SERVICE_RECORDS, HA_STATUS, CATEGORIES,
-} from '../data/mockData'
+import { CATEGORIES } from '../data/mockData'
+import { getPropertyById } from '../lib/propertyStore'
+import { getCapitalItemsForProperty } from '../lib/capitalItemStore'
 import { getActiveTasks } from '../lib/maintenanceStore'
-// localIndex reserved for future direct index queries
-// import { localIndex } from '../lib/localIndex'
+import { localIndex } from '../lib/localIndex'
+import { costStore } from '../lib/costStore'
+import { listEntities, getHAConfig } from '../lib/haClient'
 import { getGeneratorsForProperty } from '../lib/generatorStore'
 import { getPoliciesForProperty } from '../lib/insuranceStore'
 import { getPermitsForProperty } from '../lib/permitStore'
@@ -25,7 +26,7 @@ import { getUpcomingExpiries } from '../lib/expiryStore'
 import { getNarrativeText } from '../lib/narrativeStore'
 import type {
   Property, EquipmentRecord, MaintenanceTask, CapitalItem,
-  ServiceRecord, HAStatus, Category,
+  ServiceRecord, HAStatus, Category, HAEntityState,
 } from '../types'
 
 // ─── Related file pointer ──────────────────────────────────────────────────────
@@ -50,6 +51,79 @@ export interface SearchResult {
   relatedFiles: RelatedFile[]
 }
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+/**
+ * localIndex stores equipment as a record with `data.values` holding the form
+ * fields. Project it back to the richer EquipmentRecord shape the AI/UI expect.
+ */
+function indexRecordToEquipment(r: import('../lib/localIndex').IndexRecord): EquipmentRecord {
+  const data   = (r.data ?? {}) as Record<string, unknown>
+  const values = ((data['values'] ?? {}) as Record<string, unknown>)
+
+  const pick = (k: string): string | undefined => {
+    const v = values[k]
+    return typeof v === 'string' && v.trim() ? v.trim() : undefined
+  }
+  const num = (k: string): number | undefined => {
+    const v = values[k]
+    if (typeof v === 'number') return v
+    if (typeof v === 'string' && v.trim()) {
+      const n = Number(v)
+      return Number.isFinite(n) ? n : undefined
+    }
+    return undefined
+  }
+
+  const installYear = num('install_year') ?? num('installYear')
+  const currentYear = new Date().getFullYear()
+  const age         = installYear ? Math.max(0, currentYear - installYear) : undefined
+
+  const uploadStatus: EquipmentRecord['uploadStatus'] =
+    r.syncState === 'synced'          ? 'uploaded'
+    : r.syncState === 'pending_upload' ? 'pending'
+    : r.syncState === 'conflict'       ? 'error'
+    : 'draft'
+
+  return {
+    id:            r.id,
+    propertyId:    r.propertyId,
+    categoryId:    r.categoryId ?? String(data['categoryId'] ?? ''),
+    label:         r.title,
+    brand:         pick('brand'),
+    model:         pick('model') ?? pick('model_number'),
+    serialNumber:  pick('serial_number') ?? pick('serialNumber'),
+    installYear,
+    age,
+    location:      pick('location'),
+    lastServiceDate: pick('last_service_date') ?? pick('lastServiceDate'),
+    uploadStatus,
+    hasPhotos:     Array.isArray(values['photos']) && (values['photos'] as unknown[]).length > 0,
+    ...(r.driveFileId ? { driveFileId: r.driveFileId } : {}),
+  }
+}
+
+function haEntityToStatus(e: HAEntityState): HAStatus {
+  const attrs = e.attributes ?? {}
+  const friendly = typeof attrs.friendly_name === 'string' ? attrs.friendly_name : e.entity_id
+  const unit     = typeof attrs.unit_of_measurement === 'string' ? attrs.unit_of_measurement : undefined
+  const value    = String(e.state)
+
+  let status: HAStatus['status'] = 'ok'
+  const lower = value.toLowerCase()
+  if (lower === 'unavailable' || lower === 'unknown') status = 'unknown'
+  else if (lower === 'off' || lower === 'closed')     status = 'off'
+  else if (lower === 'on' || lower === 'open' || lower === 'home' || lower === 'detected') status = 'ok'
+
+  return {
+    entityId: e.entity_id,
+    label:    friendly,
+    value,
+    ...(unit ? { unit } : {}),
+    status,
+  }
+}
+
 // ─── API Class ─────────────────────────────────────────────────────────────────
 
 export class PropertyRecordsAPI {
@@ -62,11 +136,11 @@ export class PropertyRecordsAPI {
   }
 
   getProperty(): Property | undefined {
-    return PROPERTIES.find(p => p.id === this.propertyId)
+    return getPropertyById(this.propertyId)
   }
 
   getEquipment(id?: string): EquipmentWithFiles | EquipmentWithFiles[] {
-    const records = EQUIPMENT.filter(e => e.propertyId === this.propertyId)
+    const records = localIndex.getAll('equipment', this.propertyId).map(indexRecordToEquipment)
 
     const enrich = (e: EquipmentRecord): EquipmentWithFiles => ({
       ...e,
@@ -107,7 +181,7 @@ export class PropertyRecordsAPI {
     priority?: string
     year?: number
   }): CapitalItem[] {
-    let items = CAPITAL_ITEMS.filter(c => c.propertyId === this.propertyId)
+    let items = getCapitalItemsForProperty(this.propertyId)
 
     if (filter?.priority) {
       items = items.filter(c => c.priority === filter.priority)
@@ -124,12 +198,26 @@ export class PropertyRecordsAPI {
     })
   }
 
+  /**
+   * Service history derived from completed maintenance events in costStore.
+   * Each CompletedEvent represents a finished task with cost/contractor info.
+   */
   getServiceHistory(filter?: {
     systemLabel?: string
     afterDate?: string
     beforeDate?: string
   }): ServiceRecord[] {
-    let records = SERVICE_RECORDS.filter(s => s.propertyId === this.propertyId)
+    let records: ServiceRecord[] = costStore.getAll()
+      .filter(e => e.propertyId === this.propertyId)
+      .map(e => ({
+        id:              e.id,
+        propertyId:      e.propertyId,
+        date:            e.completionDate,
+        systemLabel:     e.taskTitle || e.categoryId,
+        workDescription: e.notes ? `${e.taskTitle} — ${e.notes}` : e.taskTitle,
+        ...(e.contractor  ? { contractor: e.contractor } : {}),
+        ...(e.cost != null ? { totalCost: e.cost }       : {}),
+      }))
 
     if (filter?.systemLabel) {
       const q = filter.systemLabel.toLowerCase()
@@ -145,8 +233,36 @@ export class PropertyRecordsAPI {
     return records.sort((a, b) => b.date.localeCompare(a.date))
   }
 
-  getHAStatus(): HAStatus[] {
-    return HA_STATUS
+  /**
+   * Fetch live Home Assistant sensor states linked to this property's equipment.
+   * Returns [] when HA is not configured — no mock fallback.
+   */
+  async getHAStatus(): Promise<HAStatus[]> {
+    const { url, token } = getHAConfig()
+    if (!url || !token) return []
+
+    // Entity IDs linked to equipment at this property
+    const linkedIds = localIndex.getAll('equipment', this.propertyId)
+      .map(r => {
+        const data = r.data as Record<string, unknown>
+        const values = (data['values'] ?? {}) as Record<string, unknown>
+        const v = values['ha_entity_id']
+        return typeof v === 'string' && v.trim() ? v.trim() : null
+      })
+      .filter((v): v is string => v !== null)
+
+    if (linkedIds.length === 0) return []
+
+    try {
+      const all = await listEntities()
+      const byId = new Map(all.map(e => [e.entity_id, e]))
+      return linkedIds
+        .map(id => byId.get(id))
+        .filter((e): e is HAEntityState => e !== undefined)
+        .map(haEntityToStatus)
+    } catch {
+      return []
+    }
   }
 
   getCategories(): Category[] {
@@ -241,7 +357,7 @@ export class PropertyRecordsAPI {
     const q = query.toLowerCase()
     const results: SearchResult[] = []
 
-    const equipment = EQUIPMENT.filter(e => e.propertyId === this.propertyId)
+    const equipment = localIndex.getAll('equipment', this.propertyId).map(indexRecordToEquipment)
     for (const e of equipment) {
       const text = [e.label, e.brand, e.model, e.location, e.categoryId].filter(Boolean).join(' ').toLowerCase()
       if (text.includes(q)) {
@@ -269,7 +385,7 @@ export class PropertyRecordsAPI {
       }
     }
 
-    const capital = CAPITAL_ITEMS.filter(c => c.propertyId === this.propertyId)
+    const capital = getCapitalItemsForProperty(this.propertyId)
     for (const c of capital) {
       const text = [c.title, c.notes].filter(Boolean).join(' ').toLowerCase()
       if (text.includes(q)) {
@@ -283,7 +399,7 @@ export class PropertyRecordsAPI {
       }
     }
 
-    const services = SERVICE_RECORDS.filter(s => s.propertyId === this.propertyId)
+    const services = this.getServiceHistory()
     for (const s of services) {
       const text = [s.systemLabel, s.workDescription, s.contractor].filter(Boolean).join(' ').toLowerCase()
       if (text.includes(q)) {

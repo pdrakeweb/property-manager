@@ -6,7 +6,6 @@ import {
 } from 'lucide-react'
 import { cn } from '../utils/cn'
 import { getEmergencyCard, saveEmergencyCard } from '../lib/emergencyStore'
-import { PROPERTIES } from '../data/mockData'
 import { useAppStore } from '../store/AppStoreContext'
 import type { EmergencyCard } from '../schemas'
 
@@ -349,10 +348,10 @@ function EditMode({ card, onSave, onCancel }: {
 
 export function EmergencyScreen() {
   const { propertyId: paramPropertyId } = useParams<{ propertyId?: string }>()
-  const { activePropertyId } = useAppStore()
+  const { activePropertyId, properties } = useAppStore()
   const propertyId = paramPropertyId ?? activePropertyId
 
-  const property = PROPERTIES.find(p => p.id === propertyId) ?? PROPERTIES[0]
+  const property = properties.find(p => p.id === propertyId) ?? properties[0]
 
   const [editing, setEditing] = useState(false)
   const [card, setCard] = useState<EmergencyCard | null>(() => getEmergencyCard(propertyId))

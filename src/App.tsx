@@ -34,7 +34,7 @@ import { EquipmentDetailScreen }       from './screens/EquipmentDetailScreen'
 import { SyncScreen }                  from './screens/SyncScreen'
 
 import { syncAll, seedTasksForProperty } from './lib/syncEngine'
-import { PROPERTIES } from './data/mockData'
+import { getAllProperties, seedPropertiesIfEmpty } from './lib/propertyStore'
 import {
   isAuthenticated,
   startOAuthFlow,
@@ -262,8 +262,14 @@ function OAuthCallbackHandler({ onDone }: { onDone: (ok: boolean) => void }) {
 
 function useStartupSync() {
   useEffect(() => {
+    // 0. Seed properties on first run so the store has the defaults ready
+    //    (AppStoreProvider also does this; harmless to repeat).
+    seedPropertiesIfEmpty()
+
+    const properties = getAllProperties()
+
     // 1. Seed tasks for all properties immediately (no network needed)
-    for (const p of PROPERTIES) seedTasksForProperty(p.id)
+    for (const p of properties) seedTasksForProperty(p.id)
 
     // 2. Async Drive sync — pull remote files into index, push any pending
     let running = false
@@ -275,7 +281,7 @@ function useStartupSync() {
         const token = await getValidToken()
         if (!token) return
         // Sync all properties in sequence (rate-limit friendly)
-        for (const p of PROPERTIES) {
+        for (const p of properties) {
           await syncAll(token, p.id)
         }
         localStorage.setItem('pm_last_sync_at', new Date().toISOString())

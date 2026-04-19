@@ -9,7 +9,7 @@
 
 import { makeStore } from './localStore'
 import { localIndex, type IndexRecordType } from './localIndex'
-import { PROPERTIES } from '../data/mockData'
+import { getPropertyById } from './propertyStore'
 
 /**
  * Create a store that automatically syncs records to Drive via localIndex.
@@ -32,7 +32,7 @@ export function makeSyncedStore<T extends { id: string }>(
   function syncToIndex(item: T): void {
     const propId = resolvePropertyId(item)
     if (!propId) return
-    const property = PROPERTIES.find(p => p.id === propId)
+    const property = getPropertyById(propId)
     const rootFolderId = property?.driveRootFolderId ?? ''
 
     // Don't queue if no Drive root (e.g. Camp with empty driveRootFolderId)
