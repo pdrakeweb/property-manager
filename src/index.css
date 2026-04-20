@@ -69,6 +69,31 @@
   .text-subtle {
     @apply text-slate-400 dark:text-slate-500;
   }
+
+  /* ── Form primitives (seeded in Phase B for the DSL form renderer) ─────
+     Full Phase A vocabulary will expand these with buttons, badges, etc. */
+  .form-field {
+    @apply flex flex-col gap-1;
+  }
+  .form-label {
+    @apply text-sm font-medium text-slate-700 dark:text-slate-300;
+  }
+  .form-label-required::after {
+    content: ' *';
+    @apply text-red-500;
+  }
+  .form-help {
+    @apply text-xs text-slate-500 dark:text-slate-400;
+  }
+  .form-error {
+    @apply text-xs text-red-600 dark:text-red-400;
+  }
+  .form-row {
+    @apply grid grid-cols-1 sm:grid-cols-2 gap-4;
+  }
+  .form-grid {
+    @apply grid gap-4;
+  }
 }
 
 @layer utilities {

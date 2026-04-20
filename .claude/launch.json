@@ -4,7 +4,7 @@
     {
       "name": "property-manager",
       "runtimeExecutable": "C:/Users/pdrak/AppData/Local/nvm/v25.9.0/node.exe",
-      "runtimeArgs": ["node_modules/vite/bin/vite.js", "--port", "5190", "--host"],
+      "runtimeArgs": ["node_modules/vite/bin/vite.js", "--port", "5190", "--strictPort", "--host"],
       "port": 5190
     }
   ]

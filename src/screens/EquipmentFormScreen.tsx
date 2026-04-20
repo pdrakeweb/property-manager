@@ -14,8 +14,16 @@ import { localIndex } from '../lib/localIndex'
 import { getOpenRouterKey } from '../store/settings'
 import { useDocumentExtraction, confidenceRing } from '../hooks/useDocumentExtraction'
 import type { Category } from '../types'
+import type { FieldDef as DslFieldDef } from '../records/_framework'
+import { resolveOptions } from '../records/_framework'
+import { equipmentDef } from '../records/equipment'
+import { getEquipmentProfile } from '../records/equipmentProfiles'
 
-// ── Field definitions ────────────────────────────────────────────────────────
+// ── Field adapter ────────────────────────────────────────────────────────────
+//
+// The per-category field sets live in the DSL plugin registry (see
+// `records/equipmentProfiles.ts`). This screen still renders with its local
+// `FieldDef` shape, so we adapt DSL `FieldDef` → local shape on the fly.
 
 type FieldDef = {
   id: string
@@ -26,167 +34,36 @@ type FieldDef = {
   placeholder?: string
 }
 
-const CATEGORY_FIELDS: Record<string, FieldDef[]> = {
-  generator: [
-    { id: 'brand',               label: 'Brand',                type: 'text'     },
-    { id: 'model',               label: 'Model Name',           type: 'text'     },
-    { id: 'model_number',        label: 'Model Number',         type: 'text'     },
-    { id: 'serial_number',       label: 'Serial Number',        type: 'text'     },
-    { id: 'kw_rating',           label: 'Output',               type: 'number',  unit: 'kW'  },
-    { id: 'fuel_type',           label: 'Fuel Type',            type: 'select',  options: ['Propane', 'Natural Gas', 'Gasoline', 'Diesel'] },
-    { id: 'transfer_switch_brand', label: 'Transfer Switch Brand', type: 'text' },
-    { id: 'transfer_switch_amps',  label: 'Transfer Switch Amps',  type: 'number', unit: 'A' },
-    { id: 'oil_type',            label: 'Engine Oil Type',      type: 'text',    placeholder: 'e.g. 5W-30 Synthetic' },
-    { id: 'oil_capacity_qt',     label: 'Oil Capacity',         type: 'number',  unit: 'qt' },
-    { id: 'air_filter_part',     label: 'Air Filter Part #',    type: 'text'     },
-    { id: 'last_service_date',   label: 'Last Service Date',    type: 'date'     },
-    { id: 'notes',               label: 'Notes',                type: 'textarea' },
-  ],
-  hvac: [
-    { id: 'unit_type',     label: 'Unit Type',        type: 'select', options: ['Furnace', 'Air Conditioner', 'Heat Pump', 'Air Handler', 'Mini-Split'] },
-    { id: 'unit_label',    label: 'Zone / Label',     type: 'text',   placeholder: 'e.g. Main Floor, Sunroom' },
-    { id: 'brand',         label: 'Brand',            type: 'text'     },
-    { id: 'model',         label: 'Model Number',     type: 'text'     },
-    { id: 'serial_number', label: 'Serial Number',    type: 'text'     },
-    { id: 'install_date',  label: 'Install Date',     type: 'date'     },
-    { id: 'tonnage',       label: 'Cooling Tonnage',  type: 'number',  unit: 'tons' },
-    { id: 'seer',          label: 'SEER Rating',      type: 'number'   },
-    { id: 'refrigerant_type', label: 'Refrigerant',  type: 'select',  options: ['R-410A', 'R-32', 'R-22', 'R-454B'] },
-    { id: 'filter_size',   label: 'Filter Size',      type: 'text',    placeholder: 'e.g. 20×25×4' },
-    { id: 'notes',         label: 'Notes',            type: 'textarea' },
-  ],
-  water_heater: [
-    { id: 'brand',         label: 'Brand',            type: 'text'   },
-    { id: 'model',         label: 'Model Number',     type: 'text'   },
-    { id: 'serial_number', label: 'Serial Number',    type: 'text'   },
-    { id: 'fuel_type',     label: 'Fuel Type',        type: 'select', options: ['Natural Gas', 'Propane', 'Electric', 'Heat Pump', 'Tankless Gas'] },
-    { id: 'tank_gallons',  label: 'Tank Capacity',    type: 'number', unit: 'gal' },
-    { id: 'btu_input',     label: 'BTU Input',        type: 'number', unit: 'BTU' },
-    { id: 'install_date',  label: 'Install Date',     type: 'date'   },
-    { id: 'notes',         label: 'Notes',            type: 'textarea' },
-  ],
-  water_treatment: [
-    { id: 'system_type',   label: 'System Type',      type: 'select', options: ['Water Softener', 'Iron Filter', 'UV Disinfection', 'RO System', 'Whole House Filter'] },
-    { id: 'brand',         label: 'Brand',            type: 'text'   },
-    { id: 'model',         label: 'Model Number',     type: 'text'   },
-    { id: 'serial_number', label: 'Serial Number',    type: 'text'   },
-    { id: 'install_date',  label: 'Install Date',     type: 'date'   },
-    { id: 'location',      label: 'Location',         type: 'text',  placeholder: 'e.g. Utility room' },
-    { id: 'notes',         label: 'Notes',            type: 'textarea' },
-  ],
-  appliance: [
-    { id: 'appliance_type', label: 'Appliance Type', type: 'select', options: ['Refrigerator', 'Dishwasher', 'Range/Oven', 'Microwave', 'Washer', 'Dryer', 'Freezer', 'Garbage Disposal', 'Garage Door Opener', 'Other'] },
-    { id: 'brand',          label: 'Brand',          type: 'text'   },
-    { id: 'model',          label: 'Model Number',   type: 'text'   },
-    { id: 'serial_number',  label: 'Serial Number',  type: 'text'   },
-    { id: 'install_date',   label: 'Purchase / Install Date', type: 'date' },
-    { id: 'location',       label: 'Location',       type: 'text',  placeholder: 'e.g. Kitchen, Garage' },
-    { id: 'notes',          label: 'Notes',          type: 'textarea' },
-  ],
-  propane: [
-    { id: 'supplier',      label: 'Supplier',         type: 'text',  placeholder: 'e.g. Ferrellgas' },
-    { id: 'tank_gallons',  label: 'Tank Capacity',    type: 'number', unit: 'gal' },
-    { id: 'ownership',     label: 'Tank Ownership',   type: 'select', options: ['Owned', 'Rented/Leased'] },
-    { id: 'tank_age_year', label: 'Tank Year',        type: 'number', placeholder: 'e.g. 2006' },
-    { id: 'location',      label: 'Location',         type: 'text',  placeholder: 'e.g. South yard' },
-    { id: 'account_number', label: 'Account Number',  type: 'text'   },
-    { id: 'notes',         label: 'Notes',            type: 'textarea' },
-  ],
-  well: [
-    { id: 'pump_brand',    label: 'Pump Brand',       type: 'text'   },
-    { id: 'pump_model',    label: 'Pump Model',       type: 'text'   },
-    { id: 'pump_hp',       label: 'Pump HP',          type: 'number', unit: 'HP' },
-    { id: 'well_depth_ft', label: 'Well Depth',       type: 'number', unit: 'ft' },
-    { id: 'tank_brand',    label: 'Pressure Tank Brand', type: 'text' },
-    { id: 'tank_gallons',  label: 'Tank Capacity',    type: 'number', unit: 'gal' },
-    { id: 'install_date',  label: 'Install Date',     type: 'date'   },
-    { id: 'notes',         label: 'Notes',            type: 'textarea' },
-  ],
-  septic: [
-    { id: 'tank_gallons',  label: 'Tank Capacity',    type: 'number', unit: 'gal' },
-    { id: 'tank_material', label: 'Tank Material',    type: 'select', options: ['Concrete', 'Fiberglass', 'Plastic'] },
-    { id: 'last_pumped',   label: 'Last Pumped',      type: 'date'   },
-    { id: 'pump_company',  label: 'Pump Company',     type: 'text'   },
-    { id: 'drainfield_info', label: 'Drainfield Info', type: 'textarea' },
-    { id: 'notes',         label: 'Notes',            type: 'textarea' },
-  ],
-  electrical: [
-    { id: 'panel_type',    label: 'Panel Type',       type: 'select', options: ['Main Panel', 'Sub Panel'] },
-    { id: 'brand',         label: 'Brand',            type: 'text',  placeholder: 'e.g. Square D, Eaton' },
-    { id: 'amps',          label: 'Amperage',         type: 'number', unit: 'A' },
-    { id: 'circuits',      label: 'Circuit Count',    type: 'number' },
-    { id: 'location',      label: 'Location',         type: 'text',  placeholder: 'e.g. Basement utility room' },
-    { id: 'install_date',  label: 'Install Date',     type: 'date'   },
-    { id: 'notes',         label: 'Notes / Circuit Directory', type: 'textarea' },
-  ],
-  roof: [
-    { id: 'section',       label: 'Section / Area',   type: 'text',  placeholder: 'e.g. Main House, Barn, Addition' },
-    { id: 'material',      label: 'Material',         type: 'select', options: ['Asphalt Shingle', 'Metal Standing Seam', 'Metal Corrugated', 'EPDM Rubber', 'TPO', 'Cedar Shake', 'Slate', 'Other'] },
-    { id: 'install_date',  label: 'Install Date',     type: 'date'   },
-    { id: 'contractor',    label: 'Contractor',       type: 'text'   },
-    { id: 'warranty_years', label: 'Warranty Years',  type: 'number', unit: 'yr' },
-    { id: 'color',         label: 'Color / Style',    type: 'text'   },
-    { id: 'notes',         label: 'Notes',            type: 'textarea' },
-  ],
-  sump_pump: [
-    { id: 'pump_type',     label: 'Pump Type',        type: 'select', options: ['Primary Electric', 'Battery Backup', 'Water-Powered Backup'] },
-    { id: 'brand',         label: 'Brand',            type: 'text'   },
-    { id: 'model',         label: 'Model',            type: 'text'   },
-    { id: 'hp',            label: 'HP Rating',        type: 'number', unit: 'HP' },
-    { id: 'install_date',  label: 'Install Date',     type: 'date'   },
-    { id: 'location',      label: 'Pit Location',     type: 'text'   },
-    { id: 'notes',         label: 'Notes',            type: 'textarea' },
-  ],
-  radon: [
-    { id: 'contractor',    label: 'Installer',        type: 'text'   },
-    { id: 'install_date',  label: 'Install Date',     type: 'date'   },
-    { id: 'fan_brand',     label: 'Fan Brand/Model',  type: 'text'   },
-    { id: 'last_test_level', label: 'Last Test Level', type: 'number', unit: 'pCi/L' },
-    { id: 'last_test_date',  label: 'Last Test Date',  type: 'date'   },
-    { id: 'notes',         label: 'Notes',            type: 'textarea' },
-  ],
-  barn: [
-    { id: 'structure_year', label: 'Built / Estimated Year', type: 'number' },
-    { id: 'size_sqft',     label: 'Square Footage',   type: 'number', unit: 'sq ft' },
-    { id: 'electrical',    label: 'Electrical',       type: 'text',  placeholder: 'e.g. 100A sub-panel, 4 circuits' },
-    { id: 'roof_material', label: 'Roof Material',    type: 'text'   },
-    { id: 'condition',     label: 'Overall Condition', type: 'select', options: ['Good', 'Fair', 'Poor', 'Needs Attention'] },
-    { id: 'notes',         label: 'Notes',            type: 'textarea' },
-  ],
-  surveillance: [
-    { id: 'camera_brand',  label: 'Camera Brand',     type: 'text',  placeholder: 'e.g. Reolink, Hikvision' },
-    { id: 'camera_model',  label: 'Camera Model',     type: 'text'   },
-    { id: 'location',      label: 'Camera Location',  type: 'text',  placeholder: 'e.g. Driveway, Back door' },
-    { id: 'resolution',    label: 'Resolution',       type: 'select', options: ['1080p', '4MP', '4K/8MP', 'Other'] },
-    { id: 'nvr_brand',     label: 'NVR/DVR Brand',    type: 'text'   },
-    { id: 'ip_address',    label: 'IP Address',       type: 'text',  placeholder: 'e.g. 192.168.1.x' },
-    { id: 'notes',         label: 'Notes',            type: 'textarea' },
-  ],
-  forestry_cauv: [
-    { id: 'record_type',   label: 'Record Type',      type: 'select', options: ['CAUV Renewal', 'Timber Harvest', 'Tree Planting', 'Forest Management Plan', 'Boundary Survey', 'Other'] },
-    { id: 'date',          label: 'Activity Date',    type: 'date'   },
-    { id: 'acres',         label: 'Acres Affected',   type: 'number', unit: 'ac' },
-    { id: 'contractor',    label: 'Contractor / Agency', type: 'text' },
-    { id: 'notes',         label: 'Notes',            type: 'textarea' },
-  ],
-  service_record: [
-    { id: 'system',        label: 'System / Area',    type: 'text',  placeholder: 'e.g. Generator, HVAC, Well' },
-    { id: 'date',          label: 'Service Date',     type: 'date'   },
-    { id: 'contractor',    label: 'Contractor',       type: 'text'   },
-    { id: 'work_done',     label: 'Work Performed',   type: 'textarea', placeholder: 'Describe what was done' },
-    { id: 'cost',          label: 'Total Cost',       type: 'number', unit: '$' },
-    { id: 'invoice_ref',   label: 'Invoice Reference', type: 'text'  },
-    { id: 'notes',         label: 'Notes',            type: 'textarea' },
-  ],
+function dslKindToType(kind: DslFieldDef['kind']): FieldDef['type'] {
+  switch (kind) {
+    case 'textarea':            return 'textarea'
+    case 'date':                return 'date'
+    case 'select':              return 'select'
+    case 'boolean':             return 'boolean'
+    case 'number':
+    case 'currency':            return 'number'
+    default:                    return 'text'
+  }
 }
 
-const DEFAULT_FIELDS: FieldDef[] = [
-  { id: 'brand',         label: 'Brand',         type: 'text'     },
-  { id: 'model',         label: 'Model Number',  type: 'text'     },
-  { id: 'serial_number', label: 'Serial Number', type: 'text'     },
-  { id: 'install_date',  label: 'Install Date',  type: 'date'     },
-  { id: 'notes',         label: 'Notes',         type: 'textarea' },
-]
+function adaptField(f: DslFieldDef): FieldDef {
+  return {
+    id:           f.id,
+    label:        f.label,
+    type:         dslKindToType(f.kind),
+    options:      f.options ? [...resolveOptions(f)] : undefined,
+    unit:         f.unit,
+    placeholder:  f.placeholder,
+  }
+}
+
+/** Resolve the field list for a subsystem category via the plugin registry. */
+function fieldsForCategory(categoryId: string): FieldDef[] {
+  const profile = getEquipmentProfile(categoryId)
+  if (profile) return profile.fields.map(adaptField)
+  // Unknown subsystem — fall back to the base equipment field set.
+  return equipmentDef.fields.map(adaptField)
+}
 
 // ── Component ────────────────────────────────────────────────────────────────
 
@@ -208,7 +85,7 @@ export function EquipmentFormScreen() {
   const navigate = useNavigate()
 
   const category = CATEGORIES.find(c => c.id === categoryId) as Category | undefined
-  const fields   = CATEGORY_FIELDS[categoryId] ?? DEFAULT_FIELDS
+  const fields   = fieldsForCategory(categoryId)
 
   const [values,    setValues]    = useState<Record<string, string>>({})
   const [saveState, setSaveState] = useState<SaveState>('idle')
@@ -222,7 +99,10 @@ export function EquipmentFormScreen() {
   // ── AI extraction via hook ─────────────────────────────────────────────────
 
   const fieldIds = fields.map(f => f.id)
-  const extractionPrompt = buildExtractionPrompt(category?.label ?? categoryId, fieldIds)
+  // Prefer the plugin-declared extraction prompt; fall back to the legacy
+  // generic template when the subsystem isn't registered.
+  const profilePrompt = getEquipmentProfile(categoryId)?.extractionPrompt
+  const extractionPrompt = profilePrompt ?? buildExtractionPrompt(category?.label ?? categoryId, fieldIds)
 
   const {
     aiState, extracted, aiError, docs,

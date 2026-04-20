@@ -11,6 +11,7 @@ import { makeStore } from './localStore'
 import { localIndex, type IndexRecordType } from './localIndex'
 import { propertyStore } from './propertyStore'
 import { auditLog } from './auditLog'
+import { getDefinition } from '../records/registry'
 
 /**
  * Create a store that automatically syncs records to Drive via localIndex.
@@ -39,12 +40,25 @@ export function makeSyncedStore<T extends { id: string }>(
     // Don't queue if no Drive root (e.g. Camp with empty driveRootFolderId)
     if (!rootFolderId) return
 
-    // Derive a human-readable title from common naming fields
+    // Derive a human-readable title: DSL definition first, then the legacy heuristic.
+    // Guarded so a DSL title fn returning undefined (e.g. record missing `name`)
+    // still produces a stable fallback rather than literally storing "undefined".
     const typed = item as Record<string, unknown>
-    const title = String(
-      typed['label'] ?? typed['name'] ?? typed['title'] ?? typed['provider'] ??
-      typed['taskTitle'] ?? `${indexType}_${(item as { id: string }).id.slice(0, 8)}`,
-    )
+    const def = getDefinition(indexType)
+    const fallback = `${indexType}_${(item as { id: string }).id.slice(0, 8)}`
+    const title = def
+      ? (() => {
+          try {
+            const raw = def.title(typed as never)
+            return raw ? String(raw) : fallback
+          } catch {
+            return fallback
+          }
+        })()
+      : String(
+          typed['label'] ?? typed['name'] ?? typed['title'] ?? typed['provider'] ??
+          typed['taskTitle'] ?? fallback,
+        )
 
     // JSON filename: <type>_<id>.json
     const filename = `${indexType}_${(item as { id: string }).id}.json`
