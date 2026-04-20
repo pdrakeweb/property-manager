@@ -398,10 +398,8 @@ export function ChecklistRunScreen() {
           <button
             onClick={handleComplete}
             className={cn(
-              'w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-semibold text-sm transition-colors shadow-sm',
-              allResolved
-                ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                : 'bg-sky-600 hover:bg-sky-700 text-white',
+              'btn btn-block btn-lg shadow-sm',
+              allResolved ? 'btn-primary' : 'btn-info',
             )}
           >
             <CheckSquare className="w-5 h-5" />

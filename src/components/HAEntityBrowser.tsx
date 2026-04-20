@@ -82,7 +82,7 @@ export function HAEntityBrowser({ currentEntityId, onSelect, onClose }: Props) {
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Search entity ID or name…"
-              className="w-full pl-9 pr-4 py-2 text-sm border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-300 focus:border-green-300 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+              className="w-full pl-9 pr-4 py-2 text-sm input-surface rounded-xl"
             />
           </div>
         </div>
@@ -171,14 +171,14 @@ export function HAEntityBrowser({ currentEntityId, onSelect, onClose }: Props) {
           <div className="flex gap-2 shrink-0">
             <button
               onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 transition-colors"
+              className="btn btn-ghost"
             >
               Cancel
             </button>
             <button
               onClick={() => { if (selected) { onSelect(selected); onClose() } }}
               disabled={!selected}
-              className="px-4 py-2 text-sm font-semibold rounded-xl bg-green-600 text-white hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              className="btn btn-primary"
             >
               Link Entity
             </button>

@@ -150,7 +150,7 @@ function DriveFolderModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+    <div className="modal-backdrop items-center bg-black/50 backdrop-blur-sm pb-0">
       <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden flex flex-col">
 
         {/* Header */}
@@ -213,13 +213,13 @@ function DriveFolderModal({
         <div className="flex items-center justify-between gap-2 px-4 py-3 border-t border-slate-100 dark:border-slate-700">
           <button
             onClick={onCancel}
-            className="text-xs px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600"
+            className="btn btn-secondary btn-sm"
           >
             Cancel
           </button>
           <button
             onClick={() => onSelect(current.id, current.name)}
-            className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-green-600 text-white hover:bg-green-700"
+            className="btn btn-primary btn-sm"
           >
             Select "{current.name}"
           </button>

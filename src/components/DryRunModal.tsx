@@ -18,7 +18,7 @@ export function DryRunModal({ result, onClose }: DryRunModalProps) {
   const isEmpty = summary.willCreate === 0 && summary.willUpdate === 0 && summary.willDelete === 0
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 px-4 pb-4">
+    <div className="modal-backdrop">
       <div className="modal-surface rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md max-h-[85vh] overflow-y-auto">
 
         {/* Header */}
@@ -120,7 +120,7 @@ export function DryRunModal({ result, onClose }: DryRunModalProps) {
           <button
             type="button"
             onClick={onClose}
-            className="w-full py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium transition-colors"
+            className="btn btn-secondary btn-block"
           >
             Close
           </button>

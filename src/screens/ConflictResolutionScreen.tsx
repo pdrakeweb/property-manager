@@ -207,7 +207,7 @@ function ConflictCard({
               type="button"
               onClick={keepMine}
               disabled={saving}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white text-xs font-semibold transition-colors"
+              className="btn btn-primary btn-sm gap-1.5"
             >
               <CheckCircle2 className="w-3.5 h-3.5" />
               Keep mine (v2)
@@ -216,7 +216,7 @@ function ConflictCard({
               type="button"
               onClick={keepTheirs}
               disabled={saving}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50 text-slate-700 dark:text-slate-300 text-xs font-semibold transition-colors"
+              className="btn btn-secondary btn-sm gap-1.5"
             >
               <Trash2 className="w-3.5 h-3.5" />
               Keep theirs (Drive)
@@ -226,7 +226,7 @@ function ConflictCard({
                 type="button"
                 onClick={saveMerge}
                 disabled={saving}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-amber-300 bg-amber-50 hover:bg-amber-100 disabled:opacity-50 text-amber-800 text-xs font-semibold transition-colors"
+                className="btn btn-warning-soft btn-sm gap-1.5"
               >
                 <GitMerge className="w-3.5 h-3.5" />
                 Save merge

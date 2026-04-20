@@ -83,7 +83,7 @@ function DocumentCapturePanel({
           <button
             onClick={() => cameraRef.current?.click()}
             disabled={aiState === 'extracting'}
-            className="flex items-center justify-center gap-2 bg-sky-600 hover:bg-sky-700 disabled:bg-sky-400 text-white text-sm font-medium rounded-xl px-4 py-2.5 transition-colors"
+            className="btn btn-info"
           >
             <Camera className="w-4 h-4" />
             Capture
@@ -91,7 +91,7 @@ function DocumentCapturePanel({
           <button
             onClick={() => uploadRef.current?.click()}
             disabled={aiState === 'extracting'}
-            className="flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium rounded-xl px-4 py-2.5 transition-colors"
+            className="btn btn-secondary"
           >
             <Upload className="w-4 h-4" />
             Upload
@@ -234,10 +234,10 @@ function AssessmentForm({
       </div>
 
       <div className="flex gap-3">
-        <button onClick={onCancel} className="flex-1 py-3 rounded-2xl bg-slate-100 text-slate-700 text-sm font-semibold hover:bg-slate-200">
+        <button onClick={onCancel} className="btn btn-secondary btn-lg flex-1">
           Cancel
         </button>
-        <button onClick={handleSave} className="flex-1 py-3 rounded-2xl bg-sky-600 text-white text-sm font-semibold hover:bg-sky-700">
+        <button onClick={handleSave} className="btn btn-info btn-lg flex-1">
           Save Assessment
         </button>
       </div>
@@ -337,10 +337,10 @@ function PaymentForm({
       </div>
 
       <div className="flex gap-3">
-        <button onClick={onCancel} className="flex-1 py-3 rounded-2xl bg-slate-100 text-slate-700 text-sm font-semibold hover:bg-slate-200">
+        <button onClick={onCancel} className="btn btn-secondary btn-lg flex-1">
           Cancel
         </button>
-        <button onClick={handleSave} className="flex-1 py-3 rounded-2xl bg-sky-600 text-white text-sm font-semibold hover:bg-sky-700">
+        <button onClick={handleSave} className="btn btn-info btn-lg flex-1">
           Save Payment
         </button>
       </div>

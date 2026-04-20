@@ -590,7 +590,7 @@ export function AIAdvisoryScreen() {
           <button
             onClick={() => handleSend()}
             disabled={!input.trim() || loading}
-            className="w-9 h-9 rounded-xl bg-green-600 text-white flex items-center justify-center shrink-0 hover:bg-green-700 disabled:bg-slate-200 dark:disabled:bg-slate-700 disabled:text-slate-400 transition-colors mb-0.5"
+            className="btn btn-primary btn-icon w-9 h-9 shrink-0 mb-0.5"
           >
             <Send className="w-4 h-4" />
           </button>

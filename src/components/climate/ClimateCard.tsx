@@ -104,7 +104,7 @@ export function ClimateCard({ property }: ClimateCardProps) {
         {/* Climate Zone Badge */}
         {climate && (
           <div className="flex items-center gap-2">
-            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-sky-50 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800">
+            <span className="badge badge-outline-info rounded-md font-semibold">
               Zone {climate.climateZone}
             </span>
             <span className="text-xs text-slate-500 dark:text-slate-400">{climate.climateZoneDescription}</span>

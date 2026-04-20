@@ -211,7 +211,7 @@ function SeasonCard({
         {status === 'not_started' && (
           <button
             onClick={handlePrimary}
-            className="flex items-center gap-1.5 bg-sky-600 hover:bg-sky-700 text-white rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors"
+            className="btn btn-info gap-1.5"
           >
             <Play className="w-3.5 h-3.5" />
             Start
@@ -220,7 +220,7 @@ function SeasonCard({
         {status === 'in_progress' && (
           <button
             onClick={handlePrimary}
-            className="flex items-center gap-1.5 bg-sky-600 hover:bg-sky-700 text-white rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors"
+            className="btn btn-info gap-1.5"
           >
             <ChevronRight className="w-3.5 h-3.5" />
             Continue
@@ -230,7 +230,7 @@ function SeasonCard({
           <>
             <button
               onClick={handleViewCompleted}
-              className="flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors"
+              className="btn btn-secondary gap-1.5"
             >
               View
             </button>

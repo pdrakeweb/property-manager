@@ -125,10 +125,10 @@ function QuickAddModal({ onClose, onSaved }: { onClose: () => void; onSaved: () 
     onClose()
   }
 
-  const inp = 'w-full text-sm border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-green-300'
+  const inp = 'w-full text-sm input-surface rounded-xl px-3 py-2.5'
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 px-4 pb-4">
+    <div className="modal-backdrop">
       <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-sm p-5 space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">Quick Add Task</h2>
@@ -169,13 +169,13 @@ function QuickAddModal({ onClose, onSaved }: { onClose: () => void; onSaved: () 
         </div>
 
         <div className="flex gap-3 pt-1">
-          <button onClick={onClose} className="flex-1 py-3 rounded-2xl bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-sm font-semibold hover:bg-slate-200 dark:hover:bg-slate-600">
+          <button onClick={onClose} className="btn btn-secondary btn-lg flex-1">
             Cancel
           </button>
           <button
             onClick={handleSave}
             disabled={!title.trim()}
-            className="flex-[2] py-3 rounded-2xl bg-green-600 text-white text-sm font-semibold hover:bg-green-700 disabled:bg-sky-300"
+            className="btn btn-primary btn-lg flex-[2]"
           >
             Add Task
           </button>
@@ -296,7 +296,7 @@ export function DashboardScreen() {
         </div>
         <button
           onClick={() => setShowQuickAdd(true)}
-          className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-xl px-4 py-2.5 transition-colors"
+          className="btn btn-primary"
         >
           <Plus className="w-4 h-4" />
           Add task
@@ -324,7 +324,7 @@ export function DashboardScreen() {
       {/* ── Cross-Property Health Cards (All mode only) ──────────────────── */}
       {dashboardMode === 'all' && (
         <div>
-          <h2 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">Property Health</h2>
+          <h2 className="section-title mb-2">Property Health</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {properties.map(p => (
               <PropertyHealthCard key={p.id} property={p} onSelect={handlePropertySelect} />
@@ -336,7 +336,7 @@ export function DashboardScreen() {
       {/* ── Property Health Row (All mode only) ──────────────────────────── */}
       {dashboardMode === 'all' && (
       <div>
-        <h2 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">Property Status</h2>
+        <h2 className="section-title mb-2">Property Status</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {propHealth.map(p => {
             const badge = healthBadge(p.overdueCount)
@@ -425,7 +425,7 @@ export function DashboardScreen() {
       {/* ── Due in 30 Days (All mode only) ─────────────────────────────── */}
       {dashboardMode === 'all' && allDue30.length > 0 && (
         <div>
-          <h2 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">
+          <h2 className="section-title mb-2">
             Due in 30 Days — All Properties
           </h2>
           <Card>
@@ -464,7 +464,7 @@ export function DashboardScreen() {
       {/* ── Capital Projects — All Properties (All mode only) ─────────── */}
       {dashboardMode === 'all' && CAPITAL_ITEMS.filter(i => i.priority === 'critical' || i.priority === 'high').length > 0 && (
         <div>
-          <h2 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">
+          <h2 className="section-title mb-2">
             Capital Projects — All Properties
           </h2>
           <Card>
@@ -492,7 +492,7 @@ export function DashboardScreen() {
 
       {/* ── Mini Calendar ───────────────────────────────────────────────── */}
       <div>
-        <h2 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">Calendar</h2>
+        <h2 className="section-title mb-2">Calendar</h2>
         <MiniCalendar propertyId={activePropertyId} />
       </div>
 

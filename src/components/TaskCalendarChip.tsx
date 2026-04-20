@@ -59,7 +59,7 @@ export function TaskCalendarChip({ task, propertyId }: TaskCalendarChipProps) {
           type="button"
           onClick={handleClick}
           title={error ?? task.calendarError ?? 'Calendar error — tap to retry'}
-          className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-red-50 border-red-200 text-red-700"
+          className="badge badge-outline-danger"
         >
           <AlertTriangle className="w-3 h-3" />
           Calendar error
@@ -71,7 +71,7 @@ export function TaskCalendarChip({ task, propertyId }: TaskCalendarChipProps) {
 
   if (syncing) {
     return (
-      <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-amber-50 border-amber-200 text-amber-700">
+      <span className="badge badge-outline-warning">
         <Loader2 className="w-3 h-3 animate-spin" />
         Syncing…
       </span>
@@ -84,10 +84,10 @@ export function TaskCalendarChip({ task, propertyId }: TaskCalendarChipProps) {
         type="button"
         onClick={handleClick}
         className={cn(
-          'flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border transition-colors',
+          'badge transition-colors',
           hasEvent
-            ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'
-            : 'bg-white dark:bg-slate-800 border-sky-200 dark:border-sky-800 text-sky-700 dark:text-sky-400 hover:bg-sky-50 dark:hover:bg-sky-900/30',
+            ? 'badge-outline-brand hover:bg-emerald-100 dark:hover:bg-emerald-900/50'
+            : 'badge-outline-info bg-white dark:bg-slate-800 hover:bg-sky-50 dark:hover:bg-sky-900/30',
         )}
       >
         {hasEvent ? (
