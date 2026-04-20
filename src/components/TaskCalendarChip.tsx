@@ -1,0 +1,102 @@
+import { useState } from 'react'
+import { CalendarPlus, CalendarCheck, Loader2, AlertTriangle } from 'lucide-react'
+import { cn } from '../utils/cn'
+import { isDev, getValidToken } from '../auth/oauth'
+import { addTaskToCalendar, syncAllToCalendar } from '../lib/calendarClient'
+import type { DryRunResult } from '../lib/calendarClient'
+import { propertyStore } from '../lib/propertyStore'
+import type { IndexRecord } from '../lib/localIndex'
+import { DryRunModal } from './DryRunModal'
+
+interface TaskCalendarChipProps {
+  task:       IndexRecord
+  propertyId: string
+}
+
+export function TaskCalendarChip({ task, propertyId }: TaskCalendarChipProps) {
+  const [syncing,      setSyncing]      = useState(false)
+  const [error,        setError]        = useState<string | null>(null)
+  const [dryRunResult, setDryRunResult] = useState<DryRunResult | null>(null)
+
+  const hasEvent      = (task.calendarEventIds?.length ?? 0) > 0 || !!task.calendarEventId
+  const syncState     = task.calendarSyncState
+  const propertyName  = propertyStore.getById(propertyId)?.name ?? propertyId
+
+  async function handleClick() {
+    if (syncing) return
+    setError(null)
+
+    if (isDev()) {
+      // Dev mode: show dry-run popover for this single task
+      setSyncing(true)
+      try {
+        const result = await syncAllToCalendar('dev_token', propertyId, propertyName, true) as DryRunResult
+        setDryRunResult(result)
+      } catch (err) {
+        setError(String(err))
+      } finally {
+        setSyncing(false)
+      }
+      return
+    }
+
+    setSyncing(true)
+    try {
+      const token = await getValidToken()
+      if (!token) { setError('Sign in to sync calendar'); return }
+      await addTaskToCalendar(token, task, propertyName)
+    } catch (err) {
+      setError(String(err))
+    } finally {
+      setSyncing(false)
+    }
+  }
+
+  if (syncState === 'error' || error) {
+    return (
+      <>
+        <button
+          type="button"
+          onClick={handleClick}
+          title={error ?? task.calendarError ?? 'Calendar error — tap to retry'}
+          className="badge badge-outline-danger"
+        >
+          <AlertTriangle className="w-3 h-3" />
+          Calendar error
+        </button>
+        {dryRunResult && <DryRunModal result={dryRunResult} onClose={() => setDryRunResult(null)} />}
+      </>
+    )
+  }
+
+  if (syncing) {
+    return (
+      <span className="badge badge-outline-warning">
+        <Loader2 className="w-3 h-3 animate-spin" />
+        Syncing…
+      </span>
+    )
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={handleClick}
+        className={cn(
+          'badge transition-colors',
+          hasEvent
+            ? 'badge-outline-brand hover:bg-emerald-100 dark:hover:bg-emerald-900/50'
+            : 'badge-outline-info bg-white dark:bg-slate-800 hover:bg-sky-50 dark:hover:bg-sky-900/30',
+        )}
+      >
+        {hasEvent ? (
+          <><CalendarCheck className="w-3 h-3" /> On calendar</>
+        ) : (
+          <><CalendarPlus className="w-3 h-3" /> Add to calendar</>
+        )}
+      </button>
+      {dryRunResult && <DryRunModal result={dryRunResult} onClose={() => setDryRunResult(null)} />}
+    </>
+  )
+}

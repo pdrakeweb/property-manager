@@ -1,0 +1,271 @@
+/**
+ * Layer 2 — Drive sync integration test
+ *
+ * Flow:
+ * 1. Open app in dev-bypass mode (google_access_token = 'dev_token')
+ * 2. Inject two pending_upload records into pm_index_v1:
+ *    - A maintenance task (task_*.md filename, type='task')
+ *    - An equipment record (type='equipment')
+ * 3. Reload → useStartupSync runs: seed + push pending to dev drive + pull
+ * 4. Verify pm_dev_drive_v1 has both markdown files
+ * 5. Wipe pm_index_v1 (simulates fresh install / data loss)
+ * 6. Reload again → useStartupSync seeds tasks + pullFromDrive restores Drive files
+ * 7. Verify sync test task restored as type='task' with correct data
+ * 8. Verify sync test equipment restored as type='equipment'
+ * 9. Navigate to Maintenance screen → verify task title visible
+ */
+
+const { chromium } = require('playwright')
+
+const BASE         = 'http://localhost:5173'
+const PROP_ID      = 'tannerville'
+const ROOT_FOLDER  = '14CifGAre0egOHO0qVdrVBXCQY0WXk6Wt'
+const PASS = '\x1b[32m✓\x1b[0m'
+const FAIL = '\x1b[31m✗\x1b[0m'
+const INFO = '\x1b[36m·\x1b[0m'
+
+let passed = 0
+let failed = 0
+
+function assert(condition, label) {
+  if (condition) {
+    console.log(`  ${PASS} ${label}`)
+    passed++
+  } else {
+    console.log(`  ${FAIL} ${label}`)
+    failed++
+  }
+  return condition
+}
+
+/** Poll until predicate returns truthy or timeout */
+async function waitFor(page, fn, timeout = 6000, interval = 200) {
+  const deadline = Date.now() + timeout
+  while (Date.now() < deadline) {
+    const result = await page.evaluate(fn)
+    if (result) return result
+    await page.waitForTimeout(interval)
+  }
+  return null
+}
+
+async function run() {
+  const browser = await chromium.launch({ headless: true })
+  const page    = await browser.newPage()
+  page.setDefaultTimeout(15000)
+
+  try {
+    // ── Phase 1: Authenticate ────────────────────────────────────────────────
+    console.log('\n── Phase 1: Authenticate ─────────────────────────────────────')
+    await page.goto(BASE + '/#/')
+    await page.waitForTimeout(800)
+
+    // Ensure dev token is set
+    await page.evaluate(() => {
+      localStorage.setItem('google_access_token', 'dev_token')
+      localStorage.setItem('google_user_email', 'dev@local')
+    })
+    console.log(`  ${INFO} Dev token set`)
+
+    // ── Phase 2: Inject pending records ─────────────────────────────────────
+    console.log('\n── Phase 2: Inject pending records ───────────────────────────')
+    const taskId  = 'sync_test_task_001'
+    const equipId = 'sync_test_equip_001'
+    const taskTitle = 'Sync Test – HVAC Filter Replace'
+    const equipTitle = 'Sync Test – Carrier Furnace 96'
+    const dueDate = '2026-06-01'
+    const taskFilename = `task_${taskId}.json`
+    const equipFilename = `equipment_${equipId}.json`
+
+    await page.evaluate(({ taskId, equipId, taskTitle, equipTitle, dueDate, taskFilename, equipFilename, PROP_ID, ROOT_FOLDER }) => {
+      const now = new Date().toISOString()
+      const idx = JSON.parse(localStorage.getItem('pm_index_v1') ?? '{}')
+
+      idx[taskId] = {
+        id: taskId,
+        type: 'task',
+        categoryId: 'hvac',
+        propertyId: PROP_ID,
+        title: taskTitle,
+        data: {
+          id: taskId,
+          propertyId: PROP_ID,
+          title: taskTitle,
+          systemLabel: 'HVAC',
+          categoryId: 'hvac',
+          dueDate,
+          priority: 'medium',
+          status: 'upcoming',
+          source: 'manual',
+          filename: taskFilename,
+          rootFolderId: ROOT_FOLDER,
+        },
+        syncState: 'pending_upload',
+        localUpdatedAt: now,
+      }
+
+      idx[equipId] = {
+        id: equipId,
+        type: 'equipment',
+        categoryId: 'hvac',
+        propertyId: PROP_ID,
+        title: equipTitle,
+        data: {
+          id: equipId,
+          propertyId: PROP_ID,
+          label: equipTitle,
+          categoryId: 'hvac',
+          brand: 'Carrier',
+          model: '96% AFUE Gas Furnace',
+          installYear: 2019,
+          filename: equipFilename,
+          rootFolderId: ROOT_FOLDER,
+        },
+        syncState: 'pending_upload',
+        localUpdatedAt: now,
+      }
+
+      localStorage.setItem('pm_index_v1', JSON.stringify(idx))
+    }, { taskId, equipId, taskTitle, equipTitle, dueDate, taskFilename, equipFilename, PROP_ID, ROOT_FOLDER })
+
+    const injected = await page.evaluate(({ taskId, equipId }) => {
+      const idx = JSON.parse(localStorage.getItem('pm_index_v1') ?? '{}')
+      return { hasTask: !!idx[taskId], hasEquip: !!idx[equipId] }
+    }, { taskId, equipId })
+    assert(injected.hasTask,  'Task injected into localIndex as pending_upload')
+    assert(injected.hasEquip, 'Equipment injected into localIndex as pending_upload')
+
+    // ── Phase 3: Reload → startup sync pushes pending to dev Drive ──────────
+    console.log('\n── Phase 3: Startup sync push ────────────────────────────────')
+    await page.reload()
+
+    // Wait for pending count to reach 0 (push complete) or timeout
+    const pushDone = await waitFor(page, () => {
+      const idx = JSON.parse(localStorage.getItem('pm_index_v1') ?? '{}')
+      const pending = Object.values(idx).filter(r => r.syncState === 'pending_upload')
+      return pending.length === 0 ? true : null
+    }, 8000)
+
+    const postPushStats = await page.evaluate(() => {
+      const idx = JSON.parse(localStorage.getItem('pm_index_v1') ?? '{}')
+      return Object.values(idx).filter(r => r.syncState === 'pending_upload').length
+    })
+    assert(postPushStats === 0, `All records synced (0 pending, was ${postPushStats === 0 ? 'already 0' : postPushStats})`)
+    if (!pushDone) console.log(`  ${INFO} Push may not have completed — continuing anyway`)
+
+    // ── Phase 4: Verify dev Drive has the files ──────────────────────────────
+    console.log('\n── Phase 4: Verify dev Drive contents ────────────────────────')
+    const driveState = await page.evaluate(({ taskFilename, equipFilename }) => {
+      const devDrive = JSON.parse(localStorage.getItem('pm_dev_drive_v1') ?? '{}')
+      const files = Object.values(devDrive).filter(e => !e.isFolder)
+      const taskFile  = files.find(e => e.name === taskFilename)
+      const equipFile = files.find(e => e.name === equipFilename)
+      return {
+        totalFiles: files.length,
+        taskFileFound:  !!taskFile,
+        equipFileFound: !!equipFile,
+        taskContent:    taskFile?.content?.slice(0, 60) ?? null,
+        fileNames:      files.map(e => e.name),
+      }
+    }, { taskFilename, equipFilename })
+
+    console.log(`  ${INFO} Dev Drive files (${driveState.totalFiles}): ${driveState.fileNames.join(', ')}`)
+    if (driveState.taskContent) console.log(`  ${INFO} Task file content preview: "${driveState.taskContent}"`)
+
+    assert(driveState.taskFileFound,  `task file '${taskFilename}' in dev Drive`)
+    assert(driveState.equipFileFound, `equipment file '${equipFilename}' in dev Drive`)
+
+    // ── Phase 5: Wipe localIndex ─────────────────────────────────────────────
+    console.log('\n── Phase 5: Wipe localIndex ──────────────────────────────────')
+    await page.evaluate(() => localStorage.removeItem('pm_index_v1'))
+    const wiped = await page.evaluate(() => localStorage.getItem('pm_index_v1') === null)
+    assert(wiped, 'pm_index_v1 wiped')
+
+    // ── Phase 6: Reload → startup sync seeds + pulls from Drive ─────────────
+    console.log('\n── Phase 6: Reload & pull from Drive ─────────────────────────')
+    await page.reload()
+
+    // Wait for records to appear in localIndex
+    await waitFor(page, () => {
+      const idx = JSON.parse(localStorage.getItem('pm_index_v1') ?? '{}')
+      return Object.keys(idx).length > 0 ? true : null
+    }, 6000)
+
+    // Give pull a moment to complete
+    await page.waitForTimeout(1500)
+
+    const afterPull = await page.evaluate(({ taskTitle, equipTitle }) => {
+      const idx = JSON.parse(localStorage.getItem('pm_index_v1') ?? '{}')
+      const records  = Object.values(idx)
+      const tasks    = records.filter(r => r.type === 'task')
+      const equip    = records.filter(r => r.type === 'equipment')
+      const driveRec = records.filter(r => r.id && r.id.startsWith('drive_'))
+
+      const restoredTask  = tasks.find(r => r.title && r.title.includes('Sync Test'))
+      const restoredEquip = equip.find(r => r.title && r.title.includes('Sync Test'))
+
+      return {
+        total: records.length,
+        taskCount: tasks.length,
+        equipCount: equip.length,
+        driveRestoredCount: driveRec.length,
+        taskRestored:  !!restoredTask,
+        equipRestored: !!restoredEquip,
+        restoredTaskTitle:  restoredTask?.title ?? null,
+        restoredTaskDueDate: restoredTask?.data?.dueDate ?? null,
+        restoredEquipTitle: restoredEquip?.title ?? null,
+      }
+    }, { taskTitle, equipTitle })
+
+    console.log(`  ${INFO} After pull: ${afterPull.total} total, ${afterPull.taskCount} tasks, ${afterPull.equipCount} equipment`)
+    console.log(`  ${INFO} Drive-restored records: ${afterPull.driveRestoredCount}`)
+    if (afterPull.restoredTaskTitle)  console.log(`  ${INFO} Restored task: "${afterPull.restoredTaskTitle}" due ${afterPull.restoredTaskDueDate}`)
+    if (afterPull.restoredEquipTitle) console.log(`  ${INFO} Restored equip: "${afterPull.restoredEquipTitle}"`)
+
+    assert(afterPull.taskCount  > 0,  `Tasks restored in localIndex (${afterPull.taskCount})`)
+    assert(afterPull.equipCount > 0,  `Equipment restored in localIndex (${afterPull.equipCount})`)
+    assert(afterPull.taskRestored,  'Sync test task restored as type=\'task\'')
+    // JSON restore preserves original IDs and full record data (no heuristics needed)
+    assert(afterPull.equipRestored, 'Sync test equipment restored as type=\'equipment\' with correct title')
+    if (afterPull.restoredTaskDueDate) {
+      assert(afterPull.restoredTaskDueDate === dueDate, `Task dueDate preserved correctly (${afterPull.restoredTaskDueDate})`)
+    }
+
+    // ── Phase 7: Verify task visible in Maintenance UI ───────────────────────
+    console.log('\n── Phase 7: Task visible in Maintenance UI ───────────────────')
+    await page.goto(BASE + '/#/maintenance')
+    await page.waitForTimeout(1000)
+
+    // Click the "Upcoming" tab to ensure upcoming tasks are rendered
+    const upcomingTab = await page.$('button:has-text("Upcoming"), [role="tab"]:has-text("Upcoming")')
+    if (upcomingTab) {
+      await upcomingTab.click()
+      await page.waitForTimeout(500)
+      console.log(`  ${INFO} Clicked Upcoming tab`)
+    }
+
+    const maintenanceContent = await page.content()
+    const taskVisibleInUI = maintenanceContent.includes('Sync Test') || maintenanceContent.includes('HVAC Filter Replace')
+    assert(taskVisibleInUI, 'Restored task title visible on Maintenance screen')
+
+  } catch (err) {
+    console.error(`\n  FATAL: ${err.message}`)
+    console.error(err.stack)
+    failed++
+  } finally {
+    await browser.close()
+  }
+
+  // ── Results ────────────────────────────────────────────────────────────────
+  console.log('\n══════════════════════════════════════════════════════════════')
+  const total = passed + failed
+  if (failed === 0) {
+    console.log(`\x1b[32m  All ${total} assertions passed\x1b[0m`)
+  } else {
+    console.log(`\x1b[33m  ${passed}/${total} passed, \x1b[31m${failed} failed\x1b[0m`)
+  }
+  console.log('══════════════════════════════════════════════════════════════\n')
+  process.exit(failed > 0 ? 1 : 0)
+}
+
+run().catch(err => { console.error(err); process.exit(1) })
