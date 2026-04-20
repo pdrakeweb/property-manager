@@ -114,7 +114,7 @@ function VendorModal({ initial, onSave, onClose }: VendorModalProps) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 px-4 pb-4">
+    <div className="modal-backdrop">
       <div className="modal-surface rounded-2xl w-full max-w-sm p-5 space-y-4 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between">
           <h2 className="text-base font-semibold text-slate-900">{initial ? 'Edit Vendor' : 'Add Vendor'}</h2>
@@ -208,14 +208,14 @@ function VendorModal({ initial, onSave, onClose }: VendorModalProps) {
         <div className="flex gap-3 pt-2">
           <button
             onClick={onClose}
-            className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl px-4 py-2.5 text-sm font-medium"
+            className="btn btn-secondary flex-1"
           >
             Cancel
           </button>
           <button
             onClick={submit}
             disabled={!form.name.trim()}
-            className="flex-1 bg-sky-600 hover:bg-sky-700 disabled:opacity-50 text-white rounded-xl px-4 py-2.5 text-sm font-medium"
+            className="btn btn-info flex-1"
           >
             Save
           </button>
@@ -383,7 +383,7 @@ export function VendorScreen() {
           </div>
           <button
             onClick={() => { setEditVendor(undefined); setShowModal(true) }}
-            className="flex items-center gap-2 bg-sky-600 hover:bg-sky-700 text-white rounded-xl px-4 py-2.5 text-sm font-medium"
+            className="btn btn-info"
           >
             <Plus className="w-4 h-4" />
             Add Vendor

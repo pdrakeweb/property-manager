@@ -169,7 +169,7 @@ export function SyncScreen() {
           <button
             onClick={syncNow}
             disabled={syncing || anyKbSyncing}
-            className="flex items-center gap-1.5 text-sm font-semibold px-4 py-2 rounded-xl bg-green-600 text-white hover:bg-green-700 disabled:opacity-60 transition-colors shrink-0"
+            className="btn btn-primary gap-1.5 shrink-0"
           >
             <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
             {syncing ? 'Syncing…' : 'Sync now'}
@@ -295,7 +295,7 @@ export function SyncScreen() {
       {/* Pending list */}
       {shown.length > 0 && (
         <div>
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-2 px-1">
+          <h2 className="section-title mb-2 px-1">
             Waiting to upload ({stats.pending})
           </h2>
           <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden divide-y divide-slate-100 dark:divide-slate-700 shadow-sm">

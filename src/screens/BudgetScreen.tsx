@@ -302,13 +302,13 @@ function CapitalItemDetail({
             <div className="flex gap-2 pt-1">
               <button
                 onClick={saveTx}
-                className="flex-1 bg-green-600 text-white text-sm font-medium py-2 rounded-xl hover:bg-green-700"
+                className="btn btn-primary flex-1"
               >
                 {editingTx ? 'Save changes' : 'Add transaction'}
               </button>
               <button
                 onClick={cancelTx}
-                className="px-4 text-sm text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
+                className="btn btn-ghost"
               >
                 Cancel
               </button>

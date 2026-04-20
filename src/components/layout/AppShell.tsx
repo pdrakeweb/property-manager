@@ -247,7 +247,7 @@ function SyncPill() {
     return (
       <button
         onClick={() => navigate('/conflicts')}
-        className="flex items-center gap-1 bg-red-500 hover:bg-red-600 text-white text-xs font-semibold rounded-full px-2.5 py-1 transition-colors shrink-0"
+        className="btn btn-danger btn-sm btn-pill shrink-0 gap-1"
       >
         <RefreshCw className="w-3 h-3" />
         {devMode && <span className="opacity-75">DEV</span>}

@@ -44,7 +44,7 @@ function ViewMode({ card, propertyName, onEdit }: {
         </div>
         <button
           onClick={onEdit}
-          className="flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl px-3 py-2 text-sm font-medium"
+          className="btn btn-secondary btn-sm gap-1.5"
         >
           <Edit2 className="w-3.5 h-3.5" />
           Edit
@@ -93,7 +93,7 @@ function ViewMode({ card, propertyName, onEdit }: {
                 </div>
                 <a
                   href={`tel:${c.phone}`}
-                  className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl px-3 py-2.5 text-base font-bold shrink-0"
+                  className="btn btn-primary px-3 text-base font-bold shrink-0"
                 >
                   <Phone className="w-4 h-4" />
                   {c.phone}
@@ -191,12 +191,12 @@ function EditMode({ card, onSave, onCancel }: {
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-slate-900">Edit Emergency Card</h1>
         <div className="flex gap-2">
-          <button onClick={onCancel} className="bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl px-3 py-2 text-sm font-medium">
+          <button onClick={onCancel} className="btn btn-secondary btn-sm">
             Cancel
           </button>
           <button
             onClick={handleSave}
-            className="flex items-center gap-1.5 bg-sky-600 hover:bg-sky-700 text-white rounded-xl px-3 py-2 text-sm font-medium"
+            className="btn btn-info btn-sm gap-1.5"
           >
             {saved ? <Check className="w-4 h-4" /> : null}
             {saved ? 'Saved!' : 'Save'}
@@ -334,10 +334,10 @@ function EditMode({ card, onSave, onCancel }: {
 
       {/* Bottom buttons */}
       <div className="flex gap-3 pt-2">
-        <button onClick={onCancel} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl px-4 py-2.5 text-sm font-medium">
+        <button onClick={onCancel} className="btn btn-secondary flex-1">
           Cancel
         </button>
-        <button onClick={handleSave} className="flex-1 bg-sky-600 hover:bg-sky-700 text-white rounded-xl px-4 py-2.5 text-sm font-medium">
+        <button onClick={handleSave} className="btn btn-info flex-1">
           Save
         </button>
       </div>
@@ -384,7 +384,7 @@ export function EmergencyScreen() {
           </div>
           <button
             onClick={() => setEditing(true)}
-            className="bg-red-600 hover:bg-red-700 text-white rounded-xl px-6 py-3 text-sm font-semibold"
+            className="btn btn-danger btn-lg"
           >
             Set Up Now
           </button>

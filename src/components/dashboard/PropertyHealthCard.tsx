@@ -91,16 +91,16 @@ export function PropertyHealthCard({ property, onSelect }: PropertyHealthCardPro
       {/* Count row */}
       <div className="flex items-center gap-3 mb-3">
         {overdue > 0 ? (
-          <span className="inline-flex items-center gap-1 text-xs font-semibold bg-red-100 text-red-700 px-2 py-0.5 rounded-full">
+          <span className="badge badge-soft-danger font-semibold">
             {overdue} overdue
           </span>
         ) : (
-          <span className="inline-flex items-center gap-1 text-xs font-semibold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">
+          <span className="badge badge-soft-success font-semibold">
             0 overdue
           </span>
         )}
         {dueSoon > 0 && (
-          <span className="inline-flex items-center gap-1 text-xs font-medium bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full">
+          <span className="badge badge-soft-warning">
             {dueSoon} due soon
           </span>
         )}

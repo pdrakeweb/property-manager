@@ -64,7 +64,7 @@ const RECURRENCE_OPTIONS = [
   { value: 'Semi-annual',   label: 'Semi-annual'   },
 ]
 
-const inp = 'w-full text-sm border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-green-300 bg-white dark:bg-slate-800'
+const inp = 'w-full text-sm input-surface rounded-xl px-3 py-2.5'
 
 // ── Photo role helpers ────────────────────────────────────────────────────────
 
@@ -177,7 +177,7 @@ function DoneModal({ task, propertyId, onConfirm, onClose }: DoneModalProps) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 px-4 pb-4">
+    <div className="modal-backdrop">
       <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-sm p-5 space-y-4 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between">
           <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">Mark Complete</h2>
@@ -255,8 +255,8 @@ function DoneModal({ task, propertyId, onConfirm, onClose }: DoneModalProps) {
           </div>
         </div>
         <div className="flex gap-3 pt-2">
-          <button onClick={onClose} className="flex-1 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-xl px-4 py-2.5 text-sm font-medium">Cancel</button>
-          <button onClick={handleConfirm} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl px-4 py-2.5 text-sm font-medium">Mark Complete</button>
+          <button onClick={onClose} className="btn btn-secondary flex-1">Cancel</button>
+          <button onClick={handleConfirm} className="btn btn-primary flex-1">Mark Complete</button>
         </div>
       </div>
     </div>
@@ -288,7 +288,7 @@ function DelayModal({ task, onSaved, onClose }: DelayModalProps) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 px-4 pb-4">
+    <div className="modal-backdrop">
       <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-sm p-5 space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">Delay Task</h2>
@@ -315,12 +315,12 @@ function DelayModal({ task, onSaved, onClose }: DelayModalProps) {
           <div className="flex gap-2">
             <input type="date" value={customDate} min={today} onChange={e => setCustomDate(e.target.value)} className={cn(inp, 'flex-1')} />
             <button onClick={() => customDate && applyDelay(customDate)} disabled={!customDate}
-              className="px-4 py-2.5 bg-green-600 text-white rounded-xl text-sm font-medium disabled:bg-sky-200 hover:bg-green-700 transition-colors">
+              className="btn btn-primary">
               Set
             </button>
           </div>
         </div>
-        <button onClick={onClose} className="w-full py-2.5 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300">Cancel</button>
+        <button onClick={onClose} className="btn btn-ghost btn-block">Cancel</button>
       </div>
     </div>
   )
@@ -343,7 +343,7 @@ function ScheduleModal({ task, onSaved, onClose }: ScheduleModalProps) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 px-4 pb-4">
+    <div className="modal-backdrop">
       <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-sm p-5 space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">Schedule Task</h2>
@@ -363,8 +363,8 @@ function ScheduleModal({ task, onSaved, onClose }: ScheduleModalProps) {
           </div>
         </div>
         <div className="flex gap-3 pt-1">
-          <button onClick={onClose} className="flex-1 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl py-2.5 text-sm font-medium hover:bg-slate-200 dark:hover:bg-slate-600">Cancel</button>
-          <button onClick={save} className="flex-1 bg-green-600 text-white rounded-xl py-2.5 text-sm font-medium hover:bg-green-700">Save Schedule</button>
+          <button onClick={onClose} className="btn btn-secondary flex-1">Cancel</button>
+          <button onClick={save} className="btn btn-primary flex-1">Save Schedule</button>
         </div>
       </div>
     </div>
@@ -415,7 +415,7 @@ function AddTaskModal({ propertyId, onSaved, onClose }: AddTaskModalProps) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 px-4 pb-4">
+    <div className="modal-backdrop">
       <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-sm p-5 space-y-4 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between">
           <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">Add Maintenance Task</h2>
@@ -459,9 +459,8 @@ function AddTaskModal({ propertyId, onSaved, onClose }: AddTaskModalProps) {
           </div>
         </div>
         <div className="flex gap-3 pt-1">
-          <button onClick={onClose} className="flex-1 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl py-2.5 text-sm font-medium">Cancel</button>
-          <button onClick={save} disabled={!title.trim()}
-            className="flex-1 bg-green-600 text-white rounded-xl py-2.5 text-sm font-medium disabled:bg-sky-300 hover:bg-green-700">
+          <button onClick={onClose} className="btn btn-secondary flex-1">Cancel</button>
+          <button onClick={save} disabled={!title.trim()} className="btn btn-primary flex-1">
             Add Task
           </button>
         </div>
@@ -516,7 +515,7 @@ function EventHistoryCard({ event }: { event: ReturnType<typeof costStore.getAll
         <div className="border-t border-slate-100 dark:border-slate-700/50 px-4 py-4 space-y-4">
           {(beforePhotos.length > 0 || afterPhotos.length > 0) && (
             <div>
-              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">Before / After</p>
+              <p className="section-title mb-2">Before / After</p>
               <div className="grid grid-cols-2 gap-3">
                 {[
                   { label: 'Before', photos: beforePhotos, cls: 'text-green-600 dark:text-green-400', border: 'border-green-200 dark:border-green-800' },
@@ -541,7 +540,7 @@ function EventHistoryCard({ event }: { event: ReturnType<typeof costStore.getAll
           )}
           {generalPhotos.length > 0 && (
             <div>
-              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">General</p>
+              <p className="section-title mb-2">General</p>
               <div className="grid grid-cols-3 gap-2">
                 {generalPhotos.map(p => (
                   <div key={p.id} className="rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700">

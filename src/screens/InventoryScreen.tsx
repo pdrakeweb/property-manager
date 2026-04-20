@@ -82,7 +82,7 @@ export function InventoryScreen() {
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Search categories…"
-            className="w-full pl-10 pr-4 py-2.5 text-sm border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-300 focus:border-green-300 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+            className="w-full pl-10 pr-4 py-2.5 text-sm input-surface rounded-xl"
           />
         </div>
 

@@ -76,7 +76,7 @@ function sortPermits(permits: Permit[]): Permit[] {
 
 type FilterTab = 'all' | 'open' | 'approved' | 'expired'
 
-const inp = 'w-full text-sm border border-slate-200 dark:border-slate-600 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-green-300 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500'
+const inp = 'w-full text-sm input-surface rounded-xl px-3 py-2.5'
 
 // ── Permit Form ───────────────────────────────────────────────────────────────
 
@@ -169,7 +169,7 @@ function PermitForm({
   const confRing = (field: string) => extracted[field] ? confidenceRing(extracted[field].confidence) : ''
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 px-4 pb-4">
+    <div className="modal-backdrop">
       <div className="bg-white dark:bg-slate-800 rounded-t-2xl sm:rounded-2xl shadow-xl w-full sm:max-w-lg p-5 space-y-4 max-h-[90vh] overflow-y-auto">
 
         {/* Header */}
@@ -290,13 +290,13 @@ function PermitForm({
 
         {/* Actions */}
         <div className="flex gap-3 pt-1">
-          <button onClick={onClose} className="flex-1 py-3 rounded-2xl bg-slate-100 text-slate-700 text-sm font-semibold hover:bg-slate-200 transition-colors">
+          <button onClick={onClose} className="btn btn-secondary btn-lg flex-1">
             Cancel
           </button>
           <button
             onClick={handleSave}
             disabled={!issuer.trim() || !description.trim()}
-            className="flex-[2] py-3 rounded-2xl bg-green-600 text-white text-sm font-semibold hover:bg-green-700 disabled:bg-green-300 transition-colors"
+            className="btn btn-primary btn-lg flex-[2]"
           >
             {initial ? 'Save Changes' : 'Add Permit'}
           </button>
@@ -408,13 +408,13 @@ function PermitCard({
           <div className="flex gap-2 pt-1">
             <button
               onClick={onEdit}
-              className="flex-1 py-2 rounded-xl bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+              className="btn btn-secondary btn-sm flex-1"
             >
               Edit
             </button>
             <button
               onClick={onDelete}
-              className="flex-1 py-2 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-xs font-semibold hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
+              className="btn btn-danger-soft btn-sm flex-1"
             >
               Delete
             </button>
@@ -481,7 +481,7 @@ export function PermitsScreen() {
         </div>
         <button
           onClick={openAdd}
-          className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-xl px-4 py-2.5 transition-colors"
+          className="btn btn-primary"
         >
           <Plus className="w-4 h-4" />
           Add Permit

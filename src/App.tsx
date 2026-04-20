@@ -168,7 +168,7 @@ function SignInScreen({ onSignIn }: { onSignIn: () => void }) {
         <button
           onClick={saveAndSignIn}
           disabled={signingIn}
-          className="w-full flex items-center justify-center gap-3 py-3.5 rounded-2xl bg-sky-600 hover:bg-sky-700 disabled:bg-sky-400 text-white font-semibold transition-colors shadow-sm"
+          className="btn btn-info btn-lg btn-block gap-3 shadow-sm"
         >
           {signingIn ? (
             <><Loader2 className="w-5 h-5 animate-spin" /> Redirecting to Google…</>

@@ -34,8 +34,7 @@ function RuntimeModal({ generatorId, onSave, onClose }: RuntimeModalProps) {
   const [hours, setHours] = useState('')
   const [reason, setReason] = useState('')
 
-  const inputCls =
-    'w-full text-sm border border-slate-200 dark:border-slate-600 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-green-300 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500'
+  const inputCls = 'w-full text-sm input-surface rounded-xl px-3 py-2.5'
 
   function handleSave() {
     const h = parseFloat(hours)
@@ -50,7 +49,7 @@ function RuntimeModal({ generatorId, onSave, onClose }: RuntimeModalProps) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40">
+    <div className="modal-backdrop px-0 pb-0">
       <div className="rounded-t-2xl sm:rounded-2xl bg-white dark:bg-slate-800 p-5 w-full sm:max-w-lg space-y-4 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between">
           <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">Log Runtime</h2>
@@ -99,14 +98,14 @@ function RuntimeModal({ generatorId, onSave, onClose }: RuntimeModalProps) {
         <div className="flex gap-3 pt-2">
           <button
             onClick={onClose}
-            className="flex-1 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-xl px-4 py-2.5 text-sm font-medium"
+            className="btn btn-secondary flex-1"
           >
             Cancel
           </button>
           <button
             onClick={handleSave}
             disabled={!hours || parseFloat(hours) < 0.5}
-            className="flex-1 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded-xl px-4 py-2.5 text-sm font-medium"
+            className="btn btn-primary flex-1"
           >
             Save
           </button>
@@ -130,8 +129,7 @@ function AddGeneratorModal({ propertyId, onSave, onClose }: AddGeneratorModalPro
   const [installedYear, setInstalledYear] = useState('')
   const [notes, setNotes] = useState('')
 
-  const inputCls =
-    'w-full text-sm border border-slate-200 dark:border-slate-600 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-green-300 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500'
+  const inputCls = 'w-full text-sm input-surface rounded-xl px-3 py-2.5'
 
   function handleSave() {
     if (!name.trim()) return
@@ -151,7 +149,7 @@ function AddGeneratorModal({ propertyId, onSave, onClose }: AddGeneratorModalPro
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40">
+    <div className="modal-backdrop px-0 pb-0">
       <div className="rounded-t-2xl sm:rounded-2xl bg-white dark:bg-slate-800 p-5 w-full sm:max-w-lg space-y-4 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between">
           <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">Add Generator</h2>
@@ -211,14 +209,14 @@ function AddGeneratorModal({ propertyId, onSave, onClose }: AddGeneratorModalPro
         <div className="flex gap-3 pt-2">
           <button
             onClick={onClose}
-            className="flex-1 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-xl px-4 py-2.5 text-sm font-medium"
+            className="btn btn-secondary flex-1"
           >
             Cancel
           </button>
           <button
             onClick={handleSave}
             disabled={!name.trim()}
-            className="flex-1 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded-xl px-4 py-2.5 text-sm font-medium"
+            className="btn btn-primary flex-1"
           >
             Add Generator
           </button>
@@ -269,7 +267,7 @@ function GeneratorCard({ record, onUpdate }: GeneratorCardProps) {
           </div>
           <button
             onClick={() => setShowRuntimeModal(true)}
-            className="flex items-center gap-1.5 bg-green-600 hover:bg-green-700 text-white rounded-xl px-3 py-2 text-xs font-medium shrink-0"
+            className="btn btn-primary btn-sm shrink-0"
           >
             <Plus className="w-3.5 h-3.5" />
             Log Runtime
@@ -369,7 +367,7 @@ function GeneratorCard({ record, onUpdate }: GeneratorCardProps) {
 
       {/* Confirm service dialog */}
       {confirmMilestone && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+        <div className="modal-backdrop items-center pb-0">
           <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-sm p-5 space-y-4">
             <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">Mark as Serviced?</h2>
             <p className="text-sm text-slate-600 dark:text-slate-400">
@@ -378,13 +376,13 @@ function GeneratorCard({ record, onUpdate }: GeneratorCardProps) {
             <div className="flex gap-3">
               <button
                 onClick={() => setConfirmMilestone(null)}
-                className="flex-1 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-xl px-4 py-2.5 text-sm font-medium"
+                className="btn btn-secondary flex-1"
               >
                 Cancel
               </button>
               <button
                 onClick={() => handleMarkServiced(confirmMilestone)}
-                className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl px-4 py-2.5 text-sm font-medium"
+                className="btn btn-primary flex-1"
               >
                 Confirm
               </button>
@@ -424,7 +422,7 @@ export function GeneratorScreen() {
           </div>
           <button
             onClick={() => setShowAddModal(true)}
-            className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white rounded-xl px-4 py-2.5 text-sm font-medium"
+            className="btn btn-primary"
           >
             <Plus className="w-4 h-4" />
             Add Generator
@@ -439,7 +437,7 @@ export function GeneratorScreen() {
             <p className="text-sm text-slate-400 dark:text-slate-500">Track runtime hours and maintenance milestones.</p>
             <button
               onClick={() => setShowAddModal(true)}
-              className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white rounded-xl px-4 py-2.5 text-sm font-medium mt-2"
+              className="btn btn-primary mt-2"
             >
               <Plus className="w-4 h-4" />
               Add Generator

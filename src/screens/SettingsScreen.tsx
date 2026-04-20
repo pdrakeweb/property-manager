@@ -36,7 +36,7 @@ type View = 'hub' | 'general' | 'account' | 'ai' | 'ha' | 'properties' | 'sync'
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
-      <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-2 px-1">{title}</h2>
+      <h2 className="section-title mb-2 px-1">{title}</h2>
       <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden shadow-sm divide-y divide-slate-100 dark:divide-slate-700">
         {children}
       </div>
@@ -757,8 +757,8 @@ export function SettingsScreen() {
                     )}
 
                     <div className="flex gap-2 pt-1">
-                      <button onClick={saveProp} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-green-600 text-white hover:bg-green-700">Save</button>
-                      <button onClick={() => setEditingProp(null)} className="text-xs px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600">Cancel</button>
+                      <button onClick={saveProp} className="btn btn-primary btn-sm">Save</button>
+                      <button onClick={() => setEditingProp(null)} className="btn btn-secondary btn-sm">Cancel</button>
                     </div>
                   </div>
                 )}
@@ -802,8 +802,8 @@ export function SettingsScreen() {
                 </select>
               </div>
               <div className="flex gap-2 pt-1">
-                <button onClick={saveProp} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-green-600 text-white hover:bg-green-700">Add</button>
-                <button onClick={() => setAddingProp(false)} className="text-xs px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600">Cancel</button>
+                <button onClick={saveProp} className="btn btn-primary btn-sm">Add</button>
+                <button onClick={() => setAddingProp(false)} className="btn btn-secondary btn-sm">Cancel</button>
               </div>
             </div>
           ) : (

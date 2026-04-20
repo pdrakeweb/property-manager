@@ -83,10 +83,10 @@ function EventForm({ initial, propertyId, onSave, onClose, title }: EventFormPro
     onSave(event)
   }
 
-  const inputCls = 'w-full text-sm border border-slate-200 dark:border-slate-600 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-green-300 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500'
+  const inputCls = 'w-full text-sm input-surface rounded-xl px-3 py-2.5'
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 px-4 pb-4">
+    <div className="modal-backdrop">
       <div className="rounded-t-2xl sm:rounded-2xl bg-white dark:bg-slate-800 p-5 w-full sm:max-w-lg max-h-[90vh] overflow-y-auto shadow-xl">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">{title}</h2>
@@ -192,14 +192,14 @@ function EventForm({ initial, propertyId, onSave, onClose, title }: EventFormPro
         <div className="flex gap-3 pt-4">
           <button
             onClick={onClose}
-            className="flex-1 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-xl px-4 py-2.5 text-sm font-medium"
+            className="btn btn-secondary flex-1"
           >
             Cancel
           </button>
           <button
             onClick={handleSave}
             disabled={!vendor.trim()}
-            className="flex-1 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded-xl px-4 py-2.5 text-sm font-semibold"
+            className="btn btn-primary flex-1"
           >
             Save
           </button>
@@ -293,7 +293,7 @@ function EventCard({ event, onEdit, onDelete }: EventCardProps) {
             </button>
             <button
               onClick={() => onDelete(event.id)}
-              className="text-xs px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white font-medium"
+              className="btn btn-danger btn-sm"
             >
               Yes
             </button>
@@ -362,7 +362,7 @@ export function RoadScreen() {
           </div>
           <button
             onClick={() => setShowAdd(true)}
-            className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white rounded-xl px-4 py-2.5 text-sm font-semibold"
+            className="btn btn-primary"
           >
             <Plus className="w-4 h-4" />
             Log Event
@@ -411,7 +411,7 @@ export function RoadScreen() {
             <p className="text-sm text-slate-400 dark:text-slate-500">Track gravel deliveries, culvert cleaning, plowing, and more.</p>
             <button
               onClick={() => setShowAdd(true)}
-              className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white rounded-xl px-4 py-2.5 text-sm font-semibold"
+              className="btn btn-primary"
             >
               <Plus className="w-4 h-4" />
               Log First Event

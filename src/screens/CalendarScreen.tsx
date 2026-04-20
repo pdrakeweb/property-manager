@@ -4,7 +4,7 @@ import {
 } from 'lucide-react'
 import { cn } from '../utils/cn'
 import { costStore } from '../lib/costStore'
-import { customTaskStore, getAllTasksAllProperties, getAllCustomTasks } from '../lib/maintenanceStore'
+import { customTaskStore, getAllCustomTasks } from '../lib/maintenanceStore'
 import { MAINTENANCE_TASKS } from '../data/mockData'
 import { VendorSelector } from '../components/VendorSelector'
 import { useAppStore } from '../store/AppStoreContext'
@@ -93,7 +93,7 @@ function DoneModal({ task, onConfirm, onClose }: DoneModalProps) {
   }
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/50 px-4 pb-4">
+    <div className="modal-backdrop modal-backdrop-elevated bg-black/50">
       <div className="modal-surface rounded-2xl w-full max-w-sm p-5 space-y-4 max-h-[85vh] overflow-y-auto">
         <div className="flex items-center justify-between">
           <h3 className="text-base font-semibold text-slate-900">Mark Complete</h3>
@@ -136,8 +136,8 @@ function DoneModal({ task, onConfirm, onClose }: DoneModalProps) {
           </div>
         </div>
         <div className="flex gap-3">
-          <button onClick={onClose} className="flex-1 bg-slate-100 text-slate-700 rounded-xl py-2.5 text-sm font-medium hover:bg-slate-200">Cancel</button>
-          <button onClick={confirm} className="flex-1 bg-emerald-600 text-white rounded-xl py-2.5 text-sm font-medium hover:bg-emerald-700">Mark Complete</button>
+          <button onClick={onClose} className="btn btn-secondary flex-1">Cancel</button>
+          <button onClick={confirm} className="btn btn-primary flex-1">Mark Complete</button>
         </div>
       </div>
     </div>
@@ -179,7 +179,7 @@ function AddTaskModal({ propertyId, prefilledDate, onClose, onSaved }: AddTaskMo
   }
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/50 px-4 pb-4">
+    <div className="modal-backdrop modal-backdrop-elevated bg-black/50">
       <div className="modal-surface rounded-2xl w-full max-w-sm p-5 space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="text-base font-semibold text-slate-900">Add Task</h3>
@@ -215,11 +215,11 @@ function AddTaskModal({ propertyId, prefilledDate, onClose, onSaved }: AddTaskMo
           </div>
         </div>
         <div className="flex gap-3">
-          <button onClick={onClose} className="flex-1 bg-slate-100 text-slate-700 rounded-xl py-2.5 text-sm font-medium">Cancel</button>
+          <button onClick={onClose} className="btn btn-secondary flex-1">Cancel</button>
           <button
             onClick={save}
             disabled={!title.trim()}
-            className="flex-1 bg-sky-600 text-white rounded-xl py-2.5 text-sm font-medium hover:bg-sky-700 disabled:bg-sky-300"
+            className="btn btn-info flex-1"
           >
             Add Task
           </button>
@@ -253,7 +253,7 @@ function DelayModal({ task, onClose, onDelayed }: DelayModalProps) {
   }
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/50 px-4 pb-4">
+    <div className="modal-backdrop modal-backdrop-elevated bg-black/50">
       <div className="modal-surface rounded-2xl w-full max-w-sm p-5 space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="text-base font-semibold text-slate-900">Delay Task</h3>
@@ -273,7 +273,7 @@ function DelayModal({ task, onClose, onDelayed }: DelayModalProps) {
           />
         </div>
         <div className="flex gap-3">
-          <button onClick={onClose} className="flex-1 bg-slate-100 text-slate-700 rounded-xl py-2.5 text-sm font-medium">Cancel</button>
+          <button onClick={onClose} className="btn btn-secondary flex-1">Cancel</button>
           <button
             onClick={confirm}
             disabled={!newDate}
