@@ -10,36 +10,9 @@ import { localIndex } from './localIndex'
 import { DriveClient, CATEGORY_FOLDER_NAMES } from './driveClient'
 import { localDriveAdapter } from './localDriveAdapter'
 import { propertyStore } from './propertyStore'
-import {
-  formatMaintenanceTask,
-  formatCompletedEvent,
-  formatCapitalTransaction,
-  formatFuelDelivery,
-  formatSepticEvent,
-  formatWellTest,
-  formatTaxAssessment,
-  formatTaxPayment,
-  formatMortgage,
-  formatMortgagePayment,
-  formatUtilityAccount,
-  formatUtilityBill,
-  formatVendor,
-  formatInsurance,
-  formatPermit,
-  formatRoadEvent,
-  formatGenerator,
-} from './domainMarkdown'
-import type { MaintenanceTask } from '../types'
-import type {
-  CompletedEvent, FuelDelivery, SepticEvent, WellTest,
-  TaxAssessment, TaxPayment, Mortgage, MortgagePayment,
-  UtilityAccount, UtilityBill, Vendor,
-} from '../schemas'
-import type { InsurancePolicy } from '../types/insurance'
-import type { Permit } from '../types/permits'
-import type { RoadEvent } from '../types/road'
-import type { GeneratorRecord } from '../types/generator'
-import type { CapitalTransaction } from '../types'
+import { getDefinition } from '../records/registry'
+import { resolveFolderName } from '../records/_framework'
+import { renderRecordMarkdown, recordFilename } from './dslMarkdown'
 
 function drive(): typeof DriveClient {
   return localStorage.getItem('google_access_token') === 'dev_token'
@@ -54,61 +27,12 @@ function drive(): typeof DriveClient {
 export function exportMarkdown(record: IndexRecord): string {
   const d = record.data as Record<string, unknown>
 
-  switch (record.type) {
-    case 'task':
-      return formatMaintenanceTask(d as unknown as MaintenanceTask)
+  // Registered DSL types render via the definition (custom override or default field walker).
+  const def = getDefinition(record.type)
+  if (def) return renderRecordMarkdown(def, d)
 
-    case 'completed_event':
-      return formatCompletedEvent(d as unknown as CompletedEvent)
-
-    case 'capital_transaction':
-      return formatCapitalTransaction(d as unknown as CapitalTransaction)
-
-    case 'fuel_delivery':
-      return formatFuelDelivery(d as unknown as FuelDelivery)
-
-    case 'septic_event':
-      return formatSepticEvent(d as unknown as SepticEvent)
-
-    case 'well_test':
-      return formatWellTest(d as unknown as WellTest)
-
-    case 'tax_assessment':
-      return formatTaxAssessment(d as unknown as TaxAssessment)
-
-    case 'tax_payment':
-      return formatTaxPayment(d as unknown as TaxPayment)
-
-    case 'mortgage':
-      return formatMortgage(d as unknown as Mortgage)
-
-    case 'mortgage_payment':
-      return formatMortgagePayment(d as unknown as MortgagePayment)
-
-    case 'utility_account':
-      return formatUtilityAccount(d as unknown as UtilityAccount)
-
-    case 'utility_bill':
-      return formatUtilityBill(d as unknown as UtilityBill)
-
-    case 'vendor':
-      return formatVendor(d as unknown as Vendor)
-
-    case 'insurance':
-      return formatInsurance(d as unknown as InsurancePolicy)
-
-    case 'permit':
-      return formatPermit(d as unknown as Permit)
-
-    case 'road':
-      return formatRoadEvent(d as unknown as RoadEvent)
-
-    case 'generator_log':
-      return formatGenerator(d as unknown as GeneratorRecord)
-
-    default:
-      return `# ${record.title}\n\n\`\`\`json\n${JSON.stringify(record.data, null, 2)}\n\`\`\`\n\n---\n*Exported by Property Manager · ${new Date().toISOString()}*\n`
-  }
+  // Unregistered types (e.g. `equipment`) fall back to a raw JSON dump.
+  return `# ${record.title}\n\n\`\`\`json\n${JSON.stringify(record.data, null, 2)}\n\`\`\`\n\n---\n*Exported by Property Manager · ${new Date().toISOString()}*\n`
 }
 
 /** Derive a safe .md filename for a record. */
@@ -116,6 +40,10 @@ export function exportFilename(record: IndexRecord): string {
   // Equipment records already have a well-formed .md filename from capture
   const existing = record.data.filename as string | undefined
   if (existing?.endsWith('.md')) return existing
+
+  // Registered DSL types resolve their own filename convention
+  const def = getDefinition(record.type)
+  if (def) return recordFilename(def, record.data as Record<string, unknown>)
 
   const safe = record.title
     .replace(/[^a-zA-Z0-9\s-]/g, '')
@@ -206,7 +134,13 @@ export async function exportAllMarkdownToDrive(
     try {
       const filename   = exportFilename(record)
       const categoryId = (record.data.categoryId as string) || record.categoryId || record.type
-      const catName    = CATEGORY_FOLDER_NAMES[categoryId] ?? categoryId
+      const def        = getDefinition(record.type)
+      // Variant-aware resolution: equipment records branch to subsystem folders
+      // via the registered variant; plain record types use the base folderName.
+      const catName =
+        (def ? resolveFolderName(def, record.data as Record<string, unknown>) : null)
+        ?? CATEGORY_FOLDER_NAMES[categoryId]
+        ?? categoryId
 
       // Check existing files before creating the folder — need folder ID for listing
       // Lazily create the folder only on first file that needs to go there
