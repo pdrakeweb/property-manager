@@ -1,6 +1,8 @@
 // Local-first index — single source of truth for all UI reads.
 // Drive is the sync target, not the primary read source.
 
+import { syncBus } from './syncBus'
+
 export type IndexRecordType =
   | 'equipment'
   | 'task'
@@ -82,10 +84,11 @@ export const localIndex = {
   },
 
   /** Insert or replace a record. Always stamps localUpdatedAt. */
-  upsert(record: Omit<IndexRecord, 'localUpdatedAt'> & { localUpdatedAt?: string }): void {
+  upsert(record: Omit<IndexRecord, 'localUpdatedAt'> & { localUpdatedAt?: string }, source: 'local' | 'remote' = 'local'): void {
     const index = load()
     index[record.id] = { ...record, localUpdatedAt: new Date().toISOString() } as IndexRecord
     save(index)
+    syncBus.emit({ type: 'index-updated', recordIds: [record.id], source })
   },
 
   markSynced(id: string, driveFileId: string, driveUpdatedAt: string, driveEtag?: string): void {
@@ -93,6 +96,7 @@ export const localIndex = {
     if (!index[id]) return
     index[id] = { ...index[id], syncState: 'synced', driveFileId, driveUpdatedAt, ...(driveEtag ? { driveEtag } : {}) }
     save(index)
+    syncBus.emit({ type: 'index-updated', recordIds: [id], source: 'local' })
   },
 
   markCalendarSynced(id: string, eventIds: string | string[]): void {

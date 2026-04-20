@@ -52,6 +52,18 @@ export interface DriveFileWithContent {
   etag:    string
 }
 
+export interface DriveChange {
+  fileId:  string
+  removed: boolean
+  file?:   { id: string; name: string; trashed?: boolean; parents?: string[] }
+}
+
+export interface DriveChangesPage {
+  changes:            DriveChange[]
+  newStartPageToken?: string
+  nextPageToken?:     string
+}
+
 /** Thrown when Drive returns 412 Precondition Failed (ETag mismatch). */
 export class ETagConflictError extends Error {
   constructor(
@@ -149,6 +161,34 @@ export const DriveClient = {
   async resolveFolderId(token: string, categoryId: string, rootFolderId: string): Promise<string> {
     const folderName = CATEGORY_FOLDER_NAMES[categoryId] ?? categoryId
     return findOrCreateFolder(token, folderName, rootFolderId)
+  },
+
+  /**
+   * Get a Drive changes page token to use as the baseline for delta polling.
+   * Call once, persist the token, then feed it to listChanges() on each poll.
+   */
+  async getStartPageToken(token: string): Promise<string> {
+    const resp = await fetch(`${DRIVE_API}/changes/startPageToken`, { headers: authHeaders(token) })
+    if (!resp.ok) throw new Error(`Drive getStartPageToken failed: ${resp.status}`)
+    const { startPageToken } = await resp.json() as { startPageToken: string }
+    return startPageToken
+  },
+
+  /**
+   * Fetch changes since the given page token. Returns the changed files plus
+   * (usually) a newStartPageToken to use on the next poll.
+   * If the token is stale/invalid, Drive returns 404 — caller should fall back
+   * to a full pull and acquire a fresh startPageToken.
+   */
+  async listChanges(token: string, pageToken: string): Promise<DriveChangesPage> {
+    const url = new URL(`${DRIVE_API}/changes`)
+    url.searchParams.set('pageToken',      pageToken)
+    url.searchParams.set('pageSize',       '100')
+    url.searchParams.set('fields',         'changes(fileId,removed,file(id,name,trashed,parents)),newStartPageToken,nextPageToken')
+    url.searchParams.set('includeRemoved', 'true')
+    const resp = await fetch(url.toString(), { headers: authHeaders(token) })
+    if (!resp.ok) throw new Error(`Drive listChanges failed: ${resp.status}`)
+    return await resp.json() as DriveChangesPage
   },
 
   /** Search across all app-created files using a Drive query string. */

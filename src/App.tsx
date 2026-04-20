@@ -33,7 +33,7 @@ import { PropertyProfileScreen }       from './screens/PropertyProfileScreen'
 import { EquipmentDetailScreen }       from './screens/EquipmentDetailScreen'
 import { SyncScreen }                  from './screens/SyncScreen'
 
-import { syncAll, seedTasksForProperty, syncPropertyConfig, syncAuditLog } from './lib/syncEngine'
+import { syncAll, seedTasksForProperty, syncPropertyConfig, syncAuditLog, pollDriveChanges } from './lib/syncEngine'
 import { ActivityScreen } from './screens/ActivityScreen'
 import { exportAllMarkdownToDrive } from './lib/markdownExport'
 import { propertyStore, seedPropertiesFromMock } from './lib/propertyStore'
@@ -262,6 +262,11 @@ function OAuthCallbackHandler({ onDone }: { onDone: (ok: boolean) => void }) {
 
 // ── Startup sync hook ────────────────────────────────────────────────────────
 
+// If the tab was hidden longer than this, the user may have edited data on
+// another device. Pull from Drive before they interact to avoid stale-write
+// conflicts. Matches the 10-minute threshold specified for multi-device safety.
+const STALE_AFTER_MS = 10 * 60_000
+
 function useStartupSync() {
   useEffect(() => {
     // 1. Migrate: seed properties from mock data if localStorage is empty
@@ -284,7 +289,9 @@ function useStartupSync() {
         if (!token) return
         // Sync property config first so we have all properties before syncing records
         await syncPropertyConfig(token)
-        // Sync all properties in sequence (rate-limit friendly)
+        // syncAll pulls from Drive before pushing local pending changes, so the
+        // local index reflects remote edits (from other devices) before the
+        // user starts entering data on this device.
         for (const p of propertyStore.getAll()) {
           await syncAll(token, p.id)
         }
@@ -297,10 +304,59 @@ function useStartupSync() {
       }
     }
 
+    // Always sync on mount — this covers both fresh login (MainApp mounts right
+    // after the OAuth callback lands) and page reload while already signed in.
     run()
+
     // Re-run every 5 minutes to flush any pending uploads
     const interval = setInterval(run, 5 * 60_000)
-    return () => clearInterval(interval)
+
+    // Lightweight delta polling via Drive's changes API — every 30s while the
+    // tab is visible. Much cheaper than the full `run()` and gives near-real-
+    // time updates when another device writes to Drive.
+    let pollRunning = false
+    async function poll() {
+      if (pollRunning || document.visibilityState !== 'visible') return
+      pollRunning = true
+      try {
+        const { getValidToken } = await import('./auth/oauth')
+        const token = await getValidToken()
+        if (!token) return
+        await pollDriveChanges(token)
+      } catch {
+        // Non-fatal — next poll retries
+      } finally {
+        pollRunning = false
+      }
+    }
+    const deltaInterval = setInterval(poll, 30_000)
+
+    // Multi-device safety: when the tab regains focus/visibility, resync if
+    // enough time has passed that another device could have made changes.
+    // Check last sync timestamp (not just hidden time) so a user who left the
+    // tab open but walked away still gets fresh data on return.
+    const isStale = () => {
+      const last = localStorage.getItem('pm_last_sync_at')
+      if (!last) return true
+      const ts = new Date(last).getTime()
+      if (Number.isNaN(ts)) return true
+      return Date.now() - ts > STALE_AFTER_MS
+    }
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible' && isStale()) run()
+    }
+    const onFocus = () => {
+      if (isStale()) run()
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    window.addEventListener('focus', onFocus)
+
+    return () => {
+      clearInterval(interval)
+      clearInterval(deltaInterval)
+      document.removeEventListener('visibilitychange', onVisibility)
+      window.removeEventListener('focus', onFocus)
+    }
   // Run once on mount
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])

@@ -1,25 +1,37 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ChevronLeft, Link2, Link2Off, Loader2, Wifi, WifiOff, RefreshCw } from 'lucide-react'
+import { ChevronLeft, Link2, Link2Off, Loader2, Wifi, WifiOff, RefreshCw, CloudDownload } from 'lucide-react'
 import { cn } from '../utils/cn'
 import { CATEGORIES } from '../data/mockData'
 import { localIndex } from '../lib/localIndex'
 import { fetchEntityState } from '../lib/haClient'
 import { HAEntityBrowser } from '../components/HAEntityBrowser'
+import { useRecordSync } from '../hooks/useRecordSync'
 import type { HAEntityState } from '../types'
 
 export function EquipmentDetailScreen() {
   const { id = '' } = useParams<{ id: string }>()
   const navigate     = useNavigate()
 
-  const record     = localIndex.getById(id)
+  // Background fetch + live updates. `record` updates in-place when remote
+  // changes land — we show the latest merged version without a hard reload.
+  const { record, isSyncing } = useRecordSync(id)
   const data       = (record?.data ?? {}) as Record<string, unknown>
   const values     = (data.values ?? {}) as Record<string, string>
   const categoryId = (data.categoryId ?? record?.categoryId ?? '') as string
   const category   = CATEGORIES.find(c => c.id === categoryId)
 
-  // haEntityId stored in data directly (not in values)
+  // haEntityId stored in data directly (not in values). We track whether the
+  // user has dirtied this field locally — if so, a remote pull must not
+  // overwrite their selection. Only untouched fields pick up remote changes.
   const [haEntityId,  setHaEntityId]  = useState(() => (data.haEntityId as string | undefined) ?? '')
+  const dirtyHaRef = useRef(false)
+  useEffect(() => {
+    if (dirtyHaRef.current) return    // user is editing — keep local value
+    const remote = (data.haEntityId as string | undefined) ?? ''
+    setHaEntityId(prev => prev === remote ? prev : remote)
+  }, [data.haEntityId])
+
   const [entityState, setEntityState] = useState<HAEntityState | null>(null)
   const [stateLoading, setStateLoading] = useState(false)
   const [showBrowser,  setShowBrowser]  = useState(false)
@@ -35,6 +47,7 @@ export function EquipmentDetailScreen() {
 
   function handleEntitySelected(entityId: string) {
     if (!record) return
+    dirtyHaRef.current = true
     const updatedData = { ...data, haEntityId: entityId }
     localIndex.upsert({
       ...record,
@@ -42,10 +55,14 @@ export function EquipmentDetailScreen() {
       syncState: record.syncState === 'synced' ? 'pending_upload' : record.syncState,
     })
     setHaEntityId(entityId)
+    // Once our edit is persisted, further remote pulls for this field should
+    // be treated as newer data (local write is now the baseline).
+    dirtyHaRef.current = false
   }
 
   function handleUnlink() {
     if (!record) return
+    dirtyHaRef.current = true
     const updatedData = { ...data }
     delete updatedData.haEntityId
     localIndex.upsert({
@@ -55,6 +72,7 @@ export function EquipmentDetailScreen() {
     })
     setHaEntityId('')
     setEntityState(null)
+    dirtyHaRef.current = false
   }
 
   if (!record) {
@@ -107,6 +125,14 @@ export function EquipmentDetailScreen() {
           <div className="flex items-center gap-2">
             {category && <span className="text-2xl">{category.icon}</span>}
             <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">{record.title}</h1>
+            {isSyncing && (
+              <span
+                title="Checking Drive for updates…"
+                className="inline-flex items-center gap-1 text-xs text-slate-400 dark:text-slate-500"
+              >
+                <CloudDownload className="w-3.5 h-3.5 animate-pulse" />
+              </span>
+            )}
           </div>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">{category?.label ?? categoryId}</p>
         </div>

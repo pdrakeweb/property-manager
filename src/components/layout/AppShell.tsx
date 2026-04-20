@@ -13,6 +13,7 @@ import { localIndex } from '../../lib/localIndex'
 import type { SyncStats } from '../../lib/localIndex'
 import { isDev } from '../../auth/oauth'
 import { useTheme } from '../../contexts/ThemeContext'
+import { BackgroundSyncIndicator } from '../BackgroundSyncIndicator'
 
 type NavItem = { to: string; icon: React.ComponentType<{ className?: string }>; label: string; mobileShow: boolean }
 type NavSection = { label: string; icon: React.ComponentType<{ className?: string }>; items: NavItem[] }
@@ -345,8 +346,9 @@ export function AppShell({ children }: AppShellProps) {
 
         {/* Settings + offline pill at bottom */}
         <div className="px-3 pb-6 border-t border-slate-700 pt-4 space-y-2">
-          <div className="px-3">
+          <div className="px-3 flex items-center gap-2">
             <SyncPill />
+            <BackgroundSyncIndicator />
           </div>
           <div className="px-1">
             <ThemeToggle />
@@ -376,6 +378,7 @@ export function AppShell({ children }: AppShellProps) {
             </span>
           </div>
           <div className="flex items-center gap-2">
+            <BackgroundSyncIndicator />
             <SyncPill />
             <MobilePropertySwitcher />
           </div>

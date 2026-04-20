@@ -4,8 +4,11 @@ import { localIndex } from './localIndex'
 import type { IndexRecord, IndexRecordType } from './localIndex'
 import { propertyStore } from './propertyStore'
 import { auditLog } from './auditLog'
+import { syncBus } from './syncBus'
 import type { LogEntry } from './auditLog'
 import type { MaintenanceTask } from '../types'
+
+const CHANGES_TOKEN_KEY = 'pm_drive_changes_token'
 
 /** Returns the real DriveClient in production, or the localStorage adapter in dev bypass mode */
 function drive(): typeof DriveClient {
@@ -248,7 +251,7 @@ export async function pullFromDrive(
             driveFileId:    file.id,
             driveEtag:      fileData.etag,
             driveUpdatedAt: new Date().toISOString(),
-          })
+          }, 'remote')
           knownDriveIds.add(file.id)
           pulled++
         } catch {
@@ -343,20 +346,25 @@ export async function seedTasksForProperty(propertyId: string): Promise<void> {
 // ── Full sync ─────────────────────────────────────────────────────────────────
 
 export async function syncAll(token: string, propertyId: string): Promise<SyncResult> {
-  // Seed tasks first (no-op if already seeded)
-  await seedTasksForProperty(propertyId)
+  syncBus.emit({ type: 'sync-start', scope: 'full' })
+  try {
+    // Seed tasks first (no-op if already seeded)
+    await seedTasksForProperty(propertyId)
 
-  // Pull Drive files → add to index
-  const { pulled, failed: pullFailed } = await pullFromDrive(token, propertyId)
+    // Pull Drive files → add to index
+    const { pulled, failed: pullFailed } = await pullFromDrive(token, propertyId)
 
-  // Push pending local records → Drive
-  const { uploaded, failed: uploadFailed, errors: uploadErrors } = await pushPending(token)
+    // Push pending local records → Drive
+    const { uploaded, failed: uploadFailed, errors: uploadErrors } = await pushPending(token)
 
-  const summary = `Sync complete: ↑${uploaded} uploaded ↓${pulled} pulled` +
-    (uploadFailed + pullFailed > 0 ? ` · ${uploadFailed + pullFailed} errors` : '')
-  auditLog.info('sync', summary, propertyId)
+    const summary = `Sync complete: ↑${uploaded} uploaded ↓${pulled} pulled` +
+      (uploadFailed + pullFailed > 0 ? ` · ${uploadFailed + pullFailed} errors` : '')
+    auditLog.info('sync', summary, propertyId)
 
-  return { uploaded, uploadFailed, uploadErrors, pulled, pullFailed }
+    return { uploaded, uploadFailed, uploadErrors, pulled, pullFailed }
+  } finally {
+    syncBus.emit({ type: 'sync-end', scope: 'full' })
+  }
 }
 
 // ── Property config sync ──────────────────────────────────────────────────────
@@ -441,6 +449,144 @@ export async function syncAuditLog(token: string): Promise<void> {
       auditLog.setDriveFileId(file.id)
     }
   } catch { /* non-fatal */ }
+}
+
+// ── Single-record pull ────────────────────────────────────────────────────────
+
+/**
+ * Pull the latest version of one record from Drive by driveFileId and update
+ * the local index (as a remote-sourced change). Used for per-record "pull on
+ * open" to show the user fresh data without waiting for a full sync.
+ *
+ * Returns true if the remote file differed from local (i.e. etag changed).
+ * Returns false if there were no changes, or if the record has no driveFileId
+ * (local-only — nothing to pull).
+ */
+export async function pullSingleRecord(token: string, recordId: string): Promise<boolean> {
+  const record = localIndex.getById(recordId)
+  if (!record?.driveFileId) return false
+
+  syncBus.emit({ type: 'sync-start', scope: 'record', recordId })
+  try {
+    const fileData = await drive().downloadFile(token, record.driveFileId)
+    // Etag unchanged — local is already current
+    if (fileData.etag && fileData.etag === record.driveEtag) {
+      syncBus.emit({ type: 'sync-end', scope: 'record', recordId })
+      return false
+    }
+    let stored: IndexRecord
+    try {
+      stored = JSON.parse(fileData.content) as IndexRecord
+    } catch {
+      syncBus.emit({ type: 'sync-end', scope: 'record', recordId, error: 'parse' })
+      return false
+    }
+    localIndex.upsert({
+      ...stored,
+      propertyId:     record.propertyId,     // preserve local propertyId as safety
+      syncState:      'synced',
+      driveFileId:    record.driveFileId,
+      driveEtag:      fileData.etag,
+      driveUpdatedAt: new Date().toISOString(),
+    }, 'remote')
+    syncBus.emit({ type: 'sync-end', scope: 'record', recordId })
+    return true
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    syncBus.emit({ type: 'sync-end', scope: 'record', recordId, error: msg })
+    return false
+  }
+}
+
+// ── Drive change-token polling ────────────────────────────────────────────────
+
+/**
+ * Poll Drive /changes for files modified since the last poll, then pull any
+ * changes that affect records already in the local index. Much cheaper than a
+ * full folder scan — call this every ~30s while the tab is visible.
+ *
+ * First call acquires a startPageToken and returns without pulling (sets the
+ * baseline). Subsequent calls apply deltas.
+ *
+ * If the stored token is rejected (404), we reset and re-baseline; callers can
+ * trigger a full pullFromDrive to catch up if needed.
+ */
+export async function pollDriveChanges(token: string): Promise<{ applied: number; reset: boolean }> {
+  let pageToken = localStorage.getItem(CHANGES_TOKEN_KEY)
+
+  // First-time setup: get a baseline token, do nothing else this poll.
+  if (!pageToken) {
+    try {
+      const fresh = await drive().getStartPageToken(token)
+      localStorage.setItem(CHANGES_TOKEN_KEY, fresh)
+    } catch { /* offline — try again next poll */ }
+    return { applied: 0, reset: false }
+  }
+
+  syncBus.emit({ type: 'sync-start', scope: 'delta' })
+
+  // Build a lookup from driveFileId → local recordId so we can match changes to
+  // records we care about, and skip everything else in the user's Drive.
+  const byDriveId = new Map<string, string>()
+  for (const p of propertyStore.getAll()) {
+    for (const r of localIndex.getAllForProperty(p.id)) {
+      if (r.driveFileId) byDriveId.set(r.driveFileId, r.id)
+    }
+  }
+
+  let applied = 0
+  let reset   = false
+  try {
+    while (pageToken) {
+      let page
+      try {
+        page = await drive().listChanges(token, pageToken)
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        // 404 means the token expired — reset and bail; caller can do full pull.
+        if (msg.includes('404')) {
+          localStorage.removeItem(CHANGES_TOKEN_KEY)
+          try {
+            const fresh = await drive().getStartPageToken(token)
+            localStorage.setItem(CHANGES_TOKEN_KEY, fresh)
+          } catch { /* ignore */ }
+          reset = true
+          break
+        }
+        throw err
+      }
+
+      for (const ch of page.changes) {
+        const recordId = byDriveId.get(ch.fileId)
+        if (!recordId) continue   // not one of ours
+        if (ch.removed || ch.file?.trashed) {
+          localIndex.softDelete(recordId)
+          applied++
+          continue
+        }
+        const fresh = await pullSingleRecord(token, recordId)
+        if (fresh) applied++
+      }
+
+      if (page.nextPageToken) {
+        pageToken = page.nextPageToken
+        continue
+      }
+      if (page.newStartPageToken) {
+        localStorage.setItem(CHANGES_TOKEN_KEY, page.newStartPageToken)
+      }
+      break
+    }
+  } catch {
+    // Non-fatal — keep existing token, try again next poll
+  } finally {
+    syncBus.emit({ type: 'sync-end', scope: 'delta' })
+  }
+
+  if (applied > 0) {
+    auditLog.info('sync.delta', `Applied ${applied} remote change${applied > 1 ? 's' : ''}`)
+  }
+  return { applied, reset }
 }
 
 // Re-export IndexRecordType for callers that imported it from here
