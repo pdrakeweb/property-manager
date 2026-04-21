@@ -45,8 +45,23 @@ export interface ChatCompletionOptions {
   maxTokens?: number
   temperature?: number
   tools?: ChatTool[]
-  /** If set, requests OpenAI-style structured output (OpenRouter supports `{type:'json_object'}`). */
-  responseFormat?: { type: 'json_object' } | { type: 'text' }
+  /**
+   * OpenAI-style structured output. OpenRouter supports:
+   *   - `{ type: 'json_object' }`        — model is forced to emit a JSON object
+   *   - `{ type: 'json_schema', ... }`   — strict schema-validated JSON (preferred)
+   *   - `{ type: 'text' }`               — free-form text
+   */
+  responseFormat?:
+    | { type: 'json_object' }
+    | {
+        type: 'json_schema'
+        json_schema: {
+          name: string
+          strict?: boolean
+          schema: Record<string, unknown>
+        }
+      }
+    | { type: 'text' }
   logger?: import('./aiLogger').AISessionLogger
 }
 
