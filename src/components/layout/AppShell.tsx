@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { NavLink, useLocation, useNavigate } from 'react-router-dom'
+import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, Camera, Wrench, BarChart3,
   MessageSquare, ClipboardList, Settings, ChevronDown, ChevronRight,
@@ -381,6 +381,18 @@ export function AppShell({ children }: AppShellProps) {
             <BackgroundSyncIndicator />
             <SyncPill />
             <MobilePropertySwitcher />
+            <Link
+              to="/settings"
+              aria-label="Settings"
+              className={cn(
+                'flex items-center justify-center w-8 h-8 rounded-lg transition-colors',
+                location.pathname.startsWith('/settings')
+                  ? 'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400'
+                  : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700',
+              )}
+            >
+              <Settings className="w-5 h-5" />
+            </Link>
           </div>
         </div>
       </header>

@@ -14,7 +14,6 @@ type KbStatus = {
   syncing: boolean
   result: string
   progress: { done: number; total: number } | null
-  folderId: string | null
 }
 
 export function SyncScreen() {
@@ -34,19 +33,14 @@ export function SyncScreen() {
   const [retrying,    setRetrying]    = useState(false)
   const [retryResult, setRetryResult] = useState('')
 
-  // Per-property KB state
-  const properties = propertyStore.getAll()
-  const [kbByProp, setKbByProp] = useState<Record<string, KbStatus>>({})
+  // Knowledgebase sync — scope selector + single status
+  const properties    = propertyStore.getAll()
+  const kbEligible    = properties.filter(p => p.driveRootFolderId)
+  const [kbScope, setKbScope]   = useState<string>('all')
+  const [kbStatus, setKbStatus] = useState<KbStatus>({ syncing: false, result: '', progress: null })
 
-  function kb(propId: string): KbStatus {
-    return kbByProp[propId] ?? { syncing: false, result: '', progress: null, folderId: getKnowledgebaseFolderId(propId) }
-  }
-  function setKb(propId: string, update: Partial<KbStatus>) {
-    setKbByProp(s => {
-      const cur = s[propId] ?? { syncing: false, result: '', progress: null, folderId: getKnowledgebaseFolderId(propId) }
-      return { ...s, [propId]: { ...cur, ...update } }
-    })
-  }
+  const kbScopeProperty = kbScope === 'all' ? null : kbEligible.find(p => p.id === kbScope) ?? null
+  const kbFolderId      = kbScopeProperty ? getKnowledgebaseFolderId(kbScopeProperty.id) : null
 
   function refresh() {
     setStats(localIndex.getSyncStats())
@@ -92,23 +86,32 @@ export function SyncScreen() {
     }
   }
 
-  async function syncKnowledgebase(propId: string) {
-    if (kb(propId).syncing) return
-    setKb(propId, { syncing: true, result: '', progress: null })
+  async function syncKnowledgebase() {
+    if (kbStatus.syncing) return
+    const targets = kbScope === 'all' ? kbEligible : kbEligible.filter(p => p.id === kbScope)
+    if (targets.length === 0) return
+    setKbStatus({ syncing: true, result: '', progress: null })
     try {
       const token = await getValidToken()
-      if (!token) { setKb(propId, { syncing: false, result: 'Not signed in' }); return }
-      const result = await exportAllMarkdownToDrive(token, propId, (done, total) => {
-        setKb(propId, { progress: { done, total } })
-      })
-      setKb(propId, {
+      if (!token) { setKbStatus({ syncing: false, result: 'Not signed in', progress: null }); return }
+      let exported = 0, skipped = 0, failed = 0
+      for (let i = 0; i < targets.length; i++) {
+        const p = targets[i]
+        const result = await exportAllMarkdownToDrive(token, p.id, (done, total) => {
+          const label = targets.length > 1 ? `${p.shortName}: ${done}/${total} (${i + 1}/${targets.length})` : `${done}/${total}`
+          setKbStatus(s => ({ ...s, progress: { done, total }, result: label }))
+        })
+        exported += result.exported
+        skipped  += result.skipped
+        failed   += result.failed
+      }
+      setKbStatus({
         syncing: false,
-        result: `${result.exported} created${result.skipped ? `, ${result.skipped} already up to date` : ''}${result.failed ? `, ${result.failed} failed` : ''}`,
+        result: `${exported} created${skipped ? `, ${skipped} already up to date` : ''}${failed ? `, ${failed} failed` : ''}`,
         progress: null,
-        folderId: result.kbFolderId ?? getKnowledgebaseFolderId(propId),
       })
     } catch (err) {
-      setKb(propId, { syncing: false, result: `Error: ${err instanceof Error ? err.message : String(err)}`, progress: null })
+      setKbStatus({ syncing: false, result: `Error: ${err instanceof Error ? err.message : String(err)}`, progress: null })
     }
   }
 
@@ -129,13 +132,12 @@ export function SyncScreen() {
   useEffect(() => { refresh() }, [])
 
   const shown = pending.slice(0, 25)
-  const anyKbSyncing = Object.values(kbByProp).some(s => s.syncing)
 
   return (
     <div className="space-y-5 max-w-xl">
 
       <div>
-        <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">Sync</h1>
+        <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">Cloud Sync</h1>
         <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
           {lastSyncAt
             ? `Last synced ${new Date(lastSyncAt).toLocaleString()}`
@@ -161,18 +163,22 @@ export function SyncScreen() {
       <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 shadow-sm space-y-3">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <p className="text-sm font-medium text-slate-800 dark:text-slate-200">Google Drive Sync</p>
+            <p className="text-sm font-medium text-slate-800 dark:text-slate-200">Records</p>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
               Upload pending records and pull any new files from Drive
             </p>
           </div>
           <button
             onClick={syncNow}
-            disabled={syncing || anyKbSyncing}
-            className="btn btn-primary gap-1.5 shrink-0"
+            disabled={syncing || kbStatus.syncing}
+            className={`flex items-center gap-1.5 text-sm font-semibold px-4 py-2 rounded-xl text-white disabled:opacity-60 transition-colors shrink-0 ${
+              stats.pending > 0
+                ? 'bg-green-600 hover:bg-green-700'
+                : 'bg-slate-500 hover:bg-slate-600 dark:bg-slate-600 dark:hover:bg-slate-500'
+            }`}
           >
             <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
-            {syncing ? 'Syncing…' : 'Sync now'}
+            {syncing ? 'Syncing…' : 'Sync'}
           </button>
         </div>
         {lastResult && (
@@ -189,77 +195,78 @@ export function SyncScreen() {
         )}
       </div>
 
-      {/* Per-property Knowledgebase sync */}
-      {properties.filter(p => p.driveRootFolderId).map(p => {
-        const kbStatus = kb(p.id)
-        return (
-          <div key={p.id} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 shadow-sm space-y-3">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <p className="text-sm font-medium text-slate-800 dark:text-slate-200">{p.shortName} Knowledgebase</p>
-                  {kbStatus.folderId && (
-                    <a
-                      href={`https://drive.google.com/drive/folders/${kbStatus.folderId}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-slate-400 hover:text-green-600 dark:hover:text-green-400"
-                      title="Open in Drive"
-                    >
-                      <ExternalLink className="w-3.5 h-3.5" />
-                    </a>
-                  )}
-                  {p.driveRootFolderId && (
-                    <a
-                      href={`https://drive.google.com/drive/folders/${p.driveRootFolderId}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-400"
-                      title="Open Drive root folder"
-                    >
-                      <ExternalLink className="w-3.5 h-3.5" />
-                    </a>
-                  )}
-                </div>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                  Write all records to Drive as human-readable .md files
-                </p>
+      {/* Knowledgebase sync */}
+      {kbEligible.length > 0 ? (
+        <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 shadow-sm space-y-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-medium text-slate-800 dark:text-slate-200">Knowledgebase</p>
+                {kbFolderId && (
+                  <a
+                    href={`https://drive.google.com/drive/folders/${kbFolderId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-slate-400 hover:text-green-600 dark:hover:text-green-400"
+                    title="Open in Drive"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                )}
               </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Write records to Drive as human-readable .md files
+              </p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <select
+                value={kbScope}
+                onChange={e => setKbScope(e.target.value)}
+                disabled={kbStatus.syncing}
+                className="text-xs border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-2 bg-white dark:bg-slate-800 focus:outline-none focus:ring-1 focus:ring-green-300 disabled:opacity-60"
+              >
+                <option value="all">All properties</option>
+                {kbEligible.map(p => (
+                  <option key={p.id} value={p.id}>{p.shortName}</option>
+                ))}
+              </select>
               <button
-                onClick={() => syncKnowledgebase(p.id)}
+                onClick={syncKnowledgebase}
                 disabled={kbStatus.syncing || syncing}
-                className="flex items-center gap-1.5 text-sm font-semibold px-4 py-2 rounded-xl bg-slate-700 dark:bg-slate-600 text-white hover:bg-slate-800 dark:hover:bg-slate-500 disabled:opacity-60 transition-colors shrink-0"
+                className={`flex items-center gap-1.5 text-sm font-semibold px-4 py-2 rounded-xl text-white disabled:opacity-60 transition-colors ${
+                  stats.pending > 0
+                    ? 'bg-green-600 hover:bg-green-700'
+                    : 'bg-slate-500 hover:bg-slate-600 dark:bg-slate-600 dark:hover:bg-slate-500'
+                }`}
               >
                 <RefreshCw className={`w-4 h-4 ${kbStatus.syncing ? 'animate-spin' : ''}`} />
                 {kbStatus.syncing ? 'Syncing…' : 'Sync'}
               </button>
             </div>
-
-            {kbStatus.syncing && kbStatus.progress && (
-              <div className="space-y-1.5">
-                <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400">
-                  <span>Writing files…</span>
-                  <span>{kbStatus.progress.done} / {kbStatus.progress.total}</span>
-                </div>
-                <div className="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-1.5">
-                  <div
-                    className="bg-green-500 h-1.5 rounded-full transition-all"
-                    style={{ width: kbStatus.progress.total > 0 ? `${(kbStatus.progress.done / kbStatus.progress.total) * 100}%` : '0%' }}
-                  />
-                </div>
-              </div>
-            )}
-
-            {kbStatus.result && !kbStatus.syncing && (
-              <div className="border-t border-slate-100 dark:border-slate-700 pt-2">
-                <p className="text-xs text-slate-600 dark:text-slate-400">{kbStatus.result}</p>
-              </div>
-            )}
           </div>
-        )
-      })}
 
-      {properties.every(p => !p.driveRootFolderId) && (
+          {kbStatus.syncing && kbStatus.progress && (
+            <div className="space-y-1.5">
+              <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400">
+                <span>Writing files…</span>
+                <span>{kbStatus.result || `${kbStatus.progress.done} / ${kbStatus.progress.total}`}</span>
+              </div>
+              <div className="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-1.5">
+                <div
+                  className="bg-green-500 h-1.5 rounded-full transition-all"
+                  style={{ width: kbStatus.progress.total > 0 ? `${(kbStatus.progress.done / kbStatus.progress.total) * 100}%` : '0%' }}
+                />
+              </div>
+            </div>
+          )}
+
+          {kbStatus.result && !kbStatus.syncing && (
+            <div className="border-t border-slate-100 dark:border-slate-700 pt-2">
+              <p className="text-xs text-slate-600 dark:text-slate-400">{kbStatus.result}</p>
+            </div>
+          )}
+        </div>
+      ) : (
         <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-2xl p-4">
           <p className="text-xs text-slate-500 dark:text-slate-400">
             No Drive folders configured. Set a Drive root folder for each property in Settings → Properties to enable knowledgebase sync.
