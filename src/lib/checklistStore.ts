@@ -1,8 +1,27 @@
 import { makeStore } from './localStore'
-import type { ChecklistRun, ChecklistRunItem, PropertyType } from '../types/checklist'
-import { CHECKLIST_TEMPLATES } from '../data/checklistTemplates'
+import type { ChecklistItem, ChecklistRun, ChecklistRunItem, PropertyType } from '../types/checklist'
+import { getCustomItems } from './checklistCustomStore'
+import { findTemplate } from './checklistTemplateStore'
 
 export const checklistRunStore = makeStore<ChecklistRun>('pm_checklist_runs')
+
+/**
+ * Resolve every ChecklistItem that applies to a (property, template) pair:
+ * template items filtered by property type, plus any AI/user custom items.
+ */
+export function getResolvedItems(
+  propertyId: string,
+  templateId: string,
+  propertyType: PropertyType,
+): ChecklistItem[] {
+  const template = findTemplate(templateId)
+  const baseline: ChecklistItem[] = (template?.items ?? [])
+    .filter(i => i.applicableTo.includes(propertyType))
+    .map(i => ({ ...i, source: i.source ?? 'baseline' }))
+  const custom = getCustomItems(propertyId, templateId)
+    .filter(i => i.applicableTo.includes(propertyType))
+  return [...baseline, ...custom]
+}
 
 /** All runs for a specific property, sorted newest first. */
 export function getRunsForProperty(propertyId: string): ChecklistRun[] {
@@ -68,18 +87,18 @@ export function startRun(
   templateId: string,
   propertyType: PropertyType,
 ): ChecklistRun {
-  const template = CHECKLIST_TEMPLATES.find(t => t.id === templateId)
+  const template = findTemplate(templateId)
   if (!template) throw new Error(`Unknown checklist template: ${templateId}`)
 
-  const filteredItems = template.items.filter(item =>
-    item.applicableTo.includes(propertyType),
-  )
+  const filteredItems = getResolvedItems(propertyId, templateId, propertyType)
 
   const run: ChecklistRun = {
     id: `run_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
     propertyId,
     templateId,
+    kind: template.kind ?? 'seasonal',
     season: template.season,
+    name: template.name,
     year: new Date().getFullYear(),
     startedAt: new Date().toISOString(),
     items: filteredItems.map(
