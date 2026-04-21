@@ -12,9 +12,19 @@ import type {
   KVStore,
   VaultRegistry,
   VaultTypeInfo,
+  VaultValidationResult,
 } from '../core/types'
 
-export function testRegistry(): VaultRegistry {
+export interface TestRegistryOptions {
+  /**
+   * Optional validator for the `vendor` type. When supplied, the returned
+   * registry's `vendor.validate(data)` delegates to it — letting tests
+   * exercise the schema-failure-on-pull path without importing Zod.
+   */
+  validateVendor?: (data: Record<string, unknown>) => VaultValidationResult
+}
+
+export function testRegistry(options: TestRegistryOptions = {}): VaultRegistry {
   const vendor: VaultTypeInfo = {
     type: 'vendor',
     folderName: 'Vendors',
@@ -22,6 +32,7 @@ export function testRegistry(): VaultRegistry {
     resolveTitle: (d) => String(d.name ?? 'Unnamed Vendor'),
     renderMarkdown: (d) => `# Vendor: ${String(d.name)}\n\n- Phone: ${String(d.phone ?? '')}\n`,
     markdownFilename: (d) => `vendor_${String(d.name ?? 'unnamed').replace(/\W+/g, '_')}.md`,
+    ...(options.validateVendor ? { validate: options.validateVendor } : {}),
   }
 
   const task: VaultTypeInfo = {

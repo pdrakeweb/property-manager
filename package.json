@@ -7,6 +7,9 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "docs:records": "node --import tsx scripts/generate-record-docs.mjs",
+    "docs:records:check": "node --import tsx scripts/generate-record-docs.mjs --check",
     "test:vault": "node --import tsx --test src/vault/__tests__/*.test.ts",
     "test:vault:live": "node --import tsx src/vault/__tests__/liveDrive.harness.ts"
   },

@@ -3,7 +3,7 @@ export type PropertyType = 'residence' | 'camp' | 'land'
 export type ChecklistKind = 'seasonal' | 'adhoc'
 export type ChecklistOrigin = 'ai' | 'manual'
 
-export type ChecklistItemSource = 'baseline' | 'ai' | 'user'
+export type ChecklistItemSource = 'baseline' | 'ai' | 'user' | 'manual'
 
 export interface ChecklistItem {
   id: string

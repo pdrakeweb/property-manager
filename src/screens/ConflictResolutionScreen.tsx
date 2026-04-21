@@ -46,6 +46,18 @@ function buildConflictPairs(): ConflictPair[] {
   return pairs
 }
 
+/**
+ * Records flagged as conflicts because they failed runtime Zod validation on
+ * pull — these have a `conflictReason` string but no sibling `conflictWithId`.
+ * The user can't merge them field-by-field (no "good" version exists); the
+ * choices are to discard the bad pull or accept it as-is and fix elsewhere.
+ */
+function buildValidationFailures(): IndexRecord[] {
+  return localIndex
+    .getConflicts()
+    .filter(r => !r.conflictWithId && r.conflictReason)
+}
+
 // ── Field comparison table ───────────────────────────────────────────────────
 
 function FieldTable({
@@ -239,15 +251,91 @@ function ConflictCard({
   )
 }
 
+// ── Validation-failure card (no sibling to merge against) ────────────────────
+
+function ValidationFailureCard({
+  record,
+  onResolved,
+}: {
+  record:     IndexRecord
+  onResolved: () => void
+}) {
+  const [busy, setBusy] = useState(false)
+
+  function discard() {
+    setBusy(true)
+    localIndex.softDelete(record.id)
+    onResolved()
+  }
+
+  function acceptAsIs() {
+    setBusy(true)
+    // Clear the conflict flag so the record exits the conflict UI. We mark
+    // it `pending_upload` (not `synced`) because the invalid payload is
+    // still on Drive — on the next push we'll re-upload whatever the user
+    // eventually fixes, and until then the sync indicator honestly reports
+    // the record as unsaved.
+    localIndex.upsert({
+      ...record,
+      syncState:      'pending_upload',
+      conflictReason: undefined,
+    })
+    onResolved()
+  }
+
+  return (
+    <div className="border border-rose-200 dark:border-rose-900 rounded-2xl bg-white dark:bg-slate-800 shadow-sm overflow-hidden">
+      <div className="flex items-start gap-3 px-5 py-4">
+        <AlertTriangle className="w-5 h-5 text-rose-500 shrink-0 mt-0.5" />
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">{record.title}</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            {record.type} · {record.propertyId}
+          </p>
+          <p className="mt-2 text-xs text-rose-700 dark:text-rose-400 font-medium">
+            Schema validation failed on pull
+          </p>
+          <p className="mt-1 text-xs text-slate-700 dark:text-slate-300 break-words">
+            {record.conflictReason}
+          </p>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-2 px-5 py-4 bg-slate-50 dark:bg-slate-700/50 border-t border-slate-100 dark:border-slate-700">
+        <button
+          type="button"
+          onClick={acceptAsIs}
+          disabled={busy}
+          className="btn btn-secondary btn-sm gap-1.5"
+        >
+          <CheckCircle2 className="w-3.5 h-3.5" />
+          Accept as-is
+        </button>
+        <button
+          type="button"
+          onClick={discard}
+          disabled={busy}
+          className="btn btn-danger-soft btn-sm gap-1.5"
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+          Discard record
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // ── Screen ───────────────────────────────────────────────────────────────────
 
 export function ConflictResolutionScreen() {
   const navigate = useNavigate()
-  const [pairs, setPairs] = useState<ConflictPair[]>(() => buildConflictPairs())
+  const [pairs,     setPairs]     = useState<ConflictPair[]>(() => buildConflictPairs())
+  const [failures,  setFailures]  = useState<IndexRecord[]>(() => buildValidationFailures())
 
   const handleResolved = useCallback(() => {
-    // Refresh the list after any resolution action
+    // Refresh both lists after any resolution action
     setPairs(buildConflictPairs())
+    setFailures(buildValidationFailures())
   }, [])
 
   return (
@@ -271,7 +359,7 @@ export function ConflictResolutionScreen() {
       </div>
 
       {/* Conflict list */}
-      {pairs.length === 0 ? (
+      {pairs.length === 0 && failures.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
           <div className="w-16 h-16 rounded-2xl bg-emerald-50 flex items-center justify-center">
             <CheckCircle2 className="w-8 h-8 text-emerald-500" />
@@ -282,18 +370,38 @@ export function ConflictResolutionScreen() {
           </div>
         </div>
       ) : (
-        <div className="space-y-4">
-          <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
-            {pairs.length} conflict{pairs.length !== 1 ? 's' : ''} need your attention.
-            Amber fields differ between versions — edit them before saving a merge.
-          </p>
-          {pairs.map(pair => (
-            <ConflictCard
-              key={pair.original.id}
-              pair={pair}
-              onResolved={handleResolved}
-            />
-          ))}
+        <div className="space-y-6">
+          {pairs.length > 0 && (
+            <div className="space-y-4">
+              <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+                {pairs.length} edit conflict{pairs.length !== 1 ? 's' : ''} — Drive and this device disagree.
+                Amber fields differ between versions; edit them before saving a merge.
+              </p>
+              {pairs.map(pair => (
+                <ConflictCard
+                  key={pair.original.id}
+                  pair={pair}
+                  onResolved={handleResolved}
+                />
+              ))}
+            </div>
+          )}
+
+          {failures.length > 0 && (
+            <div className="space-y-4">
+              <p className="text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded-xl px-4 py-3">
+                {failures.length} record{failures.length !== 1 ? 's' : ''} failed schema validation on pull.
+                Accept as-is to fix in the record's own screen, or discard the bad pull.
+              </p>
+              {failures.map(record => (
+                <ValidationFailureCard
+                  key={record.id}
+                  record={record}
+                  onResolved={handleResolved}
+                />
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

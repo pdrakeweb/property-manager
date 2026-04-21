@@ -18,6 +18,13 @@ export interface IndexRecord {
   driveFileId?: string
   driveEtag?: string
   conflictWithId?: string
+  /**
+   * Human-readable explanation of why a record is in `'conflict'` state.
+   * Populated by the vault on schema-validation failures during pull so the
+   * conflict UI can show the reason (e.g. "Invalid data: email: bad format").
+   * Independent of `conflictWithId`, which links two concurrent-edit siblings.
+   */
+  conflictReason?: string
   calendarEventId?:  string
   calendarEventIds?: string[]
   calendarSyncState?: 'synced' | 'pending' | 'error'
@@ -146,6 +153,10 @@ export interface StorageAdapter {
  * this shape. Keeping the vault's view structural means the vault does NOT
  * import Zod or the DSL framework directly.
  */
+export type VaultValidationResult =
+  | { ok: true }
+  | { ok: false; errors: string[] }
+
 export interface VaultTypeInfo {
   /** Stable type key (e.g. `'vendor'`). */
   type: string
@@ -159,6 +170,12 @@ export interface VaultTypeInfo {
   renderMarkdown(data: Record<string, unknown>): string
   /** Default .md filename for a record. */
   markdownFilename(data: Record<string, unknown>): string
+  /**
+   * Validate a record's payload against the registered schema. Implementations
+   * typically delegate to `zod.safeParse`. Missing implementation => treat as
+   * `{ ok: true }` (no-op) — useful for legacy types not yet on the DSL.
+   */
+  validate?(data: Record<string, unknown>): VaultValidationResult
 }
 
 export interface VaultRegistry {

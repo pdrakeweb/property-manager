@@ -131,7 +131,9 @@ function SeasonCard({
 }) {
   const navigate = useNavigate()
   const template = CHECKLIST_TEMPLATES.find(t => t.id === templateId)!
-  const meta = SEASON_META[template.season]
+  // Seasonal templates always carry a `season`; narrow the optional type here
+  // rather than crashing at runtime on an adhoc template passed in by mistake.
+  const meta = SEASON_META[template.season ?? 'spring']
   const { Icon } = meta
 
   const [generating, setGenerating] = useState(false)
