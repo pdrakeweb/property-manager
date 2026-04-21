@@ -45,6 +45,8 @@ export interface ChatCompletionOptions {
   maxTokens?: number
   temperature?: number
   tools?: ChatTool[]
+  /** If set, requests OpenAI-style structured output (OpenRouter supports `{type:'json_object'}`). */
+  responseFormat?: { type: 'json_object' } | { type: 'text' }
   logger?: import('./aiLogger').AISessionLogger
 }
 
@@ -106,6 +108,9 @@ function buildRequestBody(opts: ChatCompletionOptions, stream: boolean) {
   }
   if (opts.tools && opts.tools.length > 0) {
     body.tools = opts.tools
+  }
+  if (opts.responseFormat) {
+    body.response_format = opts.responseFormat
   }
   return body
 }
