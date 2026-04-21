@@ -25,6 +25,18 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Fails the build if planning/RECORD-TYPES.md drifts from the DSL
+      # registry. Contributors must run `npm run docs:records` after editing
+      # any `src/records/*.ts` file.
+      - name: Check generated record docs are fresh
+        run: npm run docs:records:check
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Run vault unit tests
+        run: npm run test:vault
+
       - name: Build
         run: npm run build
         env:

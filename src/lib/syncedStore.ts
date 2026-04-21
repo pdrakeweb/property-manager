@@ -12,6 +12,7 @@ import { localIndex, type IndexRecordType } from './localIndex'
 import { propertyStore } from './propertyStore'
 import { auditLog } from './auditLog'
 import { getDefinition } from '../records/registry'
+import { resolveTitle } from '../records/_framework'
 
 /**
  * Create a store that automatically syncs records to Drive via localIndex.
@@ -31,6 +32,32 @@ export function makeSyncedStore<T extends { id: string }>(
 
   const resolvePropertyId = getPropertyId ?? ((r: T) => (r as unknown as { propertyId: string }).propertyId)
 
+  // Look up the DSL definition once per store — the registry is immutable at
+  // module init, so caching here saves a dict lookup on every write/read.
+  const def = getDefinition(indexType)
+
+  /** Derive a stable fallback title when the DSL title fn fails or is missing. */
+  function fallbackTitle(id: string): string {
+    return `${indexType}_${id.slice(0, 8)}`
+  }
+
+  /**
+   * Derive the display title — DSL definition first (variant-aware), then a
+   * stable fallback. The old ad-hoc heuristic (`label ?? name ?? title ?? …`)
+   * is gone now that every registered type has a `title()` function.
+   */
+  function deriveTitle(item: T): string {
+    const id = (item as { id: string }).id
+    const fb = fallbackTitle(id)
+    if (!def) return fb
+    try {
+      const raw = resolveTitle(def, item as unknown as Record<string, unknown>)
+      return raw ? String(raw) : fb
+    } catch {
+      return fb
+    }
+  }
+
   function syncToIndex(item: T): void {
     const propId = resolvePropertyId(item)
     if (!propId) return
@@ -40,27 +67,23 @@ export function makeSyncedStore<T extends { id: string }>(
     // Don't queue if no Drive root (e.g. Camp with empty driveRootFolderId)
     if (!rootFolderId) return
 
-    // Derive a human-readable title: DSL definition first, then the legacy heuristic.
-    // Guarded so a DSL title fn returning undefined (e.g. record missing `name`)
-    // still produces a stable fallback rather than literally storing "undefined".
-    const typed = item as Record<string, unknown>
-    const def = getDefinition(indexType)
-    const fallback = `${indexType}_${(item as { id: string }).id.slice(0, 8)}`
-    const title = def
-      ? (() => {
-          try {
-            const raw = def.title(typed as never)
-            return raw ? String(raw) : fallback
-          } catch {
-            return fallback
-          }
-        })()
-      : String(
-          typed['label'] ?? typed['name'] ?? typed['title'] ?? typed['provider'] ??
-          typed['taskTitle'] ?? fallback,
-        )
+    // Runtime validation against the registered Zod schema. Invalid writes are
+    // still queued (the UI has already persisted them locally) but logged so
+    // form/regression bugs surface in the audit trail. We don't throw here
+    // because screens already do form-level validation; this is defense in
+    // depth, not the primary gate.
+    if (def) {
+      const result = def.schema.safeParse(item)
+      if (!result.success) {
+        const errs = result.error.issues
+          .slice(0, 5)
+          .map(i => `${i.path.join('.') || '(root)'}: ${i.message}`)
+          .join('; ')
+        auditLog.warn(`${indexType}.validate`, `Invalid ${indexType}: ${errs}`, propId)
+      }
+    }
 
-    // JSON filename: <type>_<id>.json
+    const title    = deriveTitle(item)
     const filename = `${indexType}_${(item as { id: string }).id}.json`
 
     localIndex.upsert({
@@ -84,19 +107,13 @@ export function makeSyncedStore<T extends { id: string }>(
     add(item: T): void {
       store.add(item)
       syncToIndex(item)
-      const propId = resolvePropertyId(item)
-      const typed  = item as Record<string, unknown>
-      const title  = String(typed['label'] ?? typed['name'] ?? typed['title'] ?? typed['provider'] ?? typed['taskTitle'] ?? item.id)
-      auditLog.info(`${indexType}.add`, `Added: ${title}`, propId || undefined)
+      auditLog.info(`${indexType}.add`, `Added: ${deriveTitle(item)}`, resolvePropertyId(item) || undefined)
     },
 
     update(item: T): void {
       store.update(item)
       syncToIndex(item)
-      const propId = resolvePropertyId(item)
-      const typed  = item as Record<string, unknown>
-      const title  = String(typed['label'] ?? typed['name'] ?? typed['title'] ?? typed['provider'] ?? typed['taskTitle'] ?? item.id)
-      auditLog.info(`${indexType}.update`, `Updated: ${title}`, propId || undefined)
+      auditLog.info(`${indexType}.update`, `Updated: ${deriveTitle(item)}`, resolvePropertyId(item) || undefined)
     },
 
     upsert(item: T): void {
@@ -109,10 +126,11 @@ export function makeSyncedStore<T extends { id: string }>(
       store.remove(id)
       localIndex.softDelete(id)
       if (existing) {
-        const propId = resolvePropertyId(existing)
-        const typed  = existing as Record<string, unknown>
-        const title  = String(typed['label'] ?? typed['name'] ?? typed['title'] ?? typed['provider'] ?? typed['taskTitle'] ?? id)
-        auditLog.info(`${indexType}.remove`, `Removed: ${title}`, propId || undefined)
+        auditLog.info(
+          `${indexType}.remove`,
+          `Removed: ${deriveTitle(existing)}`,
+          resolvePropertyId(existing) || undefined,
+        )
       }
     },
   }

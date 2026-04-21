@@ -6,37 +6,36 @@ const UPLOAD_API  = 'https://www.googleapis.com/upload/drive/v3'
 export const PM_FOLDER_NAME = 'Property Manager'
 export const KB_FOLDER_NAME = 'Knowledgebase'
 
-/** Maps category IDs to human-readable Drive folder names */
+/**
+ * Legacy category-ID → Drive folder map.
+ *
+ * Scoped to **equipment subsystem categories** only (hvac, water_heater, …)
+ * — the discriminators carried on `type: 'equipment'` records. DSL-registered
+ * record types (vendor, mortgage, insurance, etc.) derive their folder names
+ * from `RecordDefinition.folderName` via the vault registry; they used to be
+ * duplicated here but were pruned once the registry became authoritative.
+ *
+ * If you add a new equipment subsystem variant in `records/equipmentProfiles.ts`
+ * that ships files under its own folder, add the mapping here too so pull-scan
+ * finds the folder.
+ */
 export const CATEGORY_FOLDER_NAMES: Record<string, string> = {
-  generator:     'Generator',
-  hvac:          'HVAC',
-  water_heater:  'Water Heater',
+  generator:       'Generator',
+  hvac:            'HVAC',
+  water_heater:    'Water Heater',
   water_treatment: 'Water Treatment',
-  well:          'Well System',
-  propane:       'Propane',
-  septic:        'Septic System',
-  electrical:    'Electrical Panel',
-  sump_pump:     'Sump Pump',
-  radon:         'Radon Mitigation',
-  appliance:     'Appliances',
-  roof:          'Roof',
-  barn:          'Barn',
-  surveillance:  'Surveillance',
-  forestry_cauv: 'Forestry CAUV',
-  service_record: 'Service Records',
-  // Domain store folders
-  vendor:             'Vendors',
-  completed_event:    'Service History',
-  capital_transaction:'Capital',
-  fuel_delivery:      'Fuel Deliveries',
-  tax:                'Tax Records',
-  mortgage:           'Mortgage',
-  utility:            'Utilities',
-  insurance:          'Insurance',
-  permit:             'Permits',
-  road:               'Road Maintenance',
-  generator_log:      'Generator',
-  task:               'Maintenance Tasks',
+  well:            'Well System',
+  propane:         'Propane',
+  septic:          'Septic System',
+  electrical:      'Electrical Panel',
+  sump_pump:       'Sump Pump',
+  radon:           'Radon Mitigation',
+  appliance:       'Appliances',
+  roof:            'Roof',
+  barn:            'Barn',
+  surveillance:    'Surveillance',
+  forestry_cauv:   'Forestry CAUV',
+  service_record:  'Service Records',
 }
 
 export interface DriveFile {

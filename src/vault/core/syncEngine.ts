@@ -250,14 +250,35 @@ export async function pullFromDrive(
           const fileData = await ctx.storage.downloadFile(file.id)
           const stored   = JSON.parse(fileData.content) as IndexRecord
 
+          // Validate payload against the registered schema (if any). An
+          // invalid remote record is still stored locally so the user can
+          // resolve it — but flagged as a conflict with a reason string so
+          // the conflict UI can show what went wrong. When no `validate` is
+          // registered (legacy type) we treat the record as acceptable.
+          const typeInfo   = ctx.registry.get(stored.type)
+          const validation = typeInfo?.validate?.(stored.data)
+
+          let syncState: 'synced' | 'conflict' = 'synced'
+          let conflictReason: string | undefined
+          if (validation && !validation.ok) {
+            syncState      = 'conflict'
+            conflictReason = `Invalid data from remote: ${validation.errors.slice(0, 5).join('; ')}`
+            ctx.audit.warn('sync.validation', conflictReason, propertyId)
+          }
+
           ctx.localIndex.upsert({
             ...stored,
             propertyId,
-            syncState:      'synced',
+            syncState,
+            // Explicitly clear any stale reason from a prior failed pull so
+            // a once-invalid record that now validates stops advertising the
+            // old error message.
+            conflictReason,
             driveFileId:    file.id,
             driveEtag:      fileData.etag,
             driveUpdatedAt: new Date().toISOString(),
           }, 'remote')
+
           knownDriveIds.add(file.id)
           pulled++
         } catch {
