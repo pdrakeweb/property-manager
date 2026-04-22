@@ -131,9 +131,9 @@ function SeasonCard({
 }) {
   const navigate = useNavigate()
   const template = CHECKLIST_TEMPLATES.find(t => t.id === templateId)!
-  // Seasonal templates always carry a `season`; narrow the optional type here
-  // rather than crashing at runtime on an adhoc template passed in by mistake.
-  const meta = SEASON_META[template.season ?? 'spring']
+  // SeasonCard is only rendered for seasonal templates, so season is always set.
+  const season: Season = template.season ?? getCurrentSeason()
+  const meta = SEASON_META[season]
   const { Icon } = meta
 
   const [generating, setGenerating] = useState(false)
@@ -306,8 +306,8 @@ function SeasonCard({
           disabled={generating}
           title={
             aiCount > 0
-              ? `Regenerate AI suggestions (${aiCount} currently). New run required to pick up changes.`
-              : 'Generate AI-tailored suggestions for this property'
+              ? `Regenerate items (${aiCount} currently). New run required to pick up changes.`
+              : 'Generate items tailored to this property'
           }
           className="flex items-center gap-1.5 border border-violet-200 dark:border-violet-900/60 bg-violet-50 hover:bg-violet-100 dark:bg-violet-950/30 dark:hover:bg-violet-900/40 text-violet-700 dark:text-violet-300 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
         >
@@ -316,7 +316,7 @@ function SeasonCard({
             : <Sparkles className="w-3.5 h-3.5" />}
           {generating
             ? 'Generating…'
-            : aiCount > 0 ? 'Regenerate AI' : 'Generate AI items'}
+            : aiCount > 0 ? 'Regenerate Items' : 'Generate Items'}
         </button>
       </div>
 

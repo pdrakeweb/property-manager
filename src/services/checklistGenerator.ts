@@ -22,6 +22,84 @@ import type {
 
 const DEFAULT_MODEL = 'anthropic/claude-sonnet-4-6'
 
+// ─── JSON schemas for OpenRouter structured output ───────────────────────────
+// Using response_format={type:'json_schema', strict:true} forces the model to
+// emit JSON that matches the schema, eliminating malformed / truncated output
+// that plain json_object mode can still exhibit on long responses.
+
+const ITEMS_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['items'],
+  properties: {
+    items: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['label', 'detail', 'category', 'estimatedMinutes'],
+        properties: {
+          label: { type: 'string' },
+          detail: { type: 'string' },
+          category: { type: 'string' },
+          estimatedMinutes: { type: 'integer' },
+        },
+      },
+    },
+  },
+} as const
+
+const SUGGESTIONS_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['additions', 'edits', 'removals'],
+  properties: {
+    additions: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['label', 'detail', 'category', 'estimatedMinutes', 'rationale'],
+        properties: {
+          label: { type: 'string' },
+          detail: { type: 'string' },
+          category: { type: 'string' },
+          estimatedMinutes: { type: 'integer' },
+          rationale: { type: 'string' },
+        },
+      },
+    },
+    edits: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['itemId', 'label', 'detail', 'category', 'estimatedMinutes', 'rationale'],
+        properties: {
+          itemId: { type: 'string' },
+          label: { type: 'string' },
+          detail: { type: 'string' },
+          category: { type: 'string' },
+          estimatedMinutes: { type: 'integer' },
+          rationale: { type: 'string' },
+        },
+      },
+    },
+    removals: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['itemId', 'rationale'],
+        properties: {
+          itemId: { type: 'string' },
+          rationale: { type: 'string' },
+        },
+      },
+    },
+  },
+} as const
+
 export class ChecklistGenerationError extends Error {
   constructor(message: string, public readonly cause?: unknown) {
     super(message)
@@ -183,8 +261,10 @@ function parseItems(
     parsed = JSON.parse(extractJson(raw))
   } catch (e) {
     console.error('[checklistGenerator] Raw model output:', raw)
+    const head = raw.slice(0, 160)
+    const tail = raw.length > 320 ? raw.slice(-160) : ''
     throw new ChecklistGenerationError(
-      `Model did not return valid JSON. First 200 chars: ${raw.slice(0, 200)}`,
+      `Model did not return valid JSON (length ${raw.length}). Start: ${head}${tail ? ` … End: ${tail}` : ''}`,
       e,
     )
   }
@@ -273,8 +353,11 @@ export async function generateChecklistAugmentations(
     apiKey,
     model,
     temperature: 0.4,
-    maxTokens: 2048,
-    responseFormat: { type: 'json_object' },
+    maxTokens: 8192,
+    responseFormat: {
+      type: 'json_schema',
+      json_schema: { name: 'ChecklistItems', strict: true, schema: ITEMS_SCHEMA as unknown as Record<string, unknown> },
+    },
     messages: [
       { role: 'system', content: buildAugmentSystemPrompt(season, propertyType) },
       { role: 'user', content: buildAugmentUserPrompt(season, propertyType, templateId, propertyContext) },
@@ -338,8 +421,11 @@ export async function createAdhocChecklist(
     apiKey,
     model,
     temperature: 0.5,
-    maxTokens: 3072,
-    responseFormat: { type: 'json_object' },
+    maxTokens: 8192,
+    responseFormat: {
+      type: 'json_schema',
+      json_schema: { name: 'ChecklistItems', strict: true, schema: ITEMS_SCHEMA as unknown as Record<string, unknown> },
+    },
     messages: [
       { role: 'system', content: buildAdhocSystemPrompt(name, description, propertyType) },
       { role: 'user',   content: buildAdhocUserPrompt(name, description, propertyContext) },
@@ -401,8 +487,11 @@ export async function regenerateAdhocChecklist(
     apiKey,
     model,
     temperature: 0.5,
-    maxTokens: 3072,
-    responseFormat: { type: 'json_object' },
+    maxTokens: 8192,
+    responseFormat: {
+      type: 'json_schema',
+      json_schema: { name: 'ChecklistItems', strict: true, schema: ITEMS_SCHEMA as unknown as Record<string, unknown> },
+    },
     messages: [
       { role: 'system', content: buildAdhocSystemPrompt(existing.name, existing.description ?? '', propertyType) },
       { role: 'user',   content: buildAdhocUserPrompt(existing.name, existing.description ?? '', propertyContext) },
@@ -523,8 +612,11 @@ export async function suggestChecklistChanges(
     apiKey,
     model,
     temperature: 0.3,
-    maxTokens: 3072,
-    responseFormat: { type: 'json_object' },
+    maxTokens: 8192,
+    responseFormat: {
+      type: 'json_schema',
+      json_schema: { name: 'ChecklistSuggestions', strict: true, schema: SUGGESTIONS_SCHEMA as unknown as Record<string, unknown> },
+    },
     messages: [
       { role: 'system', content: buildSuggestSystemPrompt(propertyType) },
       { role: 'user',   content: buildSuggestUserPrompt(template, propertyContext) },
@@ -536,8 +628,10 @@ export async function suggestChecklistChanges(
     parsed = JSON.parse(extractJson(result.content))
   } catch (e) {
     console.error('[checklistGenerator] Raw suggest output:', result.content)
+    const head = result.content.slice(0, 160)
+    const tail = result.content.length > 320 ? result.content.slice(-160) : ''
     throw new ChecklistGenerationError(
-      `Model did not return valid JSON. First 200 chars: ${result.content.slice(0, 200)}`,
+      `Model did not return valid JSON (length ${result.content.length}). Start: ${head}${tail ? ` … End: ${tail}` : ''}`,
       e,
     )
   }
