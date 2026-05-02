@@ -1,13 +1,13 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Camera, Wrench, BarChart3, MessageSquare, AlertTriangle,
   CheckCircle2, Circle, ChevronRight, Zap, ShieldAlert, Receipt, Home,
-  Plus, X, ChevronDown, ChevronUp, Building2, TreePine,
+  Plus, X, ChevronDown, ChevronUp, Building2, TreePine, WifiOff,
 } from 'lucide-react'
 import { cn } from '../utils/cn'
 import {
-  CAPITAL_ITEMS, HA_STATUS, CATEGORIES,
+  CAPITAL_ITEMS, CATEGORIES,
 } from '../data/mockData'
 import { getYTDSpend, costStore } from '../lib/costStore'
 import { getUpcomingExpiries } from '../lib/expiryStore'
@@ -17,10 +17,11 @@ import { getNextTaxPayment, getOverdueTaxPayments, getAssessmentsForProperty } f
 import { getTotalMortgageBalance } from '../lib/mortgageStore'
 import { customTaskStore, getActiveTasks } from '../lib/maintenanceStore'
 import { localIndex } from '../lib/localIndex'
+import { fetchEntityState } from '../lib/haClient'
 import { useAppStore } from '../store/AppStoreContext'
 import { propertyStore } from '../lib/propertyStore'
 import { PropertyHealthCard } from '../components/dashboard/PropertyHealthCard'
-import type { Priority, HAStatus, MaintenanceTask } from '../types'
+import type { Priority, HAEntityState, MaintenanceTask, CapitalItem } from '../types'
 
 // ── Dashboard mode ────────────────────────────────────────────────────────────
 
@@ -53,24 +54,46 @@ function priorityDot(p: Priority) {
   }[p]
 }
 
-function haStatusColor(s: HAStatus['status']) {
-  return {
-    ok:      'text-emerald-600',
-    warning: 'text-amber-500',
-    alert:   'text-red-500',
-    off:     'text-slate-400 dark:text-slate-500',
-    unknown: 'text-slate-400 dark:text-slate-500',
-  }[s]
+type LiveStateKind = 'ok' | 'off' | 'unknown'
+
+function liveStateKind(state: HAEntityState | null): LiveStateKind {
+  if (!state) return 'unknown'
+  const v = state.state
+  if (v === 'unavailable' || v === 'unknown') return 'unknown'
+  if (v === 'off' || v === 'false' || v === 'closed' || v === 'idle') return 'off'
+  return 'ok'
 }
 
-function haStatusDot(s: HAStatus['status']) {
+function liveStateColor(kind: LiveStateKind) {
+  return {
+    ok:      'text-emerald-600 dark:text-emerald-400',
+    off:     'text-slate-500 dark:text-slate-400',
+    unknown: 'text-slate-400 dark:text-slate-500',
+  }[kind]
+}
+
+function liveStateDot(kind: LiveStateKind) {
   return {
     ok:      'bg-emerald-400',
-    warning: 'bg-amber-400 animate-pulse',
-    alert:   'bg-red-500 animate-pulse',
-    off:     'bg-slate-300',
+    off:     'bg-slate-400',
     unknown: 'bg-slate-300',
-  }[s]
+  }[kind]
+}
+
+function formatLiveValue(state: HAEntityState | null): string {
+  if (!state) return '—'
+  const unit = state.attributes.unit_of_measurement as string | undefined
+  return unit ? `${state.state} ${unit}` : state.state
+}
+
+// ── Capital items: localIndex → mockData fallback ─────────────────────────────
+
+function getCapitalItemsForProperty(propertyId: string): CapitalItem[] {
+  const indexed = localIndex.getAll('capital_item', propertyId)
+  if (indexed.length > 0) {
+    return indexed.map(r => r.data as unknown as CapitalItem)
+  }
+  return CAPITAL_ITEMS.filter(i => i.propertyId === propertyId)
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────
@@ -257,10 +280,110 @@ export function DashboardScreen() {
 
   const activeProperty = properties.find(p => p.id === activePropertyId) ?? properties[0]
   const tasks     = allTasks.filter(t => t.propertyId === activePropertyId)
-  const items     = CAPITAL_ITEMS.filter(i => i.propertyId === activePropertyId)
+  const items     = getCapitalItemsForProperty(activePropertyId)
   const cats      = CATEGORIES.filter(c => c.propertyTypes.includes(activeProperty.type))
   const dueTasks     = tasks.filter(t => t.status === 'due' || t.status === 'overdue')
   const topCapital   = items.filter(c => c.priority === 'critical' || c.priority === 'high')
+
+  // Cross-property capital items (localIndex → mockData fallback per property)
+  const allCapitalItems = useMemo(
+    () => properties.flatMap(p => getCapitalItemsForProperty(p.id)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [properties, tick],
+  )
+
+  // ── Live HA state for linked equipment ────────────────────────────────────
+  const linkedEquipment = useMemo(() => {
+    return localIndex.getAll('equipment', activePropertyId)
+      .map(r => ({
+        recordId: r.id,
+        title:    r.title,
+        entityId: (r.data as { haEntityId?: string }).haEntityId ?? '',
+      }))
+      .filter(e => !!e.entityId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activePropertyId, tick])
+
+  const [haStates, setHaStates] = useState<Record<string, HAEntityState | null>>({})
+  const [haLoading, setHaLoading] = useState(false)
+
+  useEffect(() => {
+    if (linkedEquipment.length === 0) {
+      setHaStates({})
+      return
+    }
+    let cancelled = false
+    setHaLoading(true)
+    Promise.all(
+      linkedEquipment.map(async e => {
+        const state = await fetchEntityState(e.entityId)
+        return [e.entityId, state] as const
+      }),
+    ).then(pairs => {
+      if (cancelled) return
+      const map: Record<string, HAEntityState | null> = {}
+      for (const [id, state] of pairs) map[id] = state
+      setHaStates(map)
+      setHaLoading(false)
+    })
+    return () => { cancelled = true }
+  }, [linkedEquipment])
+
+  // ── Recent activity: completed events + completed tasks + road events ─────
+  type ActivityEntry = {
+    id:    string
+    date:  string
+    text:  string
+    icon:  typeof Wrench
+    color: string
+  }
+
+  const recentActivity = useMemo<ActivityEntry[]>(() => {
+    const completedEvents: ActivityEntry[] = localIndex.getAll('completed_event', activePropertyId)
+      .map(r => {
+        const d = r.data as { taskTitle?: string; completionDate?: string; contractor?: string }
+        const date = d.completionDate ?? r.localUpdatedAt.slice(0, 10)
+        const who  = d.contractor ? ` — ${d.contractor}` : ''
+        return {
+          id:    r.id,
+          date,
+          text:  `${d.taskTitle ?? 'Service'} — service record saved${who}`,
+          icon:  Wrench,
+          color: 'text-orange-500 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20',
+        }
+      })
+
+    const completedTasks: ActivityEntry[] = localIndex.getAll('task', activePropertyId)
+      .filter(r => (r.data as unknown as MaintenanceTask).status === 'completed')
+      .map(r => {
+        const t = r.data as unknown as MaintenanceTask
+        return {
+          id:    r.id,
+          date:  r.localUpdatedAt.slice(0, 10),
+          text:  `${t.title} — task completed`,
+          icon:  CheckCircle2,
+          color: 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20',
+        }
+      })
+
+    const roadEvents: ActivityEntry[] = localIndex.getAll('road', activePropertyId)
+      .map(r => {
+        const d = r.data as { date?: string; vendor?: string; maintenanceTypeId?: string }
+        const label = (d.maintenanceTypeId ?? 'road').replace(/_/g, ' ')
+        return {
+          id:    r.id,
+          date:  d.date ?? r.localUpdatedAt.slice(0, 10),
+          text:  `${label}${d.vendor ? ` — ${d.vendor}` : ''}`,
+          icon:  Zap,
+          color: 'text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20',
+        }
+      })
+
+    return [...completedEvents, ...completedTasks, ...roadEvents]
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .slice(0, 5)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activePropertyId, tick])
   const hasIndexed   = localIndex.getCount('equipment', activePropertyId) > 0
   const documented   = cats.filter(c => hasIndexed
     ? localIndex.getAll('equipment', activePropertyId).some(r => r.categoryId === c.id)
@@ -462,14 +585,14 @@ export function DashboardScreen() {
       )}
 
       {/* ── Capital Projects — All Properties (All mode only) ─────────── */}
-      {dashboardMode === 'all' && CAPITAL_ITEMS.filter(i => i.priority === 'critical' || i.priority === 'high').length > 0 && (
+      {dashboardMode === 'all' && allCapitalItems.filter(i => i.priority === 'critical' || i.priority === 'high').length > 0 && (
         <div>
           <h2 className="section-title mb-2">
             Capital Projects — All Properties
           </h2>
           <Card>
             <div className="divide-y divide-slate-100 dark:divide-slate-700">
-              {CAPITAL_ITEMS.filter(i => i.priority === 'critical' || i.priority === 'high').slice(0, 5).map(item => {
+              {allCapitalItems.filter(i => i.priority === 'critical' || i.priority === 'high').slice(0, 5).map(item => {
                 const prop = properties.find(p => p.id === item.propertyId)
                 return (
                   <div key={item.id} className="flex items-center gap-3 px-4 py-3">
@@ -634,27 +757,38 @@ export function DashboardScreen() {
                   <div className="flex items-center justify-between mb-3">
                     <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide">Live Status</h2>
                     <div className="flex items-center gap-1.5">
-                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                      <span className="text-xs text-emerald-600 font-medium">Home Assistant</span>
+                      <div className={cn(
+                        'w-1.5 h-1.5 rounded-full',
+                        linkedEquipment.length > 0 ? 'bg-emerald-400 animate-pulse' : 'bg-slate-300 dark:bg-slate-600',
+                      )} />
+                      <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">Home Assistant</span>
                     </div>
                   </div>
-                  <div className="space-y-2.5">
-                    {HA_STATUS.map(sensor => (
-                      <div key={sensor.entityId} className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <div className={cn('w-2 h-2 rounded-full shrink-0', haStatusDot(sensor.status))} />
-                          <span className="text-sm text-slate-700 dark:text-slate-300">{sensor.label}</span>
-                        </div>
-                        <span className={cn('text-sm font-semibold tabular-nums', haStatusColor(sensor.status))}>
-                          {sensor.value}{sensor.unit ? ` ${sensor.unit}` : ''}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                  {HA_STATUS.some(s => s.status === 'warning') && (
-                    <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700/50 flex items-center gap-2">
-                      <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
-                      <span className="text-xs text-amber-600">Generator oil due within 44 hrs of runtime</span>
+                  {linkedEquipment.length === 0 ? (
+                    <button
+                      onClick={() => navigate('/inventory')}
+                      className="w-full text-left text-sm text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+                    >
+                      No HA entities linked — link equipment in the Inventory screen
+                    </button>
+                  ) : (
+                    <div className="space-y-2.5">
+                      {linkedEquipment.map(eq => {
+                        const state = haStates[eq.entityId] ?? null
+                        const kind  = liveStateKind(state)
+                        return (
+                          <div key={eq.recordId} className="flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <div className={cn('w-2 h-2 rounded-full shrink-0', liveStateDot(kind))} />
+                              <span className="text-sm text-slate-700 dark:text-slate-300 truncate">{eq.title}</span>
+                            </div>
+                            <span className={cn('text-sm font-semibold tabular-nums shrink-0 flex items-center gap-1', liveStateColor(kind))}>
+                              {!haLoading && !state && <WifiOff className="w-3 h-3" />}
+                              {formatLiveValue(state)}
+                            </span>
+                          </div>
+                        )
+                      })}
                     </div>
                   )}
                 </div>
@@ -752,23 +886,25 @@ export function DashboardScreen() {
             <Card>
               <div className="px-5 pt-5 pb-4">
                 <SectionHeader title="Recent Activity" />
-                <div className="space-y-3">
-                  {[
-                    { date: 'Apr 11', text: 'Water heater — AI advisor session saved to Drive', icon: MessageSquare, color: 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20' },
-                    { date: 'Jan 15', text: 'HVAC filter replaced — service record saved',       icon: Wrench,        color: 'text-orange-500 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20' },
-                    { date: 'Nov 1',  text: 'Generator annual service — Buckeye Power Sales',    icon: Zap,           color: 'text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20'       },
-                  ].map(({ date, text, icon: Icon, color }) => (
-                    <div key={text} className="flex items-start gap-3">
-                      <div className={cn('w-7 h-7 rounded-lg flex items-center justify-center shrink-0', color)}>
-                        <Icon className="w-3.5 h-3.5" />
+                {recentActivity.length === 0 ? (
+                  <p className="text-sm text-slate-400 dark:text-slate-500">No recent activity yet.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {recentActivity.map(({ id, date, text, icon: Icon, color }) => (
+                      <div key={id} className="flex items-start gap-3">
+                        <div className={cn('w-7 h-7 rounded-lg flex items-center justify-center shrink-0', color)}>
+                          <Icon className="w-3.5 h-3.5" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-slate-700 dark:text-slate-300 leading-tight">{text}</p>
+                        </div>
+                        <span className="text-xs text-slate-400 dark:text-slate-500 shrink-0">
+                          {new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                        </span>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-slate-700 dark:text-slate-300 leading-tight">{text}</p>
-                      </div>
-                      <span className="text-xs text-slate-400 dark:text-slate-500 shrink-0">{date}</span>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </Card>
 
