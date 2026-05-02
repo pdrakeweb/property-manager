@@ -42,13 +42,26 @@ export const SETTINGS = {
 
 // ─── Read / Write ─────────────────────────────────────────────────────────────
 
+/**
+ * Static map of env-var defaults. Each value is read via a static
+ * `import.meta.env.VITE_*` access so Vite only inlines THIS allow-list
+ * into the bundle. A previous dynamic `import.meta.env[def.envVar]`
+ * caused Vite to inline the full env object (including unrelated
+ * VITE_* secrets) — see `getSetting` for the safe lookup path.
+ */
+const ENV_DEFAULTS: Record<string, string | undefined> = {
+  VITE_OPENROUTER_KEY: import.meta.env.VITE_OPENROUTER_KEY as string | undefined,
+  VITE_HA_URL:         import.meta.env.VITE_HA_URL         as string | undefined,
+  VITE_HA_TOKEN:       import.meta.env.VITE_HA_TOKEN       as string | undefined,
+}
+
 /** Get a setting value. Checks localStorage first, then env var, then default. */
 export function getSetting(def: SettingDef): string {
   const stored = localStorage.getItem(`${PREFIX}${def.key}`)
   if (stored !== null) return stored
 
   if (def.envVar) {
-    const envVal = (import.meta.env as Record<string, string | undefined>)[def.envVar]
+    const envVal = ENV_DEFAULTS[def.envVar]
     if (envVal !== undefined && envVal !== '') return envVal
   }
 

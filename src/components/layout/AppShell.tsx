@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Camera, Wrench, BarChart3,
   MessageSquare, ClipboardList, Settings, ChevronDown, ChevronRight,
   Building2, TreePine, Users, Droplets, Receipt, Home, Zap, CalendarDays,
-  RefreshCw, Shield, FileCheck, CheckSquare, Activity, MapPin,
+  RefreshCw, Shield, FileCheck, CheckSquare, Activity, MapPin, Map,
   Sun, Moon, Monitor, DollarSign, HardHat, BookOpen, AlertTriangle, X,
 } from 'lucide-react'
 import { cn } from '../../utils/cn'
@@ -49,6 +49,7 @@ const NAV_SECTIONS: NavSection[] = [
     icon: HardHat,
     items: [
       { to: '/profile',    icon: BookOpen,      label: 'Profile',     mobileShow: false },
+      { to: '/map',        icon: Map,           label: 'Map',         mobileShow: false },
       { to: '/inventory',  icon: ClipboardList, label: 'Inventory',   mobileShow: false },
       { to: '/vendors',    icon: Users,         label: 'Vendors',     mobileShow: false },
       { to: '/permits',    icon: FileCheck,     label: 'Permits',     mobileShow: false },
