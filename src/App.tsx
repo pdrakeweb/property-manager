@@ -33,7 +33,7 @@ import { PropertyProfileScreen }       from './screens/PropertyProfileScreen'
 import { EquipmentDetailScreen }       from './screens/EquipmentDetailScreen'
 import { SyncScreen }                  from './screens/SyncScreen'
 
-import { syncAll, seedTasksForProperty, syncPropertyConfig, syncAuditLog, pollDriveChanges } from './lib/syncEngine'
+import { syncAll, seedTasksForProperty, syncPropertyConfig, syncAuditLog, pollDriveChanges, syncPendingPhotos } from './lib/syncEngine'
 import { ActivityScreen } from './screens/ActivityScreen'
 import { exportAllMarkdownToDrive } from './lib/markdownExport'
 import { propertyStore, seedPropertiesFromMock } from './lib/propertyStore'
@@ -295,6 +295,12 @@ function useStartupSync() {
         for (const p of propertyStore.getAll()) {
           await syncAll(token, p.id)
         }
+        // Upload any photos that are still base64-only in localStorage and
+        // backfill driveFileId on the corresponding completed_event records.
+        // Runs after syncAll's pushPending so the JSON record is on Drive
+        // before its photo blobs follow; the next cycle then re-pushes the
+        // record with localDataUrl cleared.
+        await syncPendingPhotos()
         await syncAuditLog(token)
         localStorage.setItem('pm_last_sync_at', new Date().toISOString())
       } catch {

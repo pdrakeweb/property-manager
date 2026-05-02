@@ -364,4 +364,31 @@ export const DriveClient = {
     const etag = resp.headers.get('ETag') ?? resp.headers.get('etag') ?? ''
     return { ...file, etag }
   },
+
+  /**
+   * Upload a photo blob to Drive and return the new file ID.
+   * Files are stored under `[propertyRoot]/photos/` so they live alongside
+   * the JSON service-event records but in their own folder.
+   */
+  async uploadPhoto(
+    propertyId: string,
+    recordId:   string,
+    photoBlob:  Blob,
+    filename:   string,
+  ): Promise<string> {
+    const token = localStorage.getItem('google_access_token')
+    if (!token) throw new Error('uploadPhoto: not authenticated')
+
+    const { propertyStore } = await import('./propertyStore')
+    const property = propertyStore.getById(propertyId)
+    const rootFolderId = property?.driveRootFolderId
+    if (!rootFolderId) throw new Error(`uploadPhoto: no Drive root for property ${propertyId}`)
+
+    const photosFolder = await findOrCreateFolder(token, 'photos', rootFolderId)
+    const safeName     = `${recordId}_${filename}`
+    const mimeType     = photoBlob.type || 'image/jpeg'
+
+    const result = await DriveClient.uploadFile(token, photosFolder, safeName, photoBlob, mimeType)
+    return result.id
+  },
 }
