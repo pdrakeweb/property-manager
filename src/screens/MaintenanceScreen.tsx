@@ -5,7 +5,6 @@ import {
   ImageIcon, Wrench, Plus, CalendarPlus, Loader2, RefreshCw,
 } from 'lucide-react'
 import { cn } from '../utils/cn'
-import { SERVICE_RECORDS } from '../data/mockData'
 import { costStore, getYTDSpend } from '../lib/costStore'
 import { VendorSelector } from '../components/VendorSelector'
 import { useAppStore } from '../store/AppStoreContext'
@@ -762,15 +761,17 @@ export function MaintenanceScreen() {
   const upcomingTasks = upcoming
   const totalCostDue  = dueTasks.reduce((s, t) => s + (t.estimatedCost ?? 0), 0)
 
-  // Completed events from store (most recent first), filtered by property
-  const completedEvents = costStore
-    .getAll()
-    .filter(e => e.propertyId === activePropertyId)
-    .sort((a, b) => b.completionDate.localeCompare(a.completionDate))
+  // Completed events from store (most recent first), filtered by property.
+  // Dedupe by id — older localStorage states sometimes contain duplicate seeds.
+  const completedEvents = Array.from(
+    new Map(
+      costStore.getAll()
+        .filter(e => e.propertyId === activePropertyId)
+        .map(e => [e.id, e]),
+    ).values(),
+  ).sort((a, b) => b.completionDate.localeCompare(a.completionDate))
 
-  // SERVICE_RECORDS also filtered by property
-  const serviceRecords = SERVICE_RECORDS.filter(r => r.propertyId === activePropertyId)
-  const historyCount   = serviceRecords.length + completedEvents.length
+  const historyCount = completedEvents.length
 
   const tabs: { id: Tab; label: string; count: number }[] = [
     { id: 'due',      label: 'Due Now',  count: dueTasks.length      },
@@ -885,31 +886,6 @@ export function MaintenanceScreen() {
             <>
               <p className="text-xs font-semibold uppercase text-emerald-600 tracking-wide">Completed ({completedEvents.length})</p>
               {completedEvents.map(event => <EventHistoryCard key={event.id} event={event} />)}
-            </>
-          )}
-
-          {serviceRecords.length > 0 && (
-            <>
-              <p className="text-xs font-semibold uppercase text-slate-400 dark:text-slate-500 tracking-wide mt-2">Service Records</p>
-              {serviceRecords.map(record => (
-                <div key={record.id} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl px-4 py-4 shadow-sm">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 rounded-md px-2 py-0.5">{record.systemLabel}</span>
-                        <span className="text-xs text-slate-400 dark:text-slate-500">
-                          {new Date(record.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                        </span>
-                      </div>
-                      <p className="text-sm text-slate-700 dark:text-slate-300 mt-1.5">{record.workDescription}</p>
-                      {record.contractor && <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">by {record.contractor}</p>}
-                    </div>
-                    {record.totalCost !== undefined && (
-                      <span className="text-sm font-semibold text-slate-700 dark:text-slate-300 shrink-0">${record.totalCost.toLocaleString()}</span>
-                    )}
-                  </div>
-                </div>
-              ))}
             </>
           )}
         </div>

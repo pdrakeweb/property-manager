@@ -2,11 +2,10 @@
  * Property Records API — provides structured access to property data.
  *
  * The AI interacts with this service rather than raw stores directly.
- * Pulls from localIndex + individual store modules. Capital items fall back
- * to a static mock seed if no records exist in the index yet.
+ * Pulls from localIndex + individual store modules.
  */
 
-import { SERVICE_RECORDS, CATEGORIES } from '../data/mockData'
+import { CATEGORIES } from '../data/mockData'
 import { getCapitalItemsForProperty } from '../lib/capitalItemStore'
 import { propertyStore } from '../lib/propertyStore'
 import { getActiveTasks } from '../lib/maintenanceStore'
@@ -212,13 +211,11 @@ export class PropertyRecordsAPI {
   }
 
   private getServiceRecords(): ServiceRecord[] {
-    const live = localIndex.getAll('completed_event', this.propertyId)
+    return localIndex.getAll('completed_event', this.propertyId)
       .map(indexToServiceRecord)
       .filter(r => r.date)
       .sort((a, b) => b.date.localeCompare(a.date))
       .slice(0, 50)
-    if (live.length > 0) return live
-    return SERVICE_RECORDS.filter(s => s.propertyId === this.propertyId)
   }
 
   getServiceHistory(filter?: {
