@@ -33,6 +33,7 @@ export type IndexRecordType =
   | 'septic_event'
   | 'fuel_delivery'
   | 'completed_event'
+  | 'capital_item'
   | 'capital_transaction'
   | 'capital_override'
   | 'insurance'

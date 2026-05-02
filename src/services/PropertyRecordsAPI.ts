@@ -6,9 +6,10 @@
  */
 
 import {
-  EQUIPMENT, CAPITAL_ITEMS,
+  EQUIPMENT,
   SERVICE_RECORDS, HA_STATUS, CATEGORIES,
 } from '../data/mockData'
+import { getCapitalItemsForProperty } from '../lib/capitalItemStore'
 import { propertyStore } from '../lib/propertyStore'
 import { getActiveTasks } from '../lib/maintenanceStore'
 // localIndex reserved for future direct index queries
@@ -108,7 +109,7 @@ export class PropertyRecordsAPI {
     priority?: string
     year?: number
   }): CapitalItem[] {
-    let items = CAPITAL_ITEMS.filter(c => c.propertyId === this.propertyId)
+    let items = getCapitalItemsForProperty(this.propertyId)
 
     if (filter?.priority) {
       items = items.filter(c => c.priority === filter.priority)
@@ -270,7 +271,7 @@ export class PropertyRecordsAPI {
       }
     }
 
-    const capital = CAPITAL_ITEMS.filter(c => c.propertyId === this.propertyId)
+    const capital = getCapitalItemsForProperty(this.propertyId)
     for (const c of capital) {
       const text = [c.title, c.notes].filter(Boolean).join(' ').toLowerCase()
       if (text.includes(q)) {

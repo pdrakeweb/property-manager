@@ -7,8 +7,9 @@ import {
 } from 'lucide-react'
 import { cn } from '../utils/cn'
 import {
-  CAPITAL_ITEMS, HA_STATUS, CATEGORIES,
+  HA_STATUS, CATEGORIES,
 } from '../data/mockData'
+import { getCapitalItems, getCapitalItemsForProperty } from '../lib/capitalItemStore'
 import { getYTDSpend, costStore } from '../lib/costStore'
 import { getUpcomingExpiries } from '../lib/expiryStore'
 import { ExpiryWidget } from '../components/ExpiryWidget'
@@ -257,7 +258,8 @@ export function DashboardScreen() {
 
   const activeProperty = properties.find(p => p.id === activePropertyId) ?? properties[0]
   const tasks     = allTasks.filter(t => t.propertyId === activePropertyId)
-  const items     = CAPITAL_ITEMS.filter(i => i.propertyId === activePropertyId)
+  const allCapitalItems = getCapitalItems()
+  const items     = getCapitalItemsForProperty(activePropertyId)
   const cats      = CATEGORIES.filter(c => c.propertyTypes.includes(activeProperty.type))
   const dueTasks     = tasks.filter(t => t.status === 'due' || t.status === 'overdue')
   const topCapital   = items.filter(c => c.priority === 'critical' || c.priority === 'high')
@@ -462,14 +464,14 @@ export function DashboardScreen() {
       )}
 
       {/* ── Capital Projects — All Properties (All mode only) ─────────── */}
-      {dashboardMode === 'all' && CAPITAL_ITEMS.filter(i => i.priority === 'critical' || i.priority === 'high').length > 0 && (
+      {dashboardMode === 'all' && allCapitalItems.filter(i => i.priority === 'critical' || i.priority === 'high').length > 0 && (
         <div>
           <h2 className="section-title mb-2">
             Capital Projects — All Properties
           </h2>
           <Card>
             <div className="divide-y divide-slate-100 dark:divide-slate-700">
-              {CAPITAL_ITEMS.filter(i => i.priority === 'critical' || i.priority === 'high').slice(0, 5).map(item => {
+              {allCapitalItems.filter(i => i.priority === 'critical' || i.priority === 'high').slice(0, 5).map(item => {
                 const prop = properties.find(p => p.id === item.propertyId)
                 return (
                   <div key={item.id} className="flex items-center gap-3 px-4 py-3">

@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import {
   TrendingUp, Plus, Info, AlertTriangle, CheckCircle2,
-  ArrowLeft, Trash2, ChevronDown, ChevronUp, AlertCircle,
+  ArrowLeft, Trash2, ChevronDown, ChevronUp, AlertCircle, X, Pencil,
 } from 'lucide-react'
 import { cn } from '../utils/cn'
-import { CAPITAL_ITEMS, SERVICE_RECORDS } from '../data/mockData'
+import { SERVICE_RECORDS, CATEGORIES } from '../data/mockData'
 import { useAppStore } from '../store/AppStoreContext'
 import type { Priority, CapitalItem, CapitalTransaction } from '../types'
 import {
@@ -15,6 +15,10 @@ import {
   getOverride,
   setOverride,
 } from '../lib/capitalStore'
+import {
+  capitalItemStore,
+  getCapitalItemsForProperty,
+} from '../lib/capitalItemStore'
 
 type Horizon = '1yr' | '3yr' | '10yr'
 
@@ -373,6 +377,199 @@ function CapitalItemDetail({
   )
 }
 
+// ── Capital Item Form (Add / Edit) ──────────────────────────────────────────
+
+const inp = 'w-full text-sm input-surface rounded-xl px-3 py-2.5'
+
+function CapitalItemForm({
+  initial,
+  propertyId,
+  onSave,
+  onClose,
+}: {
+  initial?: CapitalItem
+  propertyId: string
+  onSave: () => void
+  onClose: () => void
+}) {
+  const [title,         setTitle]         = useState(initial?.title ?? '')
+  const [categoryId,    setCategoryId]    = useState(initial?.categoryId ?? CATEGORIES[0]?.id ?? '')
+  const [priority,      setPriority]      = useState<Priority>(initial?.priority ?? 'medium')
+  const [estimatedYear, setEstimatedYear] = useState(String(initial?.estimatedYear ?? CURRENT_YEAR + 1))
+  const [costLow,       setCostLow]       = useState(initial?.costLow !== undefined ? String(initial.costLow) : '')
+  const [costHigh,      setCostHigh]      = useState(initial?.costHigh !== undefined ? String(initial.costHigh) : '')
+  const [installYear,   setInstallYear]   = useState(initial?.installYear !== undefined ? String(initial.installYear) : '')
+  const [notes,         setNotes]         = useState(initial?.notes ?? '')
+  const [status,        setStatus]        = useState<NonNullable<CapitalItem['status']>>(initial?.status ?? 'planned')
+
+  function handleSave() {
+    const yr     = Number(estimatedYear)
+    const lo     = Number(costLow)
+    const hi     = Number(costHigh)
+    if (!title.trim() || !categoryId || !Number.isFinite(yr) || !Number.isFinite(lo) || !Number.isFinite(hi)) return
+    const installYr = installYear ? Number(installYear) : undefined
+    const ageYears  = installYr ? Math.max(0, CURRENT_YEAR - installYr) : undefined
+
+    const item: CapitalItem = {
+      id:            initial?.id ?? crypto.randomUUID(),
+      propertyId,
+      title:         title.trim(),
+      categoryId,
+      installYear:   installYr,
+      ageYears,
+      priority,
+      estimatedYear: yr,
+      costLow:       Math.min(lo, hi),
+      costHigh:      Math.max(lo, hi),
+      notes:         notes.trim() || undefined,
+      source:        initial?.source ?? 'manual',
+      status,
+      percentComplete: initial?.percentComplete,
+    }
+    if (initial) capitalItemStore.update(item)
+    else         capitalItemStore.add(item)
+
+    // Keep the override store in sync with status changes so the rollup view
+    // reflects the edited status without a separate dialog.
+    setOverride(item.id, { status })
+
+    onSave()
+    onClose()
+  }
+
+  return (
+    <div className="modal-backdrop">
+      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-md p-5 space-y-4 max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between">
+          <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
+            {initial ? 'Edit Capital Project' : 'Add Capital Project'}
+          </h2>
+          <button onClick={onClose} className="p-1 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 rounded-lg">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5">Name *</label>
+          <input
+            type="text"
+            value={title}
+            onChange={e => setTitle(e.target.value)}
+            placeholder="e.g. Water Heater replacement"
+            className={inp}
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5">Category *</label>
+            <select value={categoryId} onChange={e => setCategoryId(e.target.value)} className={inp}>
+              {CATEGORIES.map(c => (
+                <option key={c.id} value={c.id}>{c.label}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5">Priority *</label>
+            <select value={priority} onChange={e => setPriority(e.target.value as Priority)} className={inp}>
+              <option value="critical">Critical</option>
+              <option value="high">High</option>
+              <option value="medium">Medium</option>
+              <option value="low">Low</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5">Planned Year *</label>
+            <input
+              type="number"
+              value={estimatedYear}
+              onChange={e => setEstimatedYear(e.target.value)}
+              className={inp}
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5">Status</label>
+            <select value={status} onChange={e => setStatus(e.target.value as NonNullable<CapitalItem['status']>)} className={inp}>
+              <option value="planned">Planned</option>
+              <option value="in-progress">In Progress</option>
+              <option value="complete">Complete</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5">Cost (low) *</label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 text-sm">$</span>
+              <input
+                type="number"
+                min={0}
+                value={costLow}
+                onChange={e => setCostLow(e.target.value)}
+                placeholder="0"
+                className={cn(inp, 'pl-7')}
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5">Cost (high) *</label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 text-sm">$</span>
+              <input
+                type="number"
+                min={0}
+                value={costHigh}
+                onChange={e => setCostHigh(e.target.value)}
+                placeholder="0"
+                className={cn(inp, 'pl-7')}
+              />
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5">Install Year (optional)</label>
+          <input
+            type="number"
+            value={installYear}
+            onChange={e => setInstallYear(e.target.value)}
+            placeholder="e.g. 2009"
+            className={inp}
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5">Notes</label>
+          <textarea
+            value={notes}
+            onChange={e => setNotes(e.target.value)}
+            rows={3}
+            placeholder="Context, vendor quotes, decision notes…"
+            className={inp}
+          />
+        </div>
+
+        <div className="flex gap-3 pt-1">
+          <button onClick={onClose} className="btn btn-secondary btn-lg flex-1">
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={!title.trim() || !costLow || !costHigh || !estimatedYear}
+            className="btn btn-primary btn-lg flex-[2]"
+          >
+            {initial ? 'Save changes' : 'Add project'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Year row (list view) ────────────────────────────────────────────────────
 
 function YearRow({
@@ -380,11 +577,15 @@ function YearRow({
   items,
   maxTotal,
   onSelectItem,
+  onEditItem,
+  onDeleteItem,
 }: {
   year: number
   items: CapitalItem[]
   maxTotal: number
   onSelectItem: (id: string) => void
+  onEditItem: (item: CapitalItem) => void
+  onDeleteItem: (item: CapitalItem) => void
 }) {
   const [expanded, setExpanded] = useState(year === CURRENT_YEAR)
   const [tick] = useState(0)
@@ -442,34 +643,54 @@ function YearRow({
             const overBudget = spent > item.costHigh
 
             return (
-              <button
+              <div
                 key={item.id}
-                onClick={() => onSelectItem(item.id)}
-                className="flex items-start gap-3 px-4 py-3.5 border-b border-slate-50 last:border-0 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors w-full text-left"
+                className="flex items-start gap-3 px-4 py-3.5 border-b border-slate-50 dark:border-slate-700/30 last:border-0 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
               >
-                <div className={cn('w-1.5 h-1.5 rounded-full mt-2 shrink-0', iconf.bar)} />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">{item.title}</p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                    {item.installYear ? `Installed ${item.installYear} (${item.ageYears} yrs)` : `Planned ${item.estimatedYear}`}
-                    {' · '}
-                    <span className="capitalize">{STATUS_LABELS[status] ?? status}</span>
-                  </p>
-                  {/* Budget vs spent mini row */}
-                  <div className="flex items-center gap-3 mt-1.5">
-                    <div className="flex-1 h-1.5 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
-                      <div
-                        className={cn('h-full rounded-full', overBudget ? 'bg-red-500' : 'bg-emerald-500')}
-                        style={{ width: `${Math.min(pctComplete, 100)}%` }}
-                      />
+                <button
+                  onClick={() => onSelectItem(item.id)}
+                  className="flex items-start gap-3 flex-1 min-w-0 text-left"
+                >
+                  <div className={cn('w-1.5 h-1.5 rounded-full mt-2 shrink-0', iconf.bar)} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">{item.title}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                      {item.installYear ? `Installed ${item.installYear} (${item.ageYears} yrs)` : `Planned ${item.estimatedYear}`}
+                      {' · '}
+                      <span className="capitalize">{STATUS_LABELS[status] ?? status}</span>
+                    </p>
+                    {/* Budget vs spent mini row */}
+                    <div className="flex items-center gap-3 mt-1.5">
+                      <div className="flex-1 h-1.5 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+                        <div
+                          className={cn('h-full rounded-full', overBudget ? 'bg-red-500' : 'bg-emerald-500')}
+                          style={{ width: `${Math.min(pctComplete, 100)}%` }}
+                        />
+                      </div>
+                      <span className={cn('text-xs font-medium shrink-0', overBudget ? 'text-red-600' : 'text-slate-500 dark:text-slate-400')}>
+                        {spent > 0 ? `$${spent.toLocaleString()} spent` : `$${item.costLow.toLocaleString()}–$${item.costHigh.toLocaleString()}`}
+                      </span>
                     </div>
-                    <span className={cn('text-xs font-medium shrink-0', overBudget ? 'text-red-600' : 'text-slate-500 dark:text-slate-400')}>
-                      {spent > 0 ? `$${spent.toLocaleString()} spent` : `$${item.costLow.toLocaleString()}–$${item.costHigh.toLocaleString()}`}
-                    </span>
                   </div>
+                </button>
+                <div className="flex items-center gap-1 shrink-0 mt-0.5">
+                  {overBudget && <AlertCircle className="w-4 h-4 text-red-500" />}
+                  <button
+                    onClick={() => onEditItem(item)}
+                    className="p-1.5 text-slate-400 dark:text-slate-500 hover:text-green-600 dark:hover:text-green-400 rounded-lg"
+                    aria-label={`Edit ${item.title}`}
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => onDeleteItem(item)}
+                    className="p-1.5 text-slate-400 dark:text-slate-500 hover:text-red-500 rounded-lg"
+                    aria-label={`Delete ${item.title}`}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
                 </div>
-                {overBudget && <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-1" />}
-              </button>
+              </div>
             )
           })}
         </div>
@@ -485,10 +706,26 @@ export function BudgetScreen() {
   const [horizon, setHorizon] = useState<Horizon>('3yr')
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null)
   const [tick, setTick] = useState(0)
+  const [showForm, setShowForm] = useState(false)
+  const [editItem, setEditItem] = useState<CapitalItem | undefined>(undefined)
   void tick
 
-  const propertyCapitalItems  = CAPITAL_ITEMS.filter(i => i.propertyId === activePropertyId)
+  const propertyCapitalItems   = getCapitalItemsForProperty(activePropertyId)
   const propertyServiceRecords = SERVICE_RECORDS.filter(r => r.propertyId === activePropertyId)
+
+  function openAdd() {
+    setEditItem(undefined)
+    setShowForm(true)
+  }
+  function openEdit(item: CapitalItem) {
+    setEditItem(item)
+    setShowForm(true)
+  }
+  function handleDelete(item: CapitalItem) {
+    if (!window.confirm(`Delete "${item.title}"? This cannot be undone.`)) return
+    capitalItemStore.remove(item.id)
+    setTick(t => t + 1)
+  }
 
   const maxYear = horizon === '1yr' ? CURRENT_YEAR : horizon === '3yr' ? CURRENT_YEAR + 2 : CURRENT_YEAR + 9
   const grouped = groupByYear(propertyCapitalItems, maxYear)
@@ -530,9 +767,15 @@ export function BudgetScreen() {
     <div className="space-y-5">
 
       {/* Header */}
-      <div>
-        <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">Budget & Capital</h1>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Forecast based on equipment ages and known replacement needs</p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">Budget & Capital</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Forecast based on equipment ages and known replacement needs</p>
+        </div>
+        <button onClick={openAdd} className="btn btn-primary shrink-0">
+          <Plus className="w-4 h-4" />
+          Add Project
+        </button>
       </div>
 
       {/* Horizon selector */}
@@ -594,6 +837,8 @@ export function BudgetScreen() {
               items={grouped[year]}
               maxTotal={maxYearTotal}
               onSelectItem={setSelectedItemId}
+              onEditItem={openEdit}
+              onDeleteItem={handleDelete}
             />
           ))}
           {years.length === 0 && (
@@ -635,10 +880,22 @@ export function BudgetScreen() {
       </div>
 
       {/* Add capital item */}
-      <button className="w-full py-3.5 rounded-2xl border border-dashed border-slate-300 text-sm font-medium text-slate-500 dark:text-slate-400 hover:border-green-300 dark:hover:border-green-700 hover:text-green-600 dark:hover:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors flex items-center justify-center gap-2">
+      <button
+        onClick={openAdd}
+        className="w-full py-3.5 rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 text-sm font-medium text-slate-500 dark:text-slate-400 hover:border-green-300 dark:hover:border-green-700 hover:text-green-600 dark:hover:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors flex items-center justify-center gap-2"
+      >
         <Plus className="w-4 h-4" />
-        Add capital item
+        Add Capital Project
       </button>
+
+      {showForm && (
+        <CapitalItemForm
+          initial={editItem}
+          propertyId={activePropertyId}
+          onSave={() => setTick(t => t + 1)}
+          onClose={() => { setShowForm(false); setEditItem(undefined) }}
+        />
+      )}
 
     </div>
   )

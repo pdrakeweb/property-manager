@@ -17,6 +17,7 @@ import { vendorDef }              from './vendor'
 import { wellTestDef }            from './wellTest'
 import { maintenanceTaskDef }     from './maintenanceTask'
 import { completedEventDef }      from './completedEvent'
+import { capitalItemDef }         from './capitalItem'
 import { capitalTransactionDef }  from './capitalTransaction'
 import { capitalOverrideDef }     from './capitalOverride'
 import { fuelDeliveryDef }        from './fuelDelivery'
@@ -39,6 +40,7 @@ export const RECORDS = {
   well_test:           wellTestDef,
   task:                maintenanceTaskDef,
   completed_event:     completedEventDef,
+  capital_item:        capitalItemDef,
   capital_transaction: capitalTransactionDef,
   capital_override:    capitalOverrideDef,
   fuel_delivery:       fuelDeliveryDef,
