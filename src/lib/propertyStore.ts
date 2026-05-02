@@ -1,49 +1,92 @@
+/**
+ * Property store — first-class records in localIndex (type 'property').
+ *
+ * Uses the makeSyncedStore pattern (insurance/permit) so writes mirror into
+ * localIndex with syncState='pending_upload'. Property records are
+ * self-referential: each property's `propertyId` (for index purposes) equals
+ * its own `id`, which lets the rest of the sync machinery reuse a property's
+ * own driveRootFolderId for upload.
+ *
+ * The legacy storage key (`pm_properties_v1`) is preserved for back-compat
+ * with users upgrading in place — `makeStore` reads/writes the same key.
+ *
+ * Reactivity: `useProperties()` subscribes to `syncBus` so React components
+ * re-render whenever any property record changes (locally or via cross-tab
+ * BroadcastChannel).
+ */
+
+import { useEffect, useState } from 'react'
+import { makeSyncedStore } from './syncedStore'
+import { syncBus } from './syncBus'
+import { PROPERTIES } from '../data/mockData'
 import type { Property } from '../types'
 
-const STORE_KEY     = 'pm_properties_v1'
-const FILE_ID_KEY   = 'pm_properties_file_id'
+const FILE_ID_KEY = 'pm_properties_file_id'
 
-function load(): Property[] {
-  try {
-    const s = localStorage.getItem(STORE_KEY)
-    if (s) return JSON.parse(s) as Property[]
-  } catch { /* ignore */ }
-  return []
+// Self-referential propertyId — properties are records of themselves, so
+// their owning propertyId for index/sync purposes is their own id.
+const baseStore = makeSyncedStore<Property>(
+  'pm_properties_v1', 'property', 'property',
+  (p) => p.id,
+)
+
+/** Sorted-by-name list of properties. */
+function getAllSorted(): Property[] {
+  return [...baseStore.getAll()].sort((a, b) => a.name.localeCompare(b.name))
 }
 
-function save(props: Property[]): void {
-  localStorage.setItem(STORE_KEY, JSON.stringify(props))
+/**
+ * Always-fire notification for property mutations. makeSyncedStore skips the
+ * localIndex queue (and therefore the syncBus 'index-updated' event) when a
+ * property has no driveRootFolderId — but useProperties() needs to refresh
+ * regardless of whether the record is eligible for Drive upload, so we emit
+ * directly here.
+ */
+function notifyPropertyChange(id: string): void {
+  syncBus.emit({ type: 'index-updated', recordIds: [id], source: 'local' })
 }
 
 export const propertyStore = {
-  getAll(): Property[] { return load() },
+  getAll(): Property[] { return getAllSorted() },
 
   getById(id: string): Property | null {
-    return load().find(p => p.id === id) ?? null
+    return baseStore.getById(id) ?? null
   },
 
   upsert(property: Property): void {
-    const all = load()
-    const idx = all.findIndex(p => p.id === property.id)
-    if (idx >= 0) all[idx] = property
-    else all.push(property)
-    save(all)
+    baseStore.upsert(property)
+    notifyPropertyChange(property.id)
+  },
+
+  add(property: Property): void {
+    baseStore.add(property)
+    notifyPropertyChange(property.id)
+  },
+
+  update(property: Property): void {
+    baseStore.update(property)
+    notifyPropertyChange(property.id)
   },
 
   remove(id: string): void {
-    save(load().filter(p => p.id !== id))
+    baseStore.remove(id)
+    notifyPropertyChange(id)
   },
 
   hasAny(): boolean {
-    return load().length > 0
+    return baseStore.getAll().length > 0
   },
 
   /** Replace entire list — used when pulling from Drive on a fresh device. */
   replaceAll(props: Property[]): void {
-    save(props)
+    for (const existing of baseStore.getAll()) {
+      if (!props.some(p => p.id === existing.id)) baseStore.remove(existing.id)
+    }
+    for (const p of props) baseStore.upsert(p)
+    syncBus.emit({ type: 'index-updated', recordIds: props.map(p => p.id), source: 'remote' })
   },
 
-  /** ID of the Drive file that holds the serialized property list. */
+  /** ID of the legacy global config file (`pm_properties.json`) on Drive. */
   getDriveFileId(): string | null {
     return localStorage.getItem(FILE_ID_KEY)
   },
@@ -55,10 +98,34 @@ export const propertyStore = {
 /**
  * Seed from the legacy PROPERTIES mock array the first time the app runs.
  * No-op if properties are already stored.
+ *
+ * Synchronous so the AppStoreProvider can call it during initial render
+ * setup without flashing an empty UI.
  */
-export async function seedPropertiesFromMock(): Promise<void> {
+export function seedPropertiesFromMock(): void {
   if (propertyStore.hasAny()) return
-  const { PROPERTIES } = await import('../data/mockData')
   for (const p of PROPERTIES) propertyStore.upsert(p)
 }
 
+/**
+ * React hook returning the live, name-sorted property list. Re-renders on any
+ * index update event (local mutation, sync pull, or cross-tab broadcast).
+ */
+export function useProperties(): Property[] {
+  const [props, setProps] = useState<Property[]>(() => propertyStore.getAll())
+
+  useEffect(() => {
+    const refresh = () => setProps(propertyStore.getAll())
+    const unsub = syncBus.subscribe(ev => {
+      if (ev.type === 'index-updated') refresh()
+    })
+    // Refresh on focus too — covers writes that bypass syncBus (rare).
+    window.addEventListener('focus', refresh)
+    return () => {
+      unsub()
+      window.removeEventListener('focus', refresh)
+    }
+  }, [])
+
+  return props
+}

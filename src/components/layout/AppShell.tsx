@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import { cn } from '../../utils/cn'
 import { useAppStore } from '../../store/AppStoreContext'
+import { useProperties } from '../../lib/propertyStore'
 import { localIndex } from '../../lib/localIndex'
 import type { SyncStats } from '../../lib/localIndex'
 import { isDev } from '../../auth/oauth'
@@ -135,8 +136,11 @@ function ThemeToggle() {
 
 function PropertySwitcher() {
   const [open, setOpen] = useState(false)
-  const { activePropertyId, setActivePropertyId, properties } = useAppStore()
+  const navigate = useNavigate()
+  const { activePropertyId, setActivePropertyId } = useAppStore()
+  const properties = useProperties()
   const active = properties.find(p => p.id === activePropertyId) ?? properties[0]
+  if (!active) return null
   const Icon = PROPERTY_ICONS[active.type]
 
   return (
@@ -175,7 +179,10 @@ function PropertySwitcher() {
             )
           })}
           <div className="border-t border-slate-600 px-3 py-2">
-            <button className="text-xs text-green-400 hover:text-green-300 transition-colors">
+            <button
+              onClick={() => { setOpen(false); navigate('/settings') }}
+              className="text-xs text-green-400 hover:text-green-300 transition-colors"
+            >
               + Add property
             </button>
           </div>
@@ -187,8 +194,11 @@ function PropertySwitcher() {
 
 function MobilePropertySwitcher() {
   const [open, setOpen] = useState(false)
-  const { activePropertyId, setActivePropertyId, properties } = useAppStore()
+  const navigate = useNavigate()
+  const { activePropertyId, setActivePropertyId } = useAppStore()
+  const properties = useProperties()
   const active = properties.find(p => p.id === activePropertyId) ?? properties[0]
+  if (!active) return null
   const Icon = PROPERTY_ICONS[active.type]
 
   return (
@@ -225,6 +235,14 @@ function MobilePropertySwitcher() {
                 </button>
               )
             })}
+            <div className="border-t border-slate-200 dark:border-slate-700 px-4 py-2.5">
+              <button
+                onClick={() => { setOpen(false); navigate('/settings') }}
+                className="text-xs font-medium text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300"
+              >
+                + Add property
+              </button>
+            </div>
           </div>
         </>
       )}
