@@ -11,10 +11,7 @@ import { ExpiryManageScreen }   from './screens/ExpiryManageScreen'
 import { SepticScreen }         from './screens/SepticScreen'
 import { PropertyProfileScreen }       from './screens/PropertyProfileScreen'
 import { EquipmentDetailScreen }       from './screens/EquipmentDetailScreen'
-import { SyncScreen }                  from './screens/SyncScreen'
-
 import { syncAll, seedTasksForProperty, syncPropertyConfig, syncAuditLog, pollDriveChanges, syncPendingPhotos } from './lib/syncEngine'
-import { ActivityScreen } from './screens/ActivityScreen'
 import { exportAllMarkdownToDrive } from './lib/markdownExport'
 import { propertyStore, seedPropertiesFromMock } from './lib/propertyStore'
 import {
