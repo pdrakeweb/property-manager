@@ -121,7 +121,7 @@ const TEST_RECORDS: TestRecord[] = [
         id: 'pt_permit_001',
         propertyId: PROP_ID,
         type: 'electrical',
-        status: 'issued',
+        status: 'approved',
         permitNumber: 'ELEC-2026-PERSIST',
         description: '200A panel upgrade and service entrance replacement',
         issuedDate: '2026-03-15',
@@ -182,7 +182,7 @@ const TEST_RECORDS: TestRecord[] = [
       data: {
         id: 'pt_road_001',
         propertyId: PROP_ID,
-        maintenanceTypeId: 'gravel',
+        maintenanceTypeId: 'gravel_delivery',
         date: '2026-04-05',
         vendor: 'Dalton Aggregate',
         quantity: 10,
@@ -198,7 +198,7 @@ const TEST_RECORDS: TestRecord[] = [
       localUpdatedAt: NOW,
     },
     verify: (r) =>
-      r.type === 'road' && r.data?.maintenanceTypeId === 'gravel' && r.data?.quantity === 10 && r.data?.cost === 480,
+      r.type === 'road' && r.data?.maintenanceTypeId === 'gravel_delivery' && r.data?.quantity === 10 && r.data?.cost === 480,
   },
   {
     label: 'completed_event (service history)',
@@ -211,6 +211,7 @@ const TEST_RECORDS: TestRecord[] = [
       data: {
         id: 'pt_svc_001',
         propertyId: PROP_ID,
+        taskId: 'pt_task_001',
         taskTitle: 'PT HVAC tune-up 2026',
         categoryId: 'hvac',
         completionDate: '2026-04-12',
@@ -315,11 +316,11 @@ test('full persistence round-trip across all syncable record types', async ({ pa
       { recId: record.id, recType: record.type, recTitle: record.title },
     )
 
-    expect.soft(result.found, `[${label}] file present in dev Drive`).toBe(true)
-    expect.soft(result.isJson, `[${label}] filename has .json extension`).toBe(true)
-    expect.soft(result.typeMatch, `[${label}] Drive content has correct type='${record.type}'`).toBe(true)
-    expect.soft(result.titleMatch, `[${label}] Drive content has correct title`).toBe(true)
-    expect.soft(result.hasData, `[${label}] Drive content has data object`).toBe(true)
+    expect(result.found, `[${label}] file present in dev Drive`).toBe(true)
+    expect(result.isJson, `[${label}] filename has .json extension`).toBe(true)
+    expect(result.typeMatch, `[${label}] Drive content has correct type='${record.type}'`).toBe(true)
+    expect(result.titleMatch, `[${label}] Drive content has correct title`).toBe(true)
+    expect(result.hasData, `[${label}] Drive content has data object`).toBe(true)
   }
 
   // ── Phase 4: Wipe localIndex ────────────────────────────────────────────
@@ -351,10 +352,9 @@ test('full persistence round-trip across all syncable record types', async ({ pa
     const synced = found && restored.syncState === 'synced'
     const verifyOk = found && verify(restored)
 
-    // Soft so all 66 assertions run (matches the original cjs script's behavior)
-    expect.soft(found, `[${label}] id='${record.id}' restored in localIndex`).toBe(true)
-    expect.soft(typeOk, `[${label}] type='${record.type}' preserved`).toBe(true)
-    expect.soft(synced, `[${label}] syncState='synced'`).toBe(true)
-    expect.soft(verifyOk, `[${label}] all key fields intact`).toBe(true)
+    expect(found, `[${label}] id='${record.id}' restored in localIndex`).toBe(true)
+    expect(typeOk, `[${label}] type='${record.type}' preserved`).toBe(true)
+    expect(synced, `[${label}] syncState='synced'`).toBe(true)
+    expect(verifyOk, `[${label}] all key fields intact`).toBe(true)
   }
 })
