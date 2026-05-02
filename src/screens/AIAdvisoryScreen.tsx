@@ -225,11 +225,6 @@ export function AIAdvisoryScreen() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, streamingContent, toolStatus])
 
-  const propertyContext = useMemo(
-    () => buildPropertyContext(activePropertyId),
-    [activePropertyId],
-  )
-
   const recordsAPI = useMemo(
     () => new PropertyRecordsAPI(activePropertyId, null),
     [activePropertyId],
@@ -240,13 +235,13 @@ export function AIAdvisoryScreen() {
     [recordsAPI],
   )
 
-  const buildSystemPrompt = useCallback(() => {
-    return `${BASE_SYSTEM_PROMPT}\n\n--- PROPERTY CONTEXT ---\n${propertyContext}\n--- END PROPERTY CONTEXT ---`
-  }, [propertyContext])
+  const buildSystemPrompt = useCallback((context: string) => {
+    return `${BASE_SYSTEM_PROMPT}\n\n--- PROPERTY CONTEXT ---\n${context}\n--- END PROPERTY CONTEXT ---`
+  }, [])
 
-  const buildChatHistory = useCallback((userText: string): ChatMessage[] => {
+  const buildChatHistory = useCallback((userText: string, context: string): ChatMessage[] => {
     const chatMessages: ChatMessage[] = [
-      { role: 'system', content: buildSystemPrompt() },
+      { role: 'system', content: buildSystemPrompt(context) },
     ]
     const recentMessages = messages.slice(-20)
     for (const msg of recentMessages) {
@@ -291,8 +286,9 @@ export function AIAdvisoryScreen() {
     }
 
     try {
-      const chatMessages = buildChatHistory(text)
-      logger.logSystemPrompt(buildSystemPrompt())
+      const propertyContext = await buildPropertyContext(activePropertyId)
+      const chatMessages = buildChatHistory(text, propertyContext)
+      logger.logSystemPrompt(buildSystemPrompt(propertyContext))
 
       const streamStart = Date.now()
       let streamChars = 0
