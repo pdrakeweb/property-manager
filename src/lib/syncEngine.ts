@@ -211,6 +211,77 @@ export async function syncAuditLog(token: string): Promise<void> {
   } catch { /* non-fatal */ }
 }
 
+// ── Photo upload sync ────────────────────────────────────────────────────────
+
+async function dataUrlToBlob(dataUrl: string): Promise<Blob> {
+  const resp = await fetch(dataUrl)
+  return resp.blob()
+}
+
+function extFromDataUrl(dataUrl: string): string {
+  const m = dataUrl.match(/^data:image\/([a-zA-Z0-9]+);/)
+  return m ? m[1].toLowerCase() : 'jpg'
+}
+
+/**
+ * Walk every completed_event record across all properties and upload any photo
+ * whose `localDataUrl` is set but `driveFileId` is not. After a successful
+ * upload, the record's photo is rewritten so `driveFileId` points at the new
+ * Drive file and `localDataUrl` is cleared (empty string) — that drops the
+ * base64 payload out of localStorage so it doesn't grow unbounded as more
+ * photos are captured.
+ *
+ * Updates flow back through `costStore.update`, which marks the record
+ * `pending_upload` so the next sync round flushes the trimmed JSON to Drive.
+ */
+export async function syncPendingPhotos(): Promise<{ uploaded: number; failed: number }> {
+  const drv = drive()
+
+  // Lazy-import costStore to avoid the syncEngine ↔ costStore import cycle
+  // that would otherwise form via syncedStore.
+  const { costStore } = await import('./costStore')
+
+  let uploaded = 0
+  let failed   = 0
+
+  for (const property of propertyStore.getAll()) {
+    if (!property.driveRootFolderId) continue
+
+    const events = costStore.getAll().filter(e => e.propertyId === property.id)
+    for (const event of events) {
+      if (!event.photos || event.photos.length === 0) continue
+
+      let dirty = false
+      const updatedPhotos = await Promise.all(event.photos.map(async photo => {
+        if (photo.driveFileId || !photo.localDataUrl) return photo
+        try {
+          const blob     = await dataUrlToBlob(photo.localDataUrl)
+          const ext      = extFromDataUrl(photo.localDataUrl)
+          const filename = `${photo.id}.${ext}`
+          const fileId   = await drv.uploadPhoto(property.id, event.id, blob, filename)
+          dirty = true
+          uploaded++
+          return { ...photo, driveFileId: fileId, localDataUrl: '' }
+        } catch (err) {
+          failed++
+          auditLog.warn(
+            'photo.upload',
+            `Photo upload failed for event ${event.id}: ${err instanceof Error ? err.message : String(err)}`,
+            property.id,
+          )
+          return photo
+        }
+      }))
+
+      if (dirty) {
+        costStore.update({ ...event, photos: updatedPhotos })
+      }
+    }
+  }
+
+  return { uploaded, failed }
+}
+
 // ── Single-record pull ───────────────────────────────────────────────────────
 
 /**

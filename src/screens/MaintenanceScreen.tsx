@@ -241,8 +241,13 @@ function DoneModal({ task, propertyId, onConfirm, onClose }: DoneModalProps) {
             {photos.length > 0 && (
               <div className="grid grid-cols-3 gap-2 mt-2">
                 {photos.map(p => (
-                  <div key={p.id} className="relative rounded-xl overflow-hidden aspect-square">
-                    <img src={p.localDataUrl} alt={p.role} className="w-full h-full object-cover" />
+                  <div key={p.id} className="relative rounded-xl overflow-hidden aspect-square bg-slate-100 dark:bg-slate-700">
+                    {p.localDataUrl
+                      ? <img src={p.localDataUrl} alt={p.role} className="w-full h-full object-cover" />
+                      : <div className="w-full h-full flex items-center justify-center text-slate-300 dark:text-slate-600">
+                          <ImageIcon className="w-6 h-6" />
+                        </div>
+                    }
                     <div className={cn('absolute bottom-0 inset-x-0 text-[10px] font-semibold text-center py-0.5 capitalize', photoRoleBadge(p.role))}>{p.role}</div>
                     <button type="button" onClick={() => setPhotos(prev => prev.filter(ph => ph.id !== p.id))}
                       className="absolute top-1 right-1 w-5 h-5 bg-black/60 text-white rounded-full flex items-center justify-center hover:bg-black/80">
@@ -526,7 +531,12 @@ function EventHistoryCard({ event }: { event: ReturnType<typeof costStore.getAll
                     {photos.length > 0
                       ? photos.map(p => (
                           <div key={p.id} className={cn('rounded-xl overflow-hidden border mb-2', border)}>
-                            <img src={p.localDataUrl} alt={label} className="w-full object-cover" />
+                            {p.localDataUrl
+                              ? <img src={p.localDataUrl} alt={label} className="w-full object-cover" />
+                              : <div className="aspect-square bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-slate-300 dark:text-slate-600">
+                                  <ImageIcon className="w-6 h-6" />
+                                </div>
+                            }
                           </div>
                         ))
                       : <div className="aspect-square rounded-xl bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-slate-300 dark:text-slate-600">
@@ -544,7 +554,12 @@ function EventHistoryCard({ event }: { event: ReturnType<typeof costStore.getAll
               <div className="grid grid-cols-3 gap-2">
                 {generalPhotos.map(p => (
                   <div key={p.id} className="rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700">
-                    <img src={p.localDataUrl} alt="General" className="w-full aspect-square object-cover" />
+                    {p.localDataUrl
+                      ? <img src={p.localDataUrl} alt="General" className="w-full aspect-square object-cover" />
+                      : <div className="w-full aspect-square bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-slate-300 dark:text-slate-600">
+                          <ImageIcon className="w-6 h-6" />
+                        </div>
+                    }
                   </div>
                 ))}
               </div>

@@ -209,4 +209,37 @@ export const localDriveAdapter = {
     save(store)
     return { id, name: filename, etag }
   },
+
+  /**
+   * Mirrors DriveClient.uploadPhoto. Stores the base64 content of the blob
+   * in `pm_dev_drive_v1` under the synthetic id `photo_${recordId}_${filename}`
+   * so dev-mode sync can be exercised without OAuth.
+   */
+  async uploadPhoto(
+    propertyId: string,
+    recordId:   string,
+    photoBlob:  Blob,
+    filename:   string,
+  ): Promise<string> {
+    const reader = new FileReader()
+    const base64: string = await new Promise((resolve, reject) => {
+      reader.onload  = () => resolve(reader.result as string)
+      reader.onerror = () => reject(reader.error ?? new Error('FileReader failed'))
+      reader.readAsDataURL(photoBlob)
+    })
+
+    const id    = `photo_${recordId}_${filename}`
+    const store = load()
+    store[id] = {
+      id,
+      name:     filename,
+      parentId: `prop_${propertyId}`,
+      isFolder: false,
+      content:  base64,
+      mimeType: photoBlob.type || 'image/jpeg',
+      etag:     'v1',
+    }
+    save(store)
+    return id
+  },
 }
