@@ -4,6 +4,15 @@ const GOOGLE_AUTH_URL  = 'https://accounts.google.com/o/oauth2/v2/auth'
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token'
 const SCOPES = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/calendar openid email profile'
 
+/**
+ * localStorage flag set when an automatic refresh fails (refresh token
+ * revoked, network error past retry, etc.). The sign-in screen reads this
+ * on mount to render a "Session expired — please reconnect" banner so the
+ * user sees a reason for the bounce instead of being silently signed out.
+ * Cleared on successful token persist and explicit sign-out.
+ */
+export const AUTH_REFRESH_FAILED_KEY = 'pm_auth_refresh_failed_at'
+
 /** Client ID: set VITE_GOOGLE_CLIENT_ID in .env, or store in localStorage for zero-rebuild config */
 export function getClientId(): string {
   return (import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined)
@@ -138,6 +147,8 @@ function _persistTokens(tokens: TokenResponse): void {
   const expiresAt = Date.now() + tokens.expires_in * 1000
   localStorage.setItem('google_access_token',    tokens.access_token)
   localStorage.setItem('google_token_expires_at', String(expiresAt))
+  // A successful persist clears any prior refresh-failure banner.
+  localStorage.removeItem(AUTH_REFRESH_FAILED_KEY)
 
   if (tokens.refresh_token) {
     localStorage.setItem('google_refresh_token', tokens.refresh_token)
@@ -170,12 +181,29 @@ export async function getValidToken(): Promise<string | null> {
     try {
       return await refreshAccessToken()
     } catch {
+      // Surface to the UI before signing out so the user sees a reason for
+      // the bounce. The sign-in screen reads this flag on mount and renders
+      // a "Session expired — please reconnect" banner. signOut() clears
+      // token keys but deliberately does not touch this one, so the flag
+      // survives until the next successful sign-in clears it via
+      // _persistTokens.
+      localStorage.setItem(AUTH_REFRESH_FAILED_KEY, new Date().toISOString())
       signOut()
       return null
     }
   }
 
   return token
+}
+
+/** Timestamp string set when refresh failed, or null when there is no pending banner. */
+export function getAuthRefreshFailedAt(): string | null {
+  return localStorage.getItem(AUTH_REFRESH_FAILED_KEY)
+}
+
+/** Dismiss the refresh-failure banner (e.g. when the user clicks Reconnect). */
+export function clearAuthRefreshFailed(): void {
+  localStorage.removeItem(AUTH_REFRESH_FAILED_KEY)
 }
 
 export function isAuthenticated(): boolean {
