@@ -5,8 +5,6 @@
 
 export type QueuedStatus = 'pending' | 'failed'
 
-import { DriveClient } from './driveClient'
-
 export interface QueuedUpload {
   id:            string
   categoryId:    string
