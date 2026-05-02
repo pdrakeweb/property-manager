@@ -346,7 +346,7 @@ export async function generateChecklistAugmentations(
   }
   const season: Season = template.season
 
-  const propertyContext = buildPropertyContext(propertyId, driveToken)
+  const propertyContext = await buildPropertyContext(propertyId, driveToken)
   const model = getModelForTask('checklistGen', DEFAULT_MODEL)
 
   const result = await chatCompletion({
@@ -412,7 +412,7 @@ export async function createAdhocChecklist(
   if (!name.trim()) throw new ChecklistGenerationError('Checklist name is required')
   if (!description.trim()) throw new ChecklistGenerationError('Description is required')
 
-  const propertyContext = buildPropertyContext(propertyId, driveToken)
+  const propertyContext = await buildPropertyContext(propertyId, driveToken)
   const model = getModelForTask('checklistGen', DEFAULT_MODEL)
 
   const templateId = `adhoc_${propertyId}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
@@ -480,7 +480,7 @@ export async function regenerateAdhocChecklist(
   const propertyType: PropertyType =
     existing.items[0]?.applicableTo[0] ?? 'residence'
 
-  const propertyContext = buildPropertyContext(existing.propertyId, driveToken)
+  const propertyContext = await buildPropertyContext(existing.propertyId, driveToken)
   const model = getModelForTask('checklistGen', DEFAULT_MODEL)
 
   const result = await chatCompletion({
@@ -605,7 +605,7 @@ export async function suggestChecklistChanges(
   if (!apiKey) throw new ChecklistGenerationError('OpenRouter API key not configured')
 
   const propertyType: PropertyType = template.items[0]?.applicableTo[0] ?? 'residence'
-  const propertyContext = buildPropertyContext(template.propertyId, driveToken)
+  const propertyContext = await buildPropertyContext(template.propertyId, driveToken)
   const model = getModelForTask('checklistGen', DEFAULT_MODEL)
 
   const result = await chatCompletion({
