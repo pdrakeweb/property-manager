@@ -10,6 +10,8 @@
     "typecheck": "tsc --noEmit",
     "docs:records": "node --import tsx scripts/generate-record-docs.mjs",
     "docs:records:check": "node --import tsx scripts/generate-record-docs.mjs --check",
+    "test": "playwright test",
+    "test:ui": "playwright test --ui",
     "test:vault": "node --import tsx --test src/vault/__tests__/*.test.ts",
     "test:vault:live": "node --import tsx src/vault/__tests__/liveDrive.harness.ts"
   },
@@ -26,6 +28,7 @@
     "zod-to-json-schema": "^3.25.2"
   },
   "devDependencies": {
+    "@playwright/test": "^1.59.1",
     "@types/node": "^25.6.0",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
