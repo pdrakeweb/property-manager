@@ -5,7 +5,7 @@ import {
   MessageSquare, ClipboardList, Settings, ChevronDown, ChevronRight,
   Building2, TreePine, Users, Droplets, Receipt, Home, Zap, CalendarDays,
   RefreshCw, Shield, FileCheck, CheckSquare, Activity, MapPin,
-  Sun, Moon, Monitor, DollarSign, HardHat, BookOpen,
+  Sun, Moon, Monitor, DollarSign, HardHat, BookOpen, AlertTriangle, X,
 } from 'lucide-react'
 import { cn } from '../../utils/cn'
 import { useAppStore } from '../../store/AppStoreContext'
@@ -15,6 +15,10 @@ import type { SyncStats } from '../../lib/localIndex'
 import { isDev } from '../../auth/oauth'
 import { useTheme } from '../../contexts/ThemeContext'
 import { BackgroundSyncIndicator } from '../BackgroundSyncIndicator'
+import {
+  getQueueCount, getFailedCount, getFailedItems, resetItem, resetFailedItems,
+} from '../../lib/offlineQueue'
+import type { QueuedUpload } from '../../lib/offlineQueue'
 
 type NavItem = { to: string; icon: React.ComponentType<{ className?: string }>; label: string; mobileShow: boolean }
 type NavSection = { label: string; icon: React.ComponentType<{ className?: string }>; items: NavItem[] }
@@ -250,18 +254,119 @@ function MobilePropertySwitcher() {
   )
 }
 
+function FailedItemsModal({
+  items, onClose, onChange,
+}: {
+  items: QueuedUpload[]
+  onClose: () => void
+  onChange: () => void
+}) {
+  function retryOne(id: string) {
+    resetItem(id)
+    onChange()
+  }
+  function retryAllFailed() {
+    resetFailedItems()
+    onChange()
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/60 p-0 sm:p-4">
+      <div className="bg-white dark:bg-slate-800 w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl shadow-xl max-h-[85vh] flex flex-col">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-700">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-5 h-5 text-red-500" />
+            <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
+              {items.length} failed upload{items.length !== 1 ? 's' : ''}
+            </h2>
+          </div>
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            className="p-1 rounded-md text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between gap-3">
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            These items reached the retry limit. Reset to retry on the next sync.
+          </p>
+          {items.length > 1 && (
+            <button
+              onClick={retryAllFailed}
+              className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-red-600 text-white hover:bg-red-700 shrink-0"
+            >
+              <RefreshCw className="w-3 h-3" />
+              Retry all
+            </button>
+          )}
+        </div>
+
+        <div className="overflow-y-auto divide-y divide-slate-100 dark:divide-slate-700">
+          {items.length === 0 ? (
+            <p className="px-4 py-6 text-sm text-slate-500 dark:text-slate-400 text-center">
+              No failed uploads.
+            </p>
+          ) : items.map(item => (
+            <div key={item.id} className="px-4 py-3 flex items-start gap-3">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">
+                  {item.filename || '(untitled)'}
+                </p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  {item.categoryId} · {item.retryCount} attempt{item.retryCount !== 1 ? 's' : ''}
+                  {item.lastAttemptAt > 0 && ` · last ${new Date(item.lastAttemptAt).toLocaleString()}`}
+                </p>
+              </div>
+              <button
+                onClick={() => retryOne(item.id)}
+                className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600 shrink-0"
+              >
+                <RefreshCw className="w-3 h-3" />
+                Retry
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function SyncPill() {
   const navigate = useNavigate()
   const [stats, setStats] = useState<SyncStats>(() => localIndex.getSyncStats())
+  const [queueTotal, setQueueTotal]   = useState<number>(() => getQueueCount())
+  const [failedCount, setFailedCount] = useState<number>(() => getFailedCount())
+  const [failedItems, setFailedItems] = useState<QueuedUpload[]>([])
+  const [showFailed,  setShowFailed]  = useState(false)
   const devMode = isDev()
 
   useEffect(() => {
-    const refresh = () => setStats(localIndex.getSyncStats())
+    const refresh = () => {
+      setStats(localIndex.getSyncStats())
+      setQueueTotal(getQueueCount())
+      setFailedCount(getFailedCount())
+    }
     const id = setInterval(refresh, 30_000)
     window.addEventListener('focus', refresh)
     return () => { clearInterval(id); window.removeEventListener('focus', refresh) }
   }, [])
 
+  function openFailed() {
+    setFailedItems(getFailedItems())
+    setShowFailed(true)
+  }
+
+  function refreshFailed() {
+    setFailedItems(getFailedItems())
+    setFailedCount(getFailedCount())
+    setQueueTotal(getQueueCount())
+  }
+
+  // Conflicts (index-level) take precedence — they require manual resolution.
   if (stats.conflicts > 0) {
     return (
       <button
@@ -275,7 +380,32 @@ function SyncPill() {
     )
   }
 
-  if (stats.pending > 0) {
+  // Failed offline-queue items: red pill, opens modal listing failed items.
+  if (failedCount > 0) {
+    return (
+      <>
+        <button
+          onClick={openFailed}
+          className="flex items-center gap-1 text-white text-xs font-semibold rounded-full px-2.5 py-1 transition-colors shrink-0 bg-red-600 hover:bg-red-700"
+        >
+          <AlertTriangle className="w-3 h-3" />
+          {devMode && <span className="opacity-75">DEV</span>}
+          {failedCount} failed
+        </button>
+        {showFailed && (
+          <FailedItemsModal
+            items={failedItems}
+            onClose={() => setShowFailed(false)}
+            onChange={refreshFailed}
+          />
+        )}
+      </>
+    )
+  }
+
+  // Pending items (index pending OR queued offline uploads not yet failed).
+  const unsynced = stats.pending + Math.max(queueTotal - failedCount, 0)
+  if (unsynced > 0) {
     return (
       <button
         onClick={() => navigate('/sync')}
@@ -286,7 +416,7 @@ function SyncPill() {
       >
         <RefreshCw className="w-3 h-3" />
         {devMode && <span className="opacity-75">DEV</span>}
-        {stats.pending} unsynced
+        {unsynced} unsynced
       </button>
     )
   }
