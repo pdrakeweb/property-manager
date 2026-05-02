@@ -124,13 +124,38 @@ export async function seedTasksForProperty(propertyId: string): Promise<void> {
 
 // ── Full sync ────────────────────────────────────────────────────────────────
 
+/**
+ * Single-flight guard. `syncAll` is invoked from at least three places that can
+ * fire concurrently — the startup `run()`, the 5-minute interval re-run, and
+ * the visibility/focus listeners — and each property's full sync issues many
+ * Drive round-trips. Re-entrant calls would interleave pulls and pushes,
+ * waste quota, and risk pull-after-push echo races. Skipping when one is
+ * already in flight is safer and the next scheduled tick will pick up any
+ * new work.
+ */
+let activeFullSync = false
+
+const NO_OP_SYNC_RESULT: SyncResult = {
+  uploaded: 0, uploadFailed: 0, uploadErrors: [], pulled: 0, pullFailed: 0,
+}
+
 export async function syncAll(_token: string, propertyId: string): Promise<SyncResult> {
+  if (activeFullSync) {
+    auditLog.warn(
+      'sync.skip',
+      `syncAll for ${propertyId} skipped — another full sync is already in progress`,
+      propertyId,
+    )
+    return NO_OP_SYNC_RESULT
+  }
+  activeFullSync = true
   syncBus.emit({ type: 'sync-start', scope: 'full' })
   try {
     await seedTasksForProperty(propertyId)
     return await getVault().syncAll(propertyId)
   } finally {
     syncBus.emit({ type: 'sync-end', scope: 'full' })
+    activeFullSync = false
   }
 }
 

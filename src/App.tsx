@@ -20,6 +20,7 @@ import {
   handleOAuthCallback,
   getClientId,
   getValidToken,
+  getAuthRefreshFailedAt,
 } from './auth/oauth'
 import { getOpenRouterKey, setSetting, SETTINGS } from './store/settings'
 
@@ -60,6 +61,9 @@ function SignInScreen({ onSignIn }: { onSignIn: () => void }) {
   const [showGcpId,   setShowGcpId]   = useState(false)
   const [error,       setError]       = useState('')
   const [signingIn,   setSigningIn]   = useState(false)
+  // Captured once on mount — _persistTokens clears the flag so re-rendering
+  // after a successful sign-in won't show the banner.
+  const [refreshFailedAt] = useState(() => getAuthRefreshFailedAt())
 
   const hasClientId = !!envClientId
   const hasOrKey    = !!envOrKey
@@ -104,6 +108,20 @@ function SignInScreen({ onSignIn }: { onSignIn: () => void }) {
           <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Property Manager</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Sign in with Google to access your Drive records</p>
         </div>
+
+        {/* Reconnect banner — set when an automatic refresh fails so the user
+            isn't silently bounced back to the sign-in screen. */}
+        {refreshFailedAt && (
+          <div className="flex items-start gap-2.5 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl px-4 py-3">
+            <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-sm font-medium text-amber-800 dark:text-amber-200">Session expired</p>
+              <p className="text-xs text-amber-700 dark:text-amber-300 mt-0.5">
+                Please reconnect Google Drive to keep syncing your records.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Config card — only show fields not already set via .env */}
         {(!hasClientId || !hasOrKey) && (

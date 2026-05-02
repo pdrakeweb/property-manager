@@ -8,7 +8,7 @@
  * so we can simulate 412 Precondition Failed when If-Match doesn't match.
  */
 
-import type { DriveFile, DriveFileWithContent } from './driveClient'
+import type { DriveFile, DriveFileWithContent, DriveChangesPage } from './driveClient'
 import { CATEGORY_FOLDER_NAMES, ETagConflictError } from './driveClient'
 
 const STORE_KEY = 'pm_dev_drive_v1'
@@ -208,6 +208,24 @@ export const localDriveAdapter = {
     store[id] = { id, name: filename, parentId: folderId, isFolder: false, content: text, mimeType, etag }
     save(store)
     return { id, name: filename, etag }
+  },
+
+  /**
+   * Mirrors DriveClient.getStartPageToken. Dev mode has no real `/changes`
+   * feed; returning a stable sentinel keeps callers happy and gives them
+   * something to persist as their baseline.
+   */
+  async getStartPageToken(_token: string): Promise<string> {
+    return 'dev_changes_token'
+  },
+
+  /**
+   * Mirrors DriveClient.listChanges. Always returns an empty changes page
+   * with the same token echoed back — there is no remote to diverge from
+   * in dev mode.
+   */
+  async listChanges(_token: string, pageToken: string): Promise<DriveChangesPage> {
+    return { changes: [], newStartPageToken: pageToken }
   },
 
   /**

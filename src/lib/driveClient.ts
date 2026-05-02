@@ -1,7 +1,22 @@
 // Google Drive API v3 wrapper — runs entirely client-side, no backend
 
+import { localDriveAdapter } from './localDriveAdapter'
+
 const DRIVE_API   = 'https://www.googleapis.com/drive/v3'
 const UPLOAD_API  = 'https://www.googleapis.com/upload/drive/v3'
+
+/**
+ * Dev-bypass sentinel. When a method receives this exact token, it short-
+ * circuits to `localDriveAdapter` rather than making real googleapis.com
+ * requests (which would 401). Centralising the check here means every direct
+ * caller — offlineQueue, EquipmentFormScreen, PropertyRecordsAPI, the
+ * googleDriveAdapter wrapper used by the vault — is dev-safe without each
+ * having to add its own routing.
+ *
+ * Keep this in sync with the same constant in `vaultSingleton.pickStorage`,
+ * which makes the equivalent decision at vault construction time.
+ */
+const DEV_TOKEN = 'dev_token'
 
 export const PM_FOLDER_NAME = 'Property Manager'
 export const KB_FOLDER_NAME = 'Knowledgebase'
@@ -150,6 +165,7 @@ export const DriveClient = {
 
   /** Generic find-or-create a named folder under any parent. */
   async ensureFolder(token: string, name: string, parentId: string): Promise<string> {
+    if (token === DEV_TOKEN) return localDriveAdapter.ensureFolder(token, name, parentId)
     return findOrCreateFolder(token, name, parentId)
   },
 
@@ -158,6 +174,7 @@ export const DriveClient = {
    * All data lives at `[root]/[Category]/`.
    */
   async resolveFolderId(token: string, categoryId: string, rootFolderId: string): Promise<string> {
+    if (token === DEV_TOKEN) return localDriveAdapter.resolveFolderId(token, categoryId, rootFolderId)
     const folderName = CATEGORY_FOLDER_NAMES[categoryId] ?? categoryId
     return findOrCreateFolder(token, folderName, rootFolderId)
   },
@@ -167,6 +184,7 @@ export const DriveClient = {
    * Call once, persist the token, then feed it to listChanges() on each poll.
    */
   async getStartPageToken(token: string): Promise<string> {
+    if (token === DEV_TOKEN) return localDriveAdapter.getStartPageToken(token)
     const resp = await fetch(`${DRIVE_API}/changes/startPageToken`, { headers: authHeaders(token) })
     if (!resp.ok) throw new Error(`Drive getStartPageToken failed: ${resp.status}`)
     const { startPageToken } = await resp.json() as { startPageToken: string }
@@ -180,6 +198,7 @@ export const DriveClient = {
    * to a full pull and acquire a fresh startPageToken.
    */
   async listChanges(token: string, pageToken: string): Promise<DriveChangesPage> {
+    if (token === DEV_TOKEN) return localDriveAdapter.listChanges(token, pageToken)
     const url = new URL(`${DRIVE_API}/changes`)
     url.searchParams.set('pageToken',      pageToken)
     url.searchParams.set('pageSize',       '100')
@@ -192,6 +211,7 @@ export const DriveClient = {
 
   /** Search across all app-created files using a Drive query string. */
   async searchFiles(token: string, query: string): Promise<DriveFile[]> {
+    if (token === DEV_TOKEN) return localDriveAdapter.searchFiles(token, query)
     const url = new URL(`${DRIVE_API}/files`)
     url.searchParams.set('q',        query)
     url.searchParams.set('fields',   'files(id,name)')
@@ -204,6 +224,7 @@ export const DriveClient = {
 
   /** Search for folders whose names contain the given term. */
   async searchFolders(token: string, term: string): Promise<DriveFile[]> {
+    if (token === DEV_TOKEN) return localDriveAdapter.searchFolders(token, term)
     const escaped = term.replace(/'/g, "\\'")
     const q = `name contains '${escaped}' and mimeType='application/vnd.google-apps.folder' and trashed=false`
     const url = new URL(`${DRIVE_API}/files`)
@@ -219,6 +240,7 @@ export const DriveClient = {
 
   /** Fetch a folder's name given its ID (for display after pasting an ID/URL). */
   async getFolderName(token: string, folderId: string): Promise<string> {
+    if (token === DEV_TOKEN) return localDriveAdapter.getFolderName(token, folderId)
     const resp = await fetch(
       `${DRIVE_API}/files/${folderId}?fields=name`,
       { headers: authHeaders(token) },
@@ -230,6 +252,7 @@ export const DriveClient = {
 
   /** List all folders (not files) directly inside a parent folder. */
   async listFolders(token: string, parentId: string): Promise<DriveFile[]> {
+    if (token === DEV_TOKEN) return localDriveAdapter.listFolders(token, parentId)
     const q = `'${parentId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`
     const url = new URL(`${DRIVE_API}/files`)
     url.searchParams.set('q',       q)
@@ -249,6 +272,7 @@ export const DriveClient = {
     content:  string,
     mimeType: string,
   ): Promise<void> {
+    if (token === DEV_TOKEN) return localDriveAdapter.updateFile(token, fileId, content, mimeType)
     const resp = await fetch(
       `${UPLOAD_API}/files/${fileId}?uploadType=media`,
       {
@@ -265,6 +289,7 @@ export const DriveClient = {
 
   /** List all non-trashed files in a folder */
   async listFiles(token: string, folderId: string): Promise<DriveFile[]> {
+    if (token === DEV_TOKEN) return localDriveAdapter.listFiles(token, folderId)
     const url = new URL(`${DRIVE_API}/files`)
     url.searchParams.set('q',        `'${folderId}' in parents and trashed=false`)
     url.searchParams.set('fields',   'files(id,name,webViewLink)')
@@ -282,6 +307,7 @@ export const DriveClient = {
    * The ETag is used for optimistic concurrency on subsequent uploads.
    */
   async downloadFile(token: string, fileId: string): Promise<DriveFileWithContent> {
+    if (token === DEV_TOKEN) return localDriveAdapter.downloadFile(token, fileId)
     // Fetch metadata (name) + ETag
     const metaResp = await fetch(
       `${DRIVE_API}/files/${fileId}?fields=id,name`,
@@ -315,6 +341,7 @@ export const DriveClient = {
     mimeType:     string,
     ifMatchEtag?: string,
   ): Promise<DriveFile & { etag: string }> {
+    if (token === DEV_TOKEN) return localDriveAdapter.uploadFile(token, folderId, filename, content, mimeType, ifMatchEtag)
     const metadata = JSON.stringify({ name: filename, parents: [folderId] })
 
     const body = content instanceof Blob ? content : new Blob([content], { type: mimeType })
