@@ -4,8 +4,7 @@ import {
 } from 'lucide-react'
 import { cn } from '../utils/cn'
 import { costStore } from '../lib/costStore'
-import { customTaskStore, getAllCustomTasks } from '../lib/maintenanceStore'
-import { MAINTENANCE_TASKS } from '../data/mockData'
+import { customTaskStore, getActiveTasks } from '../lib/maintenanceStore'
 import { VendorSelector } from '../components/VendorSelector'
 import { useAppStore } from '../store/AppStoreContext'
 import type { MaintenanceTask, Priority } from '../types'
@@ -481,9 +480,7 @@ export function CalendarScreen() {
   const [tick,        setTick]        = useState(0)
 
   // Data (re-read on every tick so mutations surface immediately)
-  const customTasks = getAllCustomTasks()
-  const allTasks    = [...MAINTENANCE_TASKS, ...customTasks]
-    .filter(t => t.propertyId === activePropertyId)
+  const allTasks     = getActiveTasks(activePropertyId)
   const completedAll = costStore.getAll()
     .filter(e => e.propertyId === activePropertyId)
 

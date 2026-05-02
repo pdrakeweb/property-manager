@@ -4,7 +4,8 @@ import {
   ArrowLeft, Trash2, ChevronDown, ChevronUp, AlertCircle, X, Pencil,
 } from 'lucide-react'
 import { cn } from '../utils/cn'
-import { SERVICE_RECORDS, CATEGORIES } from '../data/mockData'
+import { CATEGORIES } from '../data/mockData'
+import { costStore } from '../lib/costStore'
 import { useAppStore } from '../store/AppStoreContext'
 import type { Priority, CapitalItem, CapitalTransaction } from '../types'
 import {
@@ -708,10 +709,18 @@ export function BudgetScreen() {
   const [tick, setTick] = useState(0)
   const [showForm, setShowForm] = useState(false)
   const [editItem, setEditItem] = useState<CapitalItem | undefined>(undefined)
+  const [confirmDelete, setConfirmDelete] = useState<CapitalItem | null>(null)
   void tick
 
-  const propertyCapitalItems   = getCapitalItemsForProperty(activePropertyId)
-  const propertyServiceRecords = SERVICE_RECORDS.filter(r => r.propertyId === activePropertyId)
+  const propertyCapitalItems = getCapitalItemsForProperty(activePropertyId)
+  // Dedupe by id — older localStorage states sometimes contain duplicate seeds
+  const completedEvents      = Array.from(
+    new Map(
+      costStore.getAll()
+        .filter(e => e.propertyId === activePropertyId)
+        .map(e => [e.id, e]),
+    ).values(),
+  ).sort((a, b) => b.completionDate.localeCompare(a.completionDate))
 
   function openAdd() {
     setEditItem(undefined)
@@ -721,9 +730,13 @@ export function BudgetScreen() {
     setEditItem(item)
     setShowForm(true)
   }
-  function handleDelete(item: CapitalItem) {
-    if (!window.confirm(`Delete "${item.title}"? This cannot be undone.`)) return
-    capitalItemStore.remove(item.id)
+  function requestDelete(item: CapitalItem) {
+    setConfirmDelete(item)
+  }
+  function confirmDeleteNow() {
+    if (!confirmDelete) return
+    capitalItemStore.remove(confirmDelete.id)
+    setConfirmDelete(null)
     setTick(t => t + 1)
   }
 
@@ -737,7 +750,7 @@ export function BudgetScreen() {
   const maxYearTotal = Math.max(...years.map(y => yearTotal(grouped[y]).high), 1)
 
   const annualReserve = Math.round(totalHigh / (maxYear - CURRENT_YEAR + 1) / 12)
-  const totalHistoricalSpend = propertyServiceRecords.reduce((s, r) => s + (r.totalCost ?? 0), 0)
+  const totalHistoricalSpend = completedEvents.reduce((s, e) => s + (e.cost ?? 0), 0)
   const annualAvgSpend = Math.round(totalHistoricalSpend / 2)
 
   // Detail view
@@ -838,7 +851,7 @@ export function BudgetScreen() {
               maxTotal={maxYearTotal}
               onSelectItem={setSelectedItemId}
               onEditItem={openEdit}
-              onDeleteItem={handleDelete}
+              onDeleteItem={requestDelete}
             />
           ))}
           {years.length === 0 && (
@@ -854,28 +867,35 @@ export function BudgetScreen() {
       <div>
         <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide mb-3">Historical Spend</h2>
         <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-sm overflow-hidden">
-          {propertyServiceRecords.map(r => (
-            <div key={r.id} className="flex items-center gap-3 px-4 py-3 border-b border-slate-100 dark:border-slate-700/50 last:border-0">
+          {completedEvents.length === 0 && (
+            <div className="px-4 py-6 text-center text-sm text-slate-400 dark:text-slate-500">
+              No completed maintenance events yet.
+            </div>
+          )}
+          {completedEvents.map(e => (
+            <div key={e.id} className="flex items-center gap-3 px-4 py-3 border-b border-slate-100 dark:border-slate-700/50 last:border-0">
               <div className="flex-1 min-w-0">
-                <p className="text-sm text-slate-700 dark:text-slate-300 truncate">{r.workDescription}</p>
+                <p className="text-sm text-slate-700 dark:text-slate-300 truncate">{e.taskTitle}</p>
                 <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
-                  {r.systemLabel}
-                  {r.contractor ? ` · ${r.contractor}` : ''}
+                  {e.categoryId.replace(/_/g, ' ')}
+                  {e.contractor ? ` · ${e.contractor}` : ''}
                   {' · '}
-                  {new Date(r.date).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+                  {new Date(e.completionDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
                 </p>
               </div>
-              {r.totalCost !== undefined && (
+              {e.cost !== undefined && (
                 <span className="text-sm font-semibold text-slate-700 dark:text-slate-300 shrink-0">
-                  ${r.totalCost.toLocaleString()}
+                  ${e.cost.toLocaleString()}
                 </span>
               )}
             </div>
           ))}
-          <div className="flex items-center justify-between px-4 py-3 bg-slate-50 dark:bg-slate-800/50">
-            <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">Total recorded</span>
-            <span className="text-sm font-bold text-slate-800 dark:text-slate-200">${totalHistoricalSpend.toLocaleString()}</span>
-          </div>
+          {completedEvents.length > 0 && (
+            <div className="flex items-center justify-between px-4 py-3 bg-slate-50 dark:bg-slate-800/50">
+              <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">Total recorded</span>
+              <span className="text-sm font-bold text-slate-800 dark:text-slate-200">${totalHistoricalSpend.toLocaleString()}</span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -895,6 +915,34 @@ export function BudgetScreen() {
           onSave={() => setTick(t => t + 1)}
           onClose={() => { setShowForm(false); setEditItem(undefined) }}
         />
+      )}
+
+      {confirmDelete && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
+          onClick={() => setConfirmDelete(null)}
+        >
+          <div
+            className="modal-surface w-full max-w-sm rounded-2xl shadow-xl"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-700">
+              <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">Delete capital project?</h2>
+            </div>
+            <div className="px-5 py-4 space-y-2">
+              <p className="text-sm text-slate-700 dark:text-slate-300">
+                Remove <strong>{confirmDelete.title}</strong> from the forecast?
+              </p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Logged transactions for this project will remain in the ledger but will no longer roll up under any item. This action cannot be undone from the UI.
+              </p>
+            </div>
+            <div className="px-5 py-3 border-t border-slate-200 dark:border-slate-700 flex justify-end gap-2">
+              <button onClick={() => setConfirmDelete(null)} className="btn btn-secondary btn-sm">Cancel</button>
+              <button onClick={confirmDeleteNow} className="btn btn-danger btn-sm">Delete</button>
+            </div>
+          </div>
+        </div>
       )}
 
     </div>
