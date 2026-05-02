@@ -4,6 +4,7 @@
 import type { CalendarEvent, CalendarSyncResult, DryRunResult, CalendarAdapter } from './calendarClient'
 import { CalendarError } from './calendarClient'
 import { isDev } from '../auth/oauth'
+import { localIndex } from './localIndex'
 import type { IndexRecord } from './localIndex'
 import { expandTaskToDates, buildEventDescription, parseTaskIdFromDescription } from './calendarExpansion'
 
@@ -144,7 +145,6 @@ export async function reconcileCalendar(
   }
 
   // 5. Execute
-  const { localIndex } = await import('./localIndex')
   const result: CalendarSyncResult = { created: 0, updated: 0, deleted: 0, errors: [] }
 
   for (const [taskId, { task, dates }] of expectedByTask) {

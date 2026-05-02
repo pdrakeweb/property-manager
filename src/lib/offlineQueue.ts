@@ -1,6 +1,8 @@
 // Offline upload queue backed by localStorage.
 // Entries are persisted across page reloads and retried when connectivity returns.
 
+import { DriveClient } from './driveClient'
+
 export interface QueuedUpload {
   id:            string
   categoryId:    string
@@ -43,9 +45,6 @@ export function getQueueCount(): number {
 
 /** Attempt to upload all queued items. Items that fail remain in the queue. */
 export async function retryAll(getToken: () => Promise<string | null>): Promise<{ succeeded: number; failed: number }> {
-  // Lazy import to avoid circular dependency
-  const { DriveClient } = await import('./driveClient')
-
   const queue:     QueuedUpload[] = load()
   const remaining: QueuedUpload[] = []
   let succeeded = 0
