@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { localIndex } from '../lib/localIndex'
 import type { IndexRecord } from '../lib/localIndex'
 import { syncBus } from '../lib/syncBus'
+import { getValidToken } from '../auth/oauth'
+import { pullSingleRecord } from '../lib/syncEngine'
 
 interface UseRecordSyncResult {
   /** Current local record (updates live when remote sync lands). */
@@ -56,10 +58,8 @@ export function useRecordSync(id: string | undefined): UseRecordSyncResult {
     // Kick off background fetch — deliberately unawaited
     ;(async () => {
       try {
-        const { getValidToken } = await import('../auth/oauth')
         const token = await getValidToken()
         if (!token) { setHasFetched(true); return }
-        const { pullSingleRecord } = await import('../lib/syncEngine')
         await pullSingleRecord(token, id)
       } catch {
         // Non-fatal — local record already shown

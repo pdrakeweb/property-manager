@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, lazy, Suspense } from 'react'
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Building2, Loader2, AlertCircle, Eye, EyeOff } from 'lucide-react'
 
@@ -6,29 +6,9 @@ import { AppStoreProvider } from './store/AppStoreContext'
 import { AppShell }             from './components/layout/AppShell'
 import { DashboardScreen }      from './screens/DashboardScreen'
 import { CaptureSelectScreen }  from './screens/CaptureSelectScreen'
-import { EquipmentFormScreen }  from './screens/EquipmentFormScreen'
-import { MaintenanceScreen }    from './screens/MaintenanceScreen'
-import { BudgetScreen }         from './screens/BudgetScreen'
-import { AIAdvisoryScreen }     from './screens/AIAdvisoryScreen'
 import { InventoryScreen }      from './screens/InventoryScreen'
-import { SettingsScreen }       from './screens/SettingsScreen'
-import { VendorScreen }         from './screens/VendorScreen'
 import { ExpiryManageScreen }   from './screens/ExpiryManageScreen'
-import { EmergencyScreen }      from './screens/EmergencyScreen'
-import { WellTestScreen }       from './screens/WellTestScreen'
 import { SepticScreen }         from './screens/SepticScreen'
-import { FuelScreen }           from './screens/FuelScreen'
-import { TaxScreen }            from './screens/TaxScreen'
-import { MortgageScreen }       from './screens/MortgageScreen'
-import { UtilityScreen }        from './screens/UtilityScreen'
-import { CalendarScreen }      from './screens/CalendarScreen'
-import { InsuranceScreen }     from './screens/InsuranceScreen'
-import { PermitsScreen }       from './screens/PermitsScreen'
-import { ChecklistScreen }     from './screens/ChecklistScreen'
-import { ChecklistRunScreen }  from './screens/ChecklistRunScreen'
-import { GeneratorScreen }     from './screens/GeneratorScreen'
-import { RoadScreen }                  from './screens/RoadScreen'
-import { ConflictResolutionScreen }    from './screens/ConflictResolutionScreen'
 import { PropertyProfileScreen }       from './screens/PropertyProfileScreen'
 import { EquipmentDetailScreen }       from './screens/EquipmentDetailScreen'
 import { SyncScreen }                  from './screens/SyncScreen'
@@ -42,8 +22,33 @@ import {
   startOAuthFlow,
   handleOAuthCallback,
   getClientId,
+  getValidToken,
 } from './auth/oauth'
 import { getOpenRouterKey, setSetting, SETTINGS } from './store/settings'
+
+// Lazy-loaded heavy screens (>400 lines, not on first load) — split into per-route chunks
+const BudgetScreen             = lazy(() => import('./screens/BudgetScreen').then(m => ({ default: m.BudgetScreen })))
+const AIAdvisoryScreen         = lazy(() => import('./screens/AIAdvisoryScreen').then(m => ({ default: m.AIAdvisoryScreen })))
+const WellTestScreen           = lazy(() => import('./screens/WellTestScreen').then(m => ({ default: m.WellTestScreen })))
+const TaxScreen                = lazy(() => import('./screens/TaxScreen').then(m => ({ default: m.TaxScreen })))
+const MortgageScreen           = lazy(() => import('./screens/MortgageScreen').then(m => ({ default: m.MortgageScreen })))
+const InsuranceScreen          = lazy(() => import('./screens/InsuranceScreen').then(m => ({ default: m.InsuranceScreen })))
+const EquipmentFormScreen      = lazy(() => import('./screens/EquipmentFormScreen').then(m => ({ default: m.EquipmentFormScreen })))
+const MaintenanceScreen        = lazy(() => import('./screens/MaintenanceScreen').then(m => ({ default: m.MaintenanceScreen })))
+const SettingsScreen           = lazy(() => import('./screens/SettingsScreen').then(m => ({ default: m.SettingsScreen })))
+const VendorScreen             = lazy(() => import('./screens/VendorScreen').then(m => ({ default: m.VendorScreen })))
+const EmergencyScreen          = lazy(() => import('./screens/EmergencyScreen').then(m => ({ default: m.EmergencyScreen })))
+const FuelScreen               = lazy(() => import('./screens/FuelScreen').then(m => ({ default: m.FuelScreen })))
+const UtilityScreen            = lazy(() => import('./screens/UtilityScreen').then(m => ({ default: m.UtilityScreen })))
+const CalendarScreen           = lazy(() => import('./screens/CalendarScreen').then(m => ({ default: m.CalendarScreen })))
+const PermitsScreen            = lazy(() => import('./screens/PermitsScreen').then(m => ({ default: m.PermitsScreen })))
+const ChecklistScreen          = lazy(() => import('./screens/ChecklistScreen').then(m => ({ default: m.ChecklistScreen })))
+const ChecklistRunScreen       = lazy(() => import('./screens/ChecklistRunScreen').then(m => ({ default: m.ChecklistRunScreen })))
+const GeneratorScreen          = lazy(() => import('./screens/GeneratorScreen').then(m => ({ default: m.GeneratorScreen })))
+const RoadScreen               = lazy(() => import('./screens/RoadScreen').then(m => ({ default: m.RoadScreen })))
+const ConflictResolutionScreen = lazy(() => import('./screens/ConflictResolutionScreen').then(m => ({ default: m.ConflictResolutionScreen })))
+const SyncScreen               = lazy(() => import('./screens/SyncScreen').then(m => ({ default: m.SyncScreen })))
+const ActivityScreen           = lazy(() => import('./screens/ActivityScreen').then(m => ({ default: m.ActivityScreen })))
 
 // ── Sign-in screen ───────────────────────────────────────────────────────────
 
@@ -284,7 +289,6 @@ function useStartupSync() {
       if (running) return
       running = true
       try {
-        const { getValidToken } = await import('./auth/oauth')
         const token = await getValidToken()
         if (!token) return
         // Sync property config first so we have all properties before syncing records
@@ -325,7 +329,6 @@ function useStartupSync() {
       if (pollRunning || document.visibilityState !== 'visible') return
       pollRunning = true
       try {
-        const { getValidToken } = await import('./auth/oauth')
         const token = await getValidToken()
         if (!token) return
         await pollDriveChanges(token)
@@ -385,7 +388,6 @@ function useScheduledMarkdownExport() {
 
       running = true
       try {
-        const { getValidToken } = await import('./auth/oauth')
         const token = await getValidToken()
         if (!token) return
         for (const p of propertyStore.getAll()) {
@@ -416,6 +418,7 @@ function MainApp() {
   return (
     <HashRouter>
       <AppShell>
+        <Suspense fallback={<RouteFallback />}>
         <Routes>
           <Route path="/"                    element={<DashboardScreen />}     />
           <Route path="/capture"             element={<CaptureSelectScreen />} />
@@ -449,8 +452,17 @@ function MainApp() {
           <Route path="/activity"            element={<ActivityScreen />}          />
           <Route path="*"                    element={<Navigate to="/" />}     />
         </Routes>
+        </Suspense>
       </AppShell>
     </HashRouter>
+  )
+}
+
+function RouteFallback() {
+  return (
+    <div className="min-h-[40vh] flex items-center justify-center">
+      <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
+    </div>
   )
 }
 

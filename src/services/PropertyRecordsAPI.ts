@@ -12,6 +12,7 @@ import { propertyStore } from '../lib/propertyStore'
 import { getActiveTasks } from '../lib/maintenanceStore'
 import { localIndex, type IndexRecord } from '../lib/localIndex'
 import { fetchEntityState } from '../lib/haClient'
+import { DriveClient } from '../lib/driveClient'
 import { getGeneratorsForProperty } from '../lib/generatorStore'
 import { getPoliciesForProperty } from '../lib/insuranceStore'
 import { getPermitsForProperty } from '../lib/permitStore'
@@ -420,7 +421,6 @@ export class PropertyRecordsAPI {
       return '[Error: Not authenticated with Google Drive. Sign in to access file contents.]'
     }
     try {
-      const { DriveClient } = await import('../lib/driveClient')
       const result = await DriveClient.downloadFile(this.driveToken, fileId)
       return typeof result.content === 'string' ? result.content : '[Binary file — cannot display]'
     } catch (err) {
