@@ -20,7 +20,7 @@ import { fetchEntityState } from '../lib/haClient'
 import { useAppStore } from '../store/AppStoreContext'
 import { propertyStore } from '../lib/propertyStore'
 import { PropertyHealthCard } from '../components/dashboard/PropertyHealthCard'
-import type { Priority, HAEntityState, MaintenanceTask, CapitalItem } from '../types'
+import type { Priority, HAEntityState, MaintenanceTask } from '../types'
 
 // ── Dashboard mode ────────────────────────────────────────────────────────────
 
