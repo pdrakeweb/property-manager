@@ -1,4 +1,8 @@
-// Google OAuth 2.0 PKCE — no client secret, runs entirely in the browser
+// Google OAuth 2.0 PKCE — public client, no secret in the browser.
+// The OAuth client in Google Cloud Console must be a "Web application" or
+// "Single-page application" type WITHOUT a client secret requirement; PKCE
+// alone authenticates the exchange. Embedding a client_secret in this bundle
+// would leak it to every site visitor and provides no real security.
 
 const GOOGLE_AUTH_URL  = 'https://accounts.google.com/o/oauth2/v2/auth'
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token'
@@ -18,11 +22,6 @@ export function getClientId(): string {
   return (import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined)
     ?? localStorage.getItem('google_client_id')
     ?? ''
-}
-
-/** Client secret: only needed for "Web application" client type (not SPA) */
-function getClientSecret(): string {
-  return (import.meta.env.VITE_GOOGLE_CLIENT_SECRET as string | undefined) ?? ''
 }
 
 /** The redirect URI must exactly match what's registered in Google Cloud Console */
@@ -95,8 +94,6 @@ export async function handleOAuthCallback(code: string, state: string): Promise<
     grant_type:    'authorization_code',
     code_verifier: verifier,
   }
-  const secret = getClientSecret()
-  if (secret) tokenParams.client_secret = secret
 
   const resp = await fetch(GOOGLE_TOKEN_URL, {
     method:  'POST',
@@ -127,8 +124,6 @@ async function refreshAccessToken(): Promise<string> {
     grant_type:    'refresh_token',
     refresh_token: refreshToken,
   }
-  const secret = getClientSecret()
-  if (secret) refreshParams.client_secret = secret
 
   const resp = await fetch(GOOGLE_TOKEN_URL, {
     method:  'POST',

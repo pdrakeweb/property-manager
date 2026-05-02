@@ -116,8 +116,22 @@ export function InventoryScreen() {
 
           return (
             <div key={cat.id}>
-              {/* Category header row */}
-              <div className="flex items-center gap-3 px-4 py-3.5">
+              {/* Category header row — clickable when documented to jump to the first equipment record */}
+              <div
+                className={cn(
+                  'flex items-center gap-3 px-4 py-3.5',
+                  isDone && 'cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors',
+                )}
+                onClick={isDone ? () => navigate(`/equipment/${catRecords[0].id}`) : undefined}
+                role={isDone ? 'button' : undefined}
+                tabIndex={isDone ? 0 : undefined}
+                onKeyDown={isDone ? (e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    navigate(`/equipment/${catRecords[0].id}`)
+                  }
+                } : undefined}
+              >
                 {isDone
                   ? <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
                   : <Circle       className="w-5 h-5 text-slate-300 dark:text-slate-600 shrink-0" />
@@ -132,7 +146,7 @@ export function InventoryScreen() {
                 <div className="flex items-center gap-2 shrink-0">
                   {isDone ? (
                     <button
-                      onClick={() => navigate(`/capture/${cat.id}`)}
+                      onClick={(e) => { e.stopPropagation(); navigate(`/capture/${cat.id}`) }}
                       className="text-xs text-green-600 dark:text-green-400 font-medium hover:underline"
                     >
                       + Add

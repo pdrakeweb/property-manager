@@ -47,6 +47,7 @@ const RoadScreen               = lazy(() => import('./screens/RoadScreen').then(
 const ConflictResolutionScreen = lazy(() => import('./screens/ConflictResolutionScreen').then(m => ({ default: m.ConflictResolutionScreen })))
 const SyncScreen               = lazy(() => import('./screens/SyncScreen').then(m => ({ default: m.SyncScreen })))
 const ActivityScreen           = lazy(() => import('./screens/ActivityScreen').then(m => ({ default: m.ActivityScreen })))
+const MapScreen                = lazy(() => import('./screens/MapScreen').then(m => ({ default: m.MapScreen })))
 
 // ── Sign-in screen ───────────────────────────────────────────────────────────
 
@@ -465,6 +466,7 @@ function MainApp() {
           <Route path="/equipment/:id"       element={<EquipmentDetailScreen />}   />
           <Route path="/sync"                element={<SyncScreen />}              />
           <Route path="/activity"            element={<ActivityScreen />}          />
+          <Route path="/map"                 element={<MapScreen />}               />
           <Route path="*"                    element={<Navigate to="/" />}     />
         </Routes>
         </Suspense>
