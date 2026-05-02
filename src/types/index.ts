@@ -10,6 +10,8 @@ export interface Property {
   stats: { documented: number; total: number }
   latitude?: number
   longitude?: number
+  acreage?: number
+  yearBuilt?: number
 }
 
 export interface GeolocatedProperty extends Property {

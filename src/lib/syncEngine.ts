@@ -135,6 +135,16 @@ export async function syncAll(_token: string, propertyId: string): Promise<SyncR
 }
 
 // ── Property config sync ─────────────────────────────────────────────────────
+//
+// Properties are first-class records in the local index (type 'property') and
+// individually flow through the standard pull/push paths in the vault: each
+// property gets uploaded to its own driveRootFolderId/Property/property_<id>.json
+// when its `pending_upload` state is processed.
+//
+// In addition, a global `pm_properties.json` manifest at the Drive root holds
+// the full list — preserved for back-compat with installs that pre-date the
+// per-record property sync, and for fresh devices that need to discover the
+// existing property set before any individual driveRootFolderIds are known.
 
 const PROPERTY_CONFIG_FILENAME = 'pm_properties.json'
 

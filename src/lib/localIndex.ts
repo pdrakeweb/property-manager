@@ -39,6 +39,7 @@ export type IndexRecordType =
   | 'permit'
   | 'road'
   | 'generator_log'
+  | 'property'
 
 export type SyncState = VaultSyncState
 export type SyncStats = VaultSyncStats

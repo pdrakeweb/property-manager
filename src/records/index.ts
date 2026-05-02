@@ -79,3 +79,6 @@ export type { RoadEventRecord } from './road'
 
 export { GeneratorZ, GeneratorRuntimeEntryZ, generatorDef } from './generator'
 export type { GeneratorRecordDsl } from './generator'
+
+export { PropertyZ, propertyDef } from './property'
+export type { PropertyDsl } from './property'

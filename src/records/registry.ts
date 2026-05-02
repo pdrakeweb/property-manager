@@ -31,6 +31,7 @@ import { insuranceDef }           from './insurance'
 import { permitDef }              from './permit'
 import { roadDef }                from './road'
 import { generatorDef }           from './generator'
+import { propertyDef }            from './property'
 
 export const RECORDS = {
   equipment:           equipmentDef,
@@ -52,6 +53,7 @@ export const RECORDS = {
   permit:              permitDef,
   road:                roadDef,
   generator_log:       generatorDef,
+  property:            propertyDef,
 } as const
 
 export type RegisteredRecordType = keyof typeof RECORDS
