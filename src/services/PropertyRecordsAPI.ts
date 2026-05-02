@@ -6,10 +6,7 @@
  * to a static mock seed if no records exist in the index yet.
  */
 
-import {
-  EQUIPMENT,
-  SERVICE_RECORDS, HA_STATUS, CATEGORIES,
-} from '../data/mockData'
+import { SERVICE_RECORDS, CATEGORIES } from '../data/mockData'
 import { getCapitalItemsForProperty } from '../lib/capitalItemStore'
 import { propertyStore } from '../lib/propertyStore'
 import { getActiveTasks } from '../lib/maintenanceStore'
