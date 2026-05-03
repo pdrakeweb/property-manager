@@ -51,6 +51,7 @@ const ConflictResolutionScreen = lazy(() => import('./screens/ConflictResolution
 const SyncScreen               = lazy(() => import('./screens/SyncScreen').then(m => ({ default: m.SyncScreen })))
 const ActivityScreen           = lazy(() => import('./screens/ActivityScreen').then(m => ({ default: m.ActivityScreen })))
 const MapScreen                = lazy(() => import('./screens/MapScreen').then(m => ({ default: m.MapScreen })))
+const SearchScreen             = lazy(() => import('./screens/SearchScreen').then(m => ({ default: m.SearchScreen })))
 
 // ── Sign-in screen ───────────────────────────────────────────────────────────
 
@@ -473,6 +474,7 @@ function MainApp() {
           <Route path="/sync"                element={<SyncScreen />}              />
           <Route path="/activity"            element={<ActivityScreen />}          />
           <Route path="/map"                 element={<MapScreen />}               />
+          <Route path="/search"              element={<SearchScreen />}            />
           <Route path="*"                    element={<Navigate to="/" />}     />
         </Routes>
         </Suspense>

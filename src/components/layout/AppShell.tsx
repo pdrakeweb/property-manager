@@ -5,6 +5,7 @@ import {
   MessageSquare, ClipboardList, Settings, ChevronDown, ChevronRight,
   Building2, TreePine, Users, Droplets, Receipt, Home, Zap, CalendarDays,
   RefreshCw, Shield, FileCheck, CheckSquare, Activity, MapPin, Map,
+  Search,
   Sun, Moon, Monitor, DollarSign, HardHat, BookOpen, AlertTriangle, X,
 } from 'lucide-react'
 import { cn } from '../../utils/cn'
@@ -31,6 +32,7 @@ const TOP_NAV: NavItem[] = [
   { to: '/calendar',   icon: CalendarDays,    label: 'Calendar',    mobileShow: true  },
   { to: '/checklists', icon: CheckSquare,     label: 'Checklists',  mobileShow: true  },
   { to: '/advisor',    icon: MessageSquare,   label: 'Ask AI',      mobileShow: true  },
+  { to: '/search',     icon: Search,          label: 'Search',      mobileShow: false },
 ]
 
 const NAV_SECTIONS: NavSection[] = [
