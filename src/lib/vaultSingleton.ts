@@ -26,6 +26,7 @@ import { CATEGORY_FOLDER_NAMES } from './driveClient'
 import { propertyStore } from './propertyStore'
 import { auditLog } from './auditLog'
 import { syncBus } from './syncBus'
+import { getDeviceId } from './deviceId'
 
 const hostMetadata: HostMetadataStore = {
   getRootFolderId(propertyId: string): string | null {
@@ -76,6 +77,7 @@ export function getVault(): RecordVault {
     registry,
     host: hostMetadata,
     audit: auditLogger,
+    deviceId: getDeviceId(),
   })
   // Forward every vault-internal index mutation onto the cross-tab syncBus
   // so subscribers (AppShell indicator, useRecordSync, detail screens) react

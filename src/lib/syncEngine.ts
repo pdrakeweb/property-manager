@@ -48,7 +48,7 @@ export async function pushPending(_token: string): Promise<{ uploaded: number; f
   return getVault().pushPending()
 }
 
-export async function pullFromDrive(_token: string, propertyId: string): Promise<{ pulled: number; failed: number }> {
+export async function pullFromDrive(_token: string, propertyId: string): Promise<{ pulled: number; failed: number; conflicts: number }> {
   return getVault().pullFromDrive(propertyId)
 }
 
@@ -136,7 +136,7 @@ export async function seedTasksForProperty(propertyId: string): Promise<void> {
 let activeFullSync = false
 
 const NO_OP_SYNC_RESULT: SyncResult = {
-  uploaded: 0, uploadFailed: 0, uploadErrors: [], pulled: 0, pullFailed: 0,
+  uploaded: 0, uploadFailed: 0, uploadErrors: [], pulled: 0, pullFailed: 0, pullConflicts: 0,
 }
 
 export async function syncAll(_token: string, propertyId: string): Promise<SyncResult> {

@@ -12,7 +12,9 @@ import { cn } from '../../utils/cn'
 import { useAppStore } from '../../store/AppStoreContext'
 import { useProperties } from '../../lib/propertyStore'
 import { localIndex } from '../../lib/localIndex'
-import type { SyncStats } from '../../lib/localIndex'
+import type { IndexRecord, SyncStats } from '../../lib/localIndex'
+import { resolveConflictField, resolveAllConflictFields } from '../../vault'
+import { syncBus } from '../../lib/syncBus'
 import { isDev } from '../../auth/oauth'
 import { useActiveAlerts } from '../../lib/haAlerts'
 import { useModalA11y } from '../../lib/focusTrap'
@@ -372,6 +374,150 @@ function FailedItemsModal({
   )
 }
 
+function ConflictsModal({
+  conflicts, onClose, onChange,
+}: {
+  conflicts: IndexRecord[]
+  onClose: () => void
+  onChange: () => void
+}) {
+  const dialogRef = useModalA11y<HTMLDivElement>(onClose)
+
+  function pickField(record: IndexRecord, fieldPath: string, side: 'mine' | 'theirs') {
+    // resolveConflictField returns the structurally-identical vault IndexRecord;
+    // the host façade narrows `type` to IndexRecordType — safe to cast since the
+    // value came out of the index in the first place.
+    const next = resolveConflictField(record, fieldPath, side) as unknown as IndexRecord
+    localIndex.upsert(next)
+    onChange()
+  }
+
+  function pickAll(record: IndexRecord, side: 'mine' | 'theirs') {
+    const next = resolveAllConflictFields(record, side) as unknown as IndexRecord
+    localIndex.upsert(next)
+    onChange()
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/60 p-0 sm:p-4">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="conflicts-title"
+        className="bg-white dark:bg-slate-800 w-full sm:max-w-2xl sm:rounded-2xl rounded-t-2xl shadow-xl max-h-[85vh] flex flex-col"
+      >
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-700">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-5 h-5 text-red-500" />
+            <h2 id="conflicts-title" className="text-base font-semibold text-slate-900 dark:text-slate-100">
+              {conflicts.length} sync conflict{conflicts.length !== 1 ? 's' : ''}
+            </h2>
+          </div>
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            className="p-1 rounded-md text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700">
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Two devices edited the same record at the same time. Pick which value to keep for each field — your choice will sync to all devices on the next push.
+          </p>
+        </div>
+
+        <div className="overflow-y-auto divide-y divide-slate-100 dark:divide-slate-700">
+          {conflicts.length === 0 ? (
+            <p className="px-4 py-6 text-sm text-slate-500 dark:text-slate-400 text-center">
+              All conflicts resolved.
+            </p>
+          ) : conflicts.map(record => {
+            const fields = record.conflictFields ?? []
+            return (
+              <div key={record.id} className="px-4 py-3">
+                <div className="flex items-start justify-between gap-3 mb-2">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">
+                      {record.title || `(untitled ${record.type})`}
+                    </p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                      {record.type} · {fields.length} conflicting field{fields.length !== 1 ? 's' : ''}
+                      {record.conflictReason ? ` · ${record.conflictReason}` : ''}
+                    </p>
+                  </div>
+                  {fields.length > 1 && (
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        onClick={() => pickAll(record, 'mine')}
+                        className="text-xs font-semibold px-2.5 py-1 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600"
+                      >
+                        Keep all mine
+                      </button>
+                      <button
+                        onClick={() => pickAll(record, 'theirs')}
+                        className="text-xs font-semibold px-2.5 py-1 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600"
+                      >
+                        Keep all theirs
+                      </button>
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-1.5">
+                  {fields.map(f => (
+                    <div key={f.path} className="grid grid-cols-[7rem_1fr_auto] sm:grid-cols-[8rem_1fr_1fr_auto] gap-2 items-center text-xs">
+                      <code className="font-mono text-slate-600 dark:text-slate-300 truncate">{f.path}</code>
+                      <div className="min-w-0">
+                        <span className="text-slate-400 dark:text-slate-500 mr-1">mine:</span>
+                        <span className="text-slate-800 dark:text-slate-200 break-words">{formatConflictValue(f.local)}</span>
+                      </div>
+                      <div className="min-w-0 hidden sm:block">
+                        <span className="text-slate-400 dark:text-slate-500 mr-1">theirs:</span>
+                        <span className="text-slate-800 dark:text-slate-200 break-words">{formatConflictValue(f.remote)}</span>
+                      </div>
+                      <div className="flex items-center gap-1 justify-end">
+                        <button
+                          onClick={() => pickField(record, f.path, 'mine')}
+                          className="text-xs font-semibold px-2 py-1 rounded-md bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/40"
+                        >
+                          Mine
+                        </button>
+                        <button
+                          onClick={() => pickField(record, f.path, 'theirs')}
+                          className="text-xs font-semibold px-2 py-1 rounded-md bg-sky-50 dark:bg-sky-900/30 text-sky-700 dark:text-sky-400 hover:bg-sky-100 dark:hover:bg-sky-900/40"
+                          title={f.remoteDeviceId ? `Authored on ${f.remoteDeviceId.slice(0, 8)}` : undefined}
+                        >
+                          Theirs
+                        </button>
+                      </div>
+                      {/* Stacked "theirs" row on mobile (sm: hides this) */}
+                      <div className="col-span-3 sm:hidden -mt-1 ml-[7rem] min-w-0">
+                        <span className="text-slate-400 dark:text-slate-500 mr-1">theirs:</span>
+                        <span className="text-slate-800 dark:text-slate-200 break-words">{formatConflictValue(f.remote)}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/** Render an unknown JSON value compactly for the conflict diff cells. */
+function formatConflictValue(v: unknown): string {
+  if (v === undefined) return '(empty)'
+  if (v === null) return '(null)'
+  if (typeof v === 'string') return v.length > 100 ? v.slice(0, 97) + '…' : v
+  if (typeof v === 'number' || typeof v === 'boolean') return String(v)
+  try { return JSON.stringify(v).slice(0, 100) } catch { return String(v) }
+}
+
 function SyncPill() {
   const navigate = useNavigate()
   const [stats, setStats] = useState<SyncStats>(() => localIndex.getSyncStats())
@@ -379,6 +525,8 @@ function SyncPill() {
   const [failedCount, setFailedCount] = useState<number>(() => getFailedCount())
   const [failedItems, setFailedItems] = useState<QueuedUpload[]>([])
   const [showFailed,  setShowFailed]  = useState(false)
+  const [showConflicts, setShowConflicts] = useState(false)
+  const [conflicts, setConflicts] = useState<IndexRecord[]>([])
   const devMode = isDev()
 
   useEffect(() => {
@@ -389,7 +537,12 @@ function SyncPill() {
     }
     const id = setInterval(refresh, 30_000)
     window.addEventListener('focus', refresh)
-    return () => { clearInterval(id); window.removeEventListener('focus', refresh) }
+    // Index changes (local edits, pulls, conflict resolutions) bubble through
+    // syncBus — refresh immediately so the pill snaps to the new state.
+    const unsub = syncBus.subscribe(ev => {
+      if (ev.type === 'index-updated') refresh()
+    })
+    return () => { clearInterval(id); window.removeEventListener('focus', refresh); unsub() }
   }, [])
 
   function openFailed() {
@@ -403,17 +556,38 @@ function SyncPill() {
     setQueueTotal(getQueueCount())
   }
 
+  function openConflicts() {
+    setConflicts(localIndex.getConflicts())
+    setShowConflicts(true)
+  }
+
+  function refreshConflicts() {
+    const next = localIndex.getConflicts()
+    setConflicts(next)
+    setStats(localIndex.getSyncStats())
+    if (next.length === 0) setShowConflicts(false)
+  }
+
   // Conflicts (index-level) take precedence — they require manual resolution.
   if (stats.conflicts > 0) {
     return (
-      <button
-        onClick={() => navigate('/conflicts')}
-        className="btn btn-danger btn-sm btn-pill shrink-0 gap-1"
-      >
-        <RefreshCw className="w-3 h-3" />
-        {devMode && <span className="opacity-75">DEV</span>}
-        {stats.conflicts} conflict{stats.conflicts > 1 ? 's' : ''}
-      </button>
+      <>
+        <button
+          onClick={openConflicts}
+          className="btn btn-danger btn-sm btn-pill shrink-0 gap-1"
+        >
+          <RefreshCw className="w-3 h-3" />
+          {devMode && <span className="opacity-75">DEV</span>}
+          {stats.conflicts} conflict{stats.conflicts > 1 ? 's' : ''}
+        </button>
+        {showConflicts && (
+          <ConflictsModal
+            conflicts={conflicts}
+            onClose={() => setShowConflicts(false)}
+            onChange={refreshConflicts}
+          />
+        )}
+      </>
     )
   }
 

@@ -34,12 +34,18 @@ export interface CreateRecordVaultOptions {
   audit?:    AuditLogger
   /** Override the localStorage key for the index. */
   indexKey?: string
+  /**
+   * Stable id for THIS device, used as the actor on CRDT vector clocks.
+   * Browser builds inject the value from `lib/deviceId.ts`; tests pass a
+   * fixed string so vclock assertions are deterministic.
+   */
+  deviceId?: string
 }
 
 export interface RecordVault {
   localIndex: LocalIndex
   pushPending(): Promise<{ uploaded: number; failed: number; errors: string[] }>
-  pullFromDrive(propertyId: string): Promise<{ pulled: number; failed: number }>
+  pullFromDrive(propertyId: string): Promise<{ pulled: number; failed: number; conflicts: number }>
   syncAll(propertyId: string): Promise<SyncResult>
   exportMarkdown(
     propertyId: string,
@@ -52,12 +58,16 @@ export interface RecordVault {
   markdownFilename(record: IndexRecord): string
   /** Shortcut to `localIndex.getSyncStats`. */
   syncStats(propertyId?: string): SyncStats
+  /** Sweep tombstones older than `olderThanMs` ago (default 30 days).
+   *  Returns the number purged. Safe to call frequently — cheap when no
+   *  tombstones are due for collection. */
+  gcTombstones(olderThanMs?: number): number
 }
 
 export function createRecordVault(opts: CreateRecordVaultOptions): RecordVault {
-  const { storage, kvStore, registry, host, audit = nullAuditLogger, indexKey } = opts
-  const localIndex = createLocalIndex({ kvStore, indexKey })
-  const ctx = { storage, localIndex, registry, host, audit }
+  const { storage, kvStore, registry, host, audit = nullAuditLogger, indexKey, deviceId } = opts
+  const localIndex = createLocalIndex({ kvStore, indexKey, deviceId })
+  const ctx = { storage, localIndex, registry, host, audit, deviceId: deviceId ?? 'unknown-device' }
 
   return {
     localIndex,
@@ -69,6 +79,7 @@ export function createRecordVault(opts: CreateRecordVaultOptions): RecordVault {
     renderMarkdown:   (record) => renderRecordMarkdown(registry, record),
     markdownFilename: (record) => resolveMarkdownFilename(registry, record),
     syncStats:        (propertyId) => localIndex.getSyncStats(propertyId),
+    gcTombstones:     (olderThanMs) => localIndex.gcTombstones(olderThanMs),
   }
 }
 
@@ -88,6 +99,8 @@ export type {
   VaultRegistry,
 }
 export { ETagConflictError } from './core/types'
+export type { ConflictField } from './core/types'
+export { resolveConflictField, resolveAllConflictFields } from './core/mergeRecord'
 export { createMemoryAdapter } from './adapters/memoryAdapter'
 export { createGoogleDriveAdapter } from './adapters/googleDriveAdapter'
 // Node-only adapter is NOT re-exported here — importing it from the

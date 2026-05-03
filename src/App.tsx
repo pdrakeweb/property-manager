@@ -18,6 +18,7 @@ import { pollAllInboxes } from './lib/inboxPoller'
 import { exportAllMarkdownToDrive } from './lib/markdownExport'
 import { propertyStore, seedPropertiesFromMock } from './lib/propertyStore'
 import { installFocusPolling } from './lib/haAlerts'
+import { getVault } from './lib/vaultSingleton'
 import {
   isAuthenticated,
   startOAuthFlow,
@@ -306,10 +307,24 @@ function useStartupSync() {
     // 1. Migrate: seed properties from mock data if localStorage is empty
     seedPropertiesFromMock()
 
-    // Install HA alert polling (runs on focus + visibility change). Idempotent
-    // and self-quieting when HA is unconfigured, so it's safe to install
-    // unconditionally at boot.
+    // 1a. Install HA alert polling (runs on focus + visibility change).
+    //     Idempotent and self-quieting when HA is unconfigured, so it's safe
+    //     to install unconditionally at boot.
     installFocusPolling()
+
+    // 1b. Sweep tombstones older than 30 days. Cheap when nothing is due
+    //     (single localStorage read + scan). Drive's own trash retention is
+    //     ~30 days too, so by the time we drop a tombstone the file it
+    //     marks for deletion is gone — no resurrection risk.
+    try {
+      const purged = getVault().gcTombstones()
+      if (purged > 0) {
+        // Imported lazily to keep the module graph clean.
+        import('./lib/auditLog').then(({ auditLog }) =>
+          auditLog.info('sync.gc', `Purged ${purged} tombstone${purged === 1 ? '' : 's'} (>30d old)`),
+        )
+      }
+    } catch { /* GC failure is non-fatal — try again next boot */ }
 
     // 2. Seed tasks for all properties immediately (no network needed)
     const seedAll = async () => {

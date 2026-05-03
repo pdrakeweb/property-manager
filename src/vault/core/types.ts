@@ -5,7 +5,9 @@
  * Everything here must be runnable in Node for unit tests.
  */
 
-export type SyncState = 'local_only' | 'pending_upload' | 'synced' | 'conflict'
+export type SyncState = 'local_only' | 'pending_upload' | 'synced' | 'conflict' | 'deleted'
+
+import type { VClock } from './vclock'
 
 export interface IndexRecord {
   id: string
@@ -25,6 +27,13 @@ export interface IndexRecord {
    * Independent of `conflictWithId`, which links two concurrent-edit siblings.
    */
   conflictReason?: string
+  /**
+   * Field-level diff captured the last time pull detected a concurrent edit.
+   * Each entry has the local and remote values plus the device id that
+   * authored the remote write (for the "Keep theirs (deviceX)" hint).
+   * Cleared once the user resolves the conflict.
+   */
+  conflictFields?: ConflictField[]
   calendarEventId?:  string
   calendarEventIds?: string[]
   calendarSyncState?: 'synced' | 'pending' | 'error'
@@ -32,6 +41,28 @@ export interface IndexRecord {
   localUpdatedAt: string
   driveUpdatedAt?: string
   deletedAt?: string
+  /**
+   * Vector clock — `Record<deviceId, counter>`. Incremented on every local
+   * mutation by the writing device; merged on pull. See `core/vclock.ts`
+   * and planning/CRDT-PLAN.md.
+   *
+   * Optional for back-compat: records written before CRDT support load with
+   * `vclock` undefined and are normalised on first read via `ensureVClock`.
+   */
+  vclock?: VClock
+}
+
+/**
+ * One field's diff captured for the conflict-resolution UI. The user picks
+ * "Keep mine" (use `local`) or "Keep theirs" (use `remote`) per field.
+ */
+export interface ConflictField {
+  /** Dot-path inside `data` (e.g. `'phone'`, `'values.brand'`). */
+  path: string
+  local: unknown
+  remote: unknown
+  /** Author of the remote write — last device with `vclock[d] > local`. */
+  remoteDeviceId?: string
 }
 
 export interface SyncStats {
@@ -48,6 +79,9 @@ export interface SyncResult {
   uploadErrors: string[]
   pulled: number
   pullFailed: number
+  /** Records that came down in `'conflict'` state during the pull — either
+   *  a concurrent vclock edit or a schema-validation failure. */
+  pullConflicts: number
 }
 
 // ─── Storage adapter (remote backend) ────────────────────────────────────────

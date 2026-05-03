@@ -7,6 +7,7 @@
  */
 
 import type { IndexRecord, KVStore, SyncStats } from './types'
+import { ensureVClock, increment as vIncrement } from './vclock'
 
 /**
  * Write-origin tag carried on index-change notifications.
@@ -33,6 +34,20 @@ export interface LocalIndex {
   markConflict(id: string): void
   softDelete(id: string): void
   getPending(): IndexRecord[]
+  /** Tombstones (`syncState === 'deleted'`) that haven't yet been pushed to
+   *  Drive. Push translates these into deleted-marker JSON files so peer
+   *  devices learn about the delete and don't resurrect the record. */
+  getPendingTombstones(): IndexRecord[]
+  /** Every tombstone, regardless of push state. Used by the pull-side
+   *  resurrection check: if remote sends us a non-deleted record we have
+   *  locally tombstoned, vclock arbitrates whether the delete or the
+   *  un-delete wins. */
+  getAllTombstones(): IndexRecord[]
+  /** Drop tombstones whose deletedAt is older than `olderThanMs` ago. The
+   *  default 30-day window matches Drive's own trash retention so by the
+   *  time a tombstone is GC'd, the file it tombstones is gone too — making
+   *  resurrection from an old peer impossible. Returns the number purged. */
+  gcTombstones(olderThanMs?: number): number
   getCount(type: string, propertyId: string): number
   getSyncStats(propertyId?: string): SyncStats
   hasAny(type: string, propertyId: string): boolean
@@ -52,6 +67,13 @@ export interface LocalIndexOptions {
   indexKey?: string
   /** Time source — tests override to get deterministic timestamps. */
   now?: () => string
+  /**
+   * Stable id for THIS device — used as the actor on vector-clock writes.
+   * Tests override; the browser builds inject the value from
+   * `lib/deviceId.ts` via the vault singleton. Defaults to `'unknown-device'`
+   * so legacy callers still work, but production callers always pass a real id.
+   */
+  deviceId?: string
 }
 
 /**
@@ -62,7 +84,12 @@ export interface LocalIndexOptions {
  * state is never cached.
  */
 export function createLocalIndex(opts: LocalIndexOptions): LocalIndex {
-  const { kvStore, indexKey = 'pm_index_v1', now = () => new Date().toISOString() } = opts
+  const {
+    kvStore,
+    indexKey = 'pm_index_v1',
+    now = () => new Date().toISOString(),
+    deviceId = 'unknown-device',
+  } = opts
 
   const subscribers = new Set<IndexChangeHandler>()
   function emit(ids: readonly string[], source: IndexChangeSource): void {
@@ -97,7 +124,25 @@ export function createLocalIndex(opts: LocalIndexOptions): LocalIndex {
 
     upsert(record, source = 'local') {
       const index = load()
-      index[record.id] = { ...record, localUpdatedAt: now() } as IndexRecord
+      const prior = index[record.id]
+      const incoming = { ...record, localUpdatedAt: now() } as IndexRecord
+
+      if (source === 'local') {
+        // Local mutation: bump THIS device's counter. Start from the prior
+        // record's clock so a new device joining a record's history advances
+        // its causal knowledge instead of forking a fresh chain.
+        const baseClock = ensureVClock(record.vclock ?? prior?.vclock, deviceId)
+        incoming.vclock = vIncrement(baseClock, deviceId)
+      } else {
+        // Remote-sourced upsert: caller is responsible for setting `vclock`
+        // (typically the merged remote+local clock from pullFromDrive).
+        // Backfill via ensureVClock when missing for back-compat.
+        if (!incoming.vclock) {
+          incoming.vclock = ensureVClock(prior?.vclock, deviceId)
+        }
+      }
+
+      index[record.id] = incoming
       save(index)
       emit([record.id], source)
     },
@@ -105,9 +150,14 @@ export function createLocalIndex(opts: LocalIndexOptions): LocalIndex {
     markSynced(id, driveFileId, driveUpdatedAt, driveEtag) {
       const index = load()
       if (!index[id]) return
+      const existing = index[id]
+      // Tombstones stay tombstoned after upload — flipping syncState to
+      // 'synced' would let getPending pick the record up again on the next
+      // push and we'd loop forever uploading the same delete.
+      const nextSyncState = existing.deletedAt ? 'deleted' : 'synced'
       index[id] = {
-        ...index[id],
-        syncState: 'synced',
+        ...existing,
+        syncState: nextSyncState,
         driveFileId,
         driveUpdatedAt,
         ...(driveEtag ? { driveEtag } : {}),
@@ -152,7 +202,23 @@ export function createLocalIndex(opts: LocalIndexOptions): LocalIndex {
     softDelete(id) {
       const index = load()
       if (!index[id]) return
-      index[id] = { ...index[id], deletedAt: now() }
+      // Tombstone: bump the clock so this delete dominates any concurrent
+      // edit on another device. syncState='deleted' marks it for upload as
+      // a tombstone rather than a live record (see pull-side resurrection
+      // protection in syncEngine.pullFromDrive).
+      //
+      // Clear `driveUpdatedAt` so the next push picks the tombstone up via
+      // getPendingTombstones. markSynced will set driveUpdatedAt back when
+      // the upload completes, taking the tombstone off the pending list.
+      const prior = index[index[id].id]
+      const baseClock = ensureVClock(prior.vclock, deviceId)
+      index[id] = {
+        ...index[id],
+        deletedAt:      now(),
+        syncState:      'deleted',
+        vclock:         vIncrement(baseClock, deviceId),
+        driveUpdatedAt: undefined,
+      }
       save(index)
       emit([id], 'local')
     },
@@ -165,6 +231,44 @@ export function createLocalIndex(opts: LocalIndexOptions): LocalIndex {
     getPending() {
       const index = load()
       return Object.values(index).filter(r => r.syncState === 'pending_upload' && !r.deletedAt)
+    },
+
+    getPendingTombstones() {
+      const index = load()
+      // A tombstone is "pending" until Drive's copy reflects the delete —
+      // i.e. driveUpdatedAt is at-or-after deletedAt. New (never-pushed)
+      // tombstones have no driveUpdatedAt yet; uploaded ones do, and we
+      // compare timestamps to detect a re-delete that needs another push.
+      return Object.values(index).filter(r => {
+        if (r.syncState !== 'deleted' || !r.deletedAt) return false
+        if (!r.driveUpdatedAt) return true
+        return Date.parse(r.driveUpdatedAt) < Date.parse(r.deletedAt)
+      })
+    },
+
+    getAllTombstones() {
+      const index = load()
+      return Object.values(index).filter(r => !!r.deletedAt)
+    },
+
+    gcTombstones(olderThanMs = 30 * 24 * 60 * 60 * 1000) {
+      const index = load()
+      const cutoff = Date.now() - olderThanMs
+      const purged: string[] = []
+      for (const r of Object.values(index)) {
+        if (!r.deletedAt) continue
+        const ts = Date.parse(r.deletedAt)
+        if (Number.isNaN(ts)) continue  // unparseable — leave it alone
+        if (ts < cutoff) {
+          delete index[r.id]
+          purged.push(r.id)
+        }
+      }
+      if (purged.length > 0) {
+        save(index)
+        emit(purged, 'local')
+      }
+      return purged.length
     },
 
     getCount(type, propertyId) {
