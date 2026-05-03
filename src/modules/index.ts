@@ -25,6 +25,10 @@ import { SearchModule } from './search'
 import { AIModule } from './ai'
 import { RiskModule } from './risk'
 import { ImportModule } from './import'
+import { CapitalModule } from './capital'
+import { InsuranceModule } from './insurance'
+import { MortgageModule } from './mortgage'
+import { TaxModule } from './tax'
 
 // Phase 1 — always-on baseline.
 moduleRegistry.register(CoreModule)
@@ -36,6 +40,10 @@ moduleRegistry.register(SearchModule)
 moduleRegistry.register(AIModule)
 moduleRegistry.register(RiskModule)
 moduleRegistry.register(ImportModule)
+moduleRegistry.register(CapitalModule)
+moduleRegistry.register(InsuranceModule)
+moduleRegistry.register(MortgageModule)
+moduleRegistry.register(TaxModule)
 
 // ─── Phase 2 placeholders (22 modules) ──────────────────────────────────────
 //
@@ -46,11 +54,7 @@ moduleRegistry.register(ImportModule)
 //   moduleRegistry.register(ImportModule)         // Drive inbox / external import
 //
 // Finance:
-//   moduleRegistry.register(BudgetModule)         // capital plan + spend
-//   moduleRegistry.register(TaxModule)            // assessments + payments
-//   moduleRegistry.register(MortgageModule)       // loan + amortisation
 //   moduleRegistry.register(UtilitiesModule)      // accounts + monthly bills
-//   moduleRegistry.register(InsuranceModule)      // policies + renewals
 //
 // Property records:
 //   moduleRegistry.register(ProfileModule)        // narrative property profile
