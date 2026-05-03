@@ -72,15 +72,12 @@ describe('vault/mergeRecord — mergeRecords outcomes', () => {
   })
 
   it('concurrent: identifies the dominant remote device for the "Theirs" hint', () => {
-    const local  = rec({ vclock: { a: 1, b: 1 }, data: { x: 'mine' } })
+    // Local dominates `b` (3 > 1) but remote dominates `peer` (5 > 0) — so
+    // the clocks are concurrent and `peer` is the device that contributed
+    // the largest "ahead" gap on the remote side.
+    const local  = rec({ vclock: { a: 1, b: 3 }, data: { x: 'mine' } })
     const remote = rec({ vclock: { a: 1, b: 1, peer: 5 }, data: { x: 'theirs' } })
-    // local has b:1, remote has b:1 — equal there. peer:5 vs local's peer:0 →
-    // peer is the remote author. But b:1 is equal so… actually `dominates`
-    // here would say remote dominates. We want a true concurrent test so
-    // make local dominate b.
-    const local2  = rec({ vclock: { a: 1, b: 3 }, data: { x: 'mine' } })
-    const remote2 = rec({ vclock: { a: 1, b: 1, peer: 5 }, data: { x: 'theirs' } })
-    const out = mergeRecords(local2, remote2, TEST_DEVICE)
+    const out = mergeRecords(local, remote, TEST_DEVICE)
     assert.equal(out.kind, 'concurrent')
     if (out.kind !== 'concurrent') return
     assert.equal(out.conflictFields[0].remoteDeviceId, 'peer')
