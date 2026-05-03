@@ -19,9 +19,17 @@
 
 import { moduleRegistry } from './_registry'
 import { CoreModule } from './core'
+import { ContentsModule } from './contents'
+import { HomeBookModule } from './homebook'
+import { InventoryModule } from './inventory'
 
 // Phase 1 — always-on baseline.
 moduleRegistry.register(CoreModule)
+
+// Phase 2 — property records.
+moduleRegistry.register(ContentsModule)
+moduleRegistry.register(HomeBookModule)
+moduleRegistry.register(InventoryModule)
 
 // ─── Phase 2 placeholders (22 modules) ──────────────────────────────────────
 //
@@ -43,11 +51,9 @@ moduleRegistry.register(CoreModule)
 //
 // Property records:
 //   moduleRegistry.register(ProfileModule)        // narrative property profile
-//   moduleRegistry.register(HomeBookModule)       // long-form home book export
 //   moduleRegistry.register(MapModule)            // geolocation / climate
 //   moduleRegistry.register(RiskBriefModule)      // hazard / risk summary
-//   moduleRegistry.register(InventoryModule)      // equipment inventory
-//   moduleRegistry.register(ContentsModule)       // contents inventory (insurance)
+// (HomeBookModule, InventoryModule, ContentsModule registered above.)
 //
 // Property systems:
 //   moduleRegistry.register(VendorsModule)        // contractor directory
