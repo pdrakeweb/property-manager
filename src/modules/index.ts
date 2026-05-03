@@ -19,11 +19,17 @@
 
 import { moduleRegistry } from './_registry'
 import { CoreModule } from './core'
+import { NarrativeModule } from './narrative'
+import { ExpiryModule } from './expiry'
 
 // Phase 1 — always-on baseline.
 moduleRegistry.register(CoreModule)
 
-// ─── Phase 2 placeholders (22 modules) ──────────────────────────────────────
+// Phase 2 — opt-in modules.
+moduleRegistry.register(NarrativeModule)
+moduleRegistry.register(ExpiryModule)
+
+// ─── Phase 2 placeholders (remaining modules) ───────────────────────────────
 //
 // Capture / lifecycle / AI:
 //   moduleRegistry.register(CaptureModule)        // photo capture + AI extraction
