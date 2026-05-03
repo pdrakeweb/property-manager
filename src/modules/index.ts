@@ -22,6 +22,9 @@ import { CoreModule } from './core'
 import { MaintenanceModule } from './maintenance'
 import { CalendarModule } from './calendar'
 import { SearchModule } from './search'
+import { AIModule } from './ai'
+import { RiskModule } from './risk'
+import { ImportModule } from './import'
 
 // Phase 1 — always-on baseline.
 moduleRegistry.register(CoreModule)
@@ -30,6 +33,9 @@ moduleRegistry.register(CoreModule)
 moduleRegistry.register(MaintenanceModule)
 moduleRegistry.register(CalendarModule)
 moduleRegistry.register(SearchModule)
+moduleRegistry.register(AIModule)
+moduleRegistry.register(RiskModule)
+moduleRegistry.register(ImportModule)
 
 // ─── Phase 2 placeholders (22 modules) ──────────────────────────────────────
 //
