@@ -18,8 +18,9 @@ const UPLOAD_API  = 'https://www.googleapis.com/upload/drive/v3'
  */
 const DEV_TOKEN = 'dev_token'
 
-export const PM_FOLDER_NAME = 'Property Manager'
-export const KB_FOLDER_NAME = 'Knowledgebase'
+export const PM_FOLDER_NAME    = 'Property Manager'
+export const KB_FOLDER_NAME    = 'Knowledgebase'
+export const INBOX_FOLDER_NAME = 'inbox'
 
 /**
  * Legacy category-ID → Drive folder map.
@@ -57,6 +58,12 @@ export interface DriveFile {
   id:           string
   name:         string
   webViewLink?: string
+}
+
+export interface InboxFile {
+  id:           string
+  name:         string
+  modifiedTime: string  // ISO 8601
 }
 
 export interface DriveFileWithContent {
@@ -390,6 +397,87 @@ export const DriveClient = {
     const file = await resp.json() as DriveFile
     const etag = resp.headers.get('ETag') ?? resp.headers.get('etag') ?? ''
     return { ...file, etag }
+  },
+
+  /**
+   * Find or create the per-property `inbox/` folder under the property's
+   * Drive root. This is where Claude (or the user) drops markdown
+   * conversation summaries for the PWA's inbox poller to pick up.
+   */
+  async ensureInboxFolder(token: string, rootFolderId: string): Promise<string> {
+    if (token === DEV_TOKEN) return localDriveAdapter.ensureInboxFolder(token, rootFolderId)
+    return findOrCreateFolder(token, INBOX_FOLDER_NAME, rootFolderId)
+  },
+
+  /**
+   * List inbox files modified after `sinceISO` (or all files if `sinceISO`
+   * is empty). Only `.md` and `.txt` files are returned; folders and other
+   * mime types are filtered out so the poller never tries to parse a binary.
+   * Includes `modifiedTime` so callers can advance their last-polled cursor.
+   */
+  async listInboxFiles(token: string, rootFolderId: string, sinceISO?: string): Promise<InboxFile[]> {
+    if (token === DEV_TOKEN) return localDriveAdapter.listInboxFiles(token, rootFolderId, sinceISO)
+    const folderId = await DriveClient.ensureInboxFolder(token, rootFolderId)
+    const clauses: string[] = [
+      `'${folderId}' in parents`,
+      `trashed=false`,
+      `(mimeType='text/markdown' or mimeType='text/plain' or name contains '.md' or name contains '.txt')`,
+    ]
+    if (sinceISO) clauses.push(`modifiedTime > '${sinceISO}'`)
+    const url = new URL(`${DRIVE_API}/files`)
+    url.searchParams.set('q',        clauses.join(' and '))
+    url.searchParams.set('fields',   'files(id,name,modifiedTime,mimeType)')
+    url.searchParams.set('orderBy',  'modifiedTime')
+    url.searchParams.set('pageSize', '100')
+
+    const resp = await fetch(url.toString(), { headers: authHeaders(token) })
+    if (!resp.ok) throw new Error(`Drive listInboxFiles failed: ${resp.status}`)
+
+    const { files } = await resp.json() as {
+      files: Array<{ id: string; name: string; modifiedTime: string; mimeType: string }>
+    }
+    return (files ?? [])
+      // Backstop for the loose `name contains` clause above — Drive's
+      // contains is a substring match, not extension match, so guard here.
+      .filter(f => /\.(md|txt|markdown)$/i.test(f.name))
+      .map(f => ({ id: f.id, name: f.name, modifiedTime: f.modifiedTime }))
+  },
+
+  /** Download an inbox file's plain-text content. Thin wrapper over downloadFile. */
+  async downloadInboxFile(token: string, fileId: string): Promise<string> {
+    if (token === DEV_TOKEN) return localDriveAdapter.downloadInboxFile(token, fileId)
+    const { content } = await DriveClient.downloadFile(token, fileId)
+    return content
+  },
+
+  /**
+   * Watch an inbox folder: list every `.md`/`.txt` file modified after
+   * `sinceISO` and download its content. Returns a `{ file, content }`
+   * pair per new file so the caller can parse + queue without making a
+   * second round of requests. Pure Drive I/O — parsing and queue
+   * persistence live in the inbox-poller orchestrator.
+   *
+   * Errors on individual downloads are swallowed and that file is omitted
+   * (rather than failing the whole batch); the caller still advances the
+   * cursor past those files so they don't loop forever, but the audit
+   * log entry written by the orchestrator captures the failure.
+   */
+  async watchInbox(
+    token:        string,
+    rootFolderId: string,
+    sinceISO?:    string,
+  ): Promise<Array<{ file: InboxFile; content: string }>> {
+    const files = await DriveClient.listInboxFiles(token, rootFolderId, sinceISO)
+    const out: Array<{ file: InboxFile; content: string }> = []
+    for (const file of files) {
+      try {
+        const content = await DriveClient.downloadInboxFile(token, file.id)
+        out.push({ file, content })
+      } catch {
+        // Skip — caller logs and still advances past this file via modifiedTime.
+      }
+    }
+    return out
   },
 
   /**

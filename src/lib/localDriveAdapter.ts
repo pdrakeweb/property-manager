@@ -8,19 +8,20 @@
  * so we can simulate 412 Precondition Failed when If-Match doesn't match.
  */
 
-import type { DriveFile, DriveFileWithContent, DriveChangesPage } from './driveClient'
-import { CATEGORY_FOLDER_NAMES, ETagConflictError } from './driveClient'
+import type { DriveFile, DriveFileWithContent, DriveChangesPage, InboxFile } from './driveClient'
+import { CATEGORY_FOLDER_NAMES, ETagConflictError, INBOX_FOLDER_NAME } from './driveClient'
 
 const STORE_KEY = 'pm_dev_drive_v1'
 
 interface DevEntry {
-  id:        string
-  name:      string
-  parentId:  string
-  isFolder:  boolean
-  content?:  string
-  mimeType?: string
-  etag?:     string    // "v1", "v2", … — bumped on each write
+  id:            string
+  name:          string
+  parentId:      string
+  isFolder:      boolean
+  content?:      string
+  mimeType?:     string
+  etag?:         string  // "v1", "v2", … — bumped on each write
+  modifiedTime?: string  // ISO 8601 — set on every write
 }
 
 function load(): Record<string, DevEntry> {
@@ -90,6 +91,98 @@ export const localDriveAdapter = {
     return findOrCreateFolder(folderName, rootFolderId)
   },
 
+  /**
+   * Mirrors DriveClient.ensureInboxFolder. Drops a sample `.md` into any
+   * brand-new dev inbox so the full pull → parse → review flow is
+   * exercisable without a real Drive account. The seed only fires once
+   * per dev inbox folder (idempotent on repeat calls).
+   */
+  async ensureInboxFolder(_token: string, rootFolderId: string): Promise<string> {
+    const root = load()
+    if (!root[rootFolderId]) {
+      root[rootFolderId] = { id: rootFolderId, name: 'root', parentId: '', isFolder: true }
+      save(root)
+    }
+    const folderId = findOrCreateFolder(INBOX_FOLDER_NAME, rootFolderId)
+
+    // Seed: only on the very first creation, when the folder is still empty.
+    const store = load()
+    const hasAnyFile = Object.values(store).some(e => !e.isFolder && e.parentId === folderId)
+    if (!hasAnyFile) {
+      const id = devId()
+      store[id] = {
+        id,
+        name:         'sample-conversation.md',
+        parentId:     folderId,
+        isFolder:     false,
+        mimeType:     'text/markdown',
+        etag:         'v1',
+        modifiedTime: new Date().toISOString(),
+        content: [
+          '---',
+          'property_id: sample',
+          'date: 2026-05-03',
+          '---',
+          '',
+          '## Summary',
+          '',
+          'Walked the property after the spring thaw and noted a few items.',
+          '',
+          '## Outcomes',
+          '',
+          '```task',
+          'title: Reseal driveway cracks before summer',
+          'category: service_record',
+          'due: 2026-06-01',
+          'estimated_cost: 250',
+          'priority: medium',
+          'recurrence: annually',
+          'confidence: high',
+          'raw_text: "Cracks visible at apron — should be sealed before frost-heave damage spreads."',
+          '```',
+          '',
+          '```purchase',
+          'title: Replacement HVAC filter — 20x25x4 MERV 11',
+          'category: hvac',
+          'estimated_cost: 24',
+          'vendor: Filtrete',
+          'confidence: high',
+          '```',
+          '',
+          '```note',
+          'title: Inbox poller smoke test',
+          'body: This sample file is dropped automatically by the dev mock so the inbox flow is testable without a real Google Drive. Approve the items above and the entries will land in the local index.',
+          'confidence: high',
+          '```',
+          '',
+        ].join('\n'),
+      }
+      save(store)
+    }
+
+    return folderId
+  },
+
+  /** Mirrors DriveClient.listInboxFiles — filters by extension + modifiedTime. */
+  async listInboxFiles(_token: string, rootFolderId: string, sinceISO?: string): Promise<InboxFile[]> {
+    const folderId = await this.ensureInboxFolder(_token, rootFolderId)
+    const store = load()
+    return Object.values(store)
+      .filter(e => !e.isFolder && e.parentId === folderId)
+      .filter(e => /\.(md|txt|markdown)$/i.test(e.name))
+      .filter(e => !sinceISO || (e.modifiedTime ?? '') > sinceISO)
+      .map(e => ({ id: e.id, name: e.name, modifiedTime: e.modifiedTime ?? new Date().toISOString() }))
+      .sort((a, b) => a.modifiedTime.localeCompare(b.modifiedTime))
+  },
+
+  /** Mirrors DriveClient.downloadInboxFile — returns plain text content. */
+  async downloadInboxFile(_token: string, fileId: string): Promise<string> {
+    const store = load()
+    const entry = store[fileId]
+    if (!entry || entry.isFolder) throw new Error(`Dev adapter: file ${fileId} not found`)
+    return entry.content ?? ''
+  },
+
   /** Mirrors DriveClient.searchFiles — supports name='...' queries */
   async searchFiles(_token: string, query: string): Promise<DriveFile[]> {
     const nameMatch = query.match(/name='([^']+)'/)
@@ -133,8 +226,9 @@ export const localDriveAdapter = {
     const store = load()
     const entry = store[fileId]
     if (!entry || entry.isFolder) throw new Error(`Dev adapter: file ${fileId} not found`)
-    entry.content = content
-    entry.etag    = nextEtag(entry.etag)
+    entry.content      = content
+    entry.etag         = nextEtag(entry.etag)
+    entry.modifiedTime = new Date().toISOString()
     save(store)
   },
 
@@ -196,16 +290,20 @@ export const localDriveAdapter = {
 
     if (existing) {
       const newEtag = nextEtag(existing.etag)
-      existing.content  = text
-      existing.mimeType = mimeType
-      existing.etag     = newEtag
+      existing.content      = text
+      existing.mimeType     = mimeType
+      existing.etag         = newEtag
+      existing.modifiedTime = new Date().toISOString()
       save(store)
       return { id: existing.id, name: existing.name, etag: newEtag }
     }
 
     const id    = devId()
     const etag  = 'v1'
-    store[id] = { id, name: filename, parentId: folderId, isFolder: false, content: text, mimeType, etag }
+    store[id] = {
+      id, name: filename, parentId: folderId, isFolder: false,
+      content: text, mimeType, etag, modifiedTime: new Date().toISOString(),
+    }
     save(store)
     return { id, name: filename, etag }
   },
