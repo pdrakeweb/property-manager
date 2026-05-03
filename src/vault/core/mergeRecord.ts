@@ -76,3 +76,60 @@ function diffData(
   }
   return fields
 }
+
+// ─── Field-level conflict resolution ─────────────────────────────────────────
+
+/**
+ * Resolve one field of a conflicting record: keep local ("mine") or adopt
+ * the remote value ("theirs"). The resolved field is removed from the
+ * record's `conflictFields` array. Returns the new record; the caller
+ * decides whether to flip syncState back to `'pending_upload'` (which
+ * happens automatically here once `conflictFields` becomes empty).
+ *
+ * Pure: does not touch any store. UI calls this then `localIndex.upsert`.
+ */
+export function resolveConflictField(
+  record: IndexRecord,
+  fieldPath: string,
+  side: 'mine' | 'theirs',
+): IndexRecord {
+  const fields = record.conflictFields ?? []
+  const target = fields.find(f => f.path === fieldPath)
+  if (!target) return record  // already resolved or never conflicted
+
+  const data = { ...(record.data as Record<string, unknown>) }
+  if (side === 'theirs') {
+    if (target.remote === undefined) {
+      delete data[fieldPath]
+    } else {
+      data[fieldPath] = target.remote
+    }
+  }
+  // 'mine' keeps the existing local value — no data change required.
+
+  const remaining = fields.filter(f => f.path !== fieldPath)
+
+  return {
+    ...record,
+    data,
+    conflictFields: remaining.length > 0 ? remaining : undefined,
+    // Once every field is resolved, the record needs to push back to Drive
+    // so the merged content (and any "keep theirs" choices we just made)
+    // becomes visible to other devices.
+    syncState:      remaining.length > 0 ? 'conflict' : 'pending_upload',
+    conflictReason: remaining.length > 0 ? record.conflictReason : undefined,
+  }
+}
+
+/** Resolve every remaining conflict field in one shot. Used by the
+ *  "Keep all mine" / "Keep all theirs" bulk actions. */
+export function resolveAllConflictFields(
+  record: IndexRecord,
+  side: 'mine' | 'theirs',
+): IndexRecord {
+  let r = record
+  for (const f of record.conflictFields ?? []) {
+    r = resolveConflictField(r, f.path, side)
+  }
+  return r
+}

@@ -99,6 +99,8 @@ export type {
   VaultRegistry,
 }
 export { ETagConflictError } from './core/types'
+export type { ConflictField } from './core/types'
+export { resolveConflictField, resolveAllConflictFields } from './core/mergeRecord'
 export { createMemoryAdapter } from './adapters/memoryAdapter'
 export { createGoogleDriveAdapter } from './adapters/googleDriveAdapter'
 // Node-only adapter is NOT re-exported here — importing it from the
