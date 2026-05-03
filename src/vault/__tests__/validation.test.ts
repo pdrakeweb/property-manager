@@ -74,7 +74,10 @@ describe('vault/syncEngine — validation on pull', () => {
     await seedRemoteVendor(ctx, { id: 'v9' /* no name */ })
     const result = await pullFromDrive(ctx, 'prop-1')
 
-    assert.equal(result.pulled, 1)
+    // Validation failures count as conflicts, not as successful pulls — the
+    // user must resolve before the record participates in normal sync.
+    assert.equal(result.pulled, 0)
+    assert.equal(result.conflicts, 1)
     assert.equal(result.failed, 0)
 
     const r = ctx.localIndex.getById('v9')!

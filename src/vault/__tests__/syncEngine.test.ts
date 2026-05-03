@@ -149,9 +149,9 @@ describe('vault/syncEngine — pull', () => {
     assert.equal(ctx.localIndex.getAllForProperty('prop-1').length, 0)
   })
 
-  it('returns 0/0 when property has no root folder', async () => {
+  it('returns 0/0/0 when property has no root folder', async () => {
     const result = await pullFromDrive(ctx, 'prop-empty')
-    assert.deepEqual(result, { pulled: 0, failed: 0 })
+    assert.deepEqual(result, { pulled: 0, failed: 0, conflicts: 0 })
   })
 
   it('scans legacy folder names too', async () => {
@@ -166,81 +166,220 @@ describe('vault/syncEngine — pull', () => {
   })
 })
 
-describe('vault/syncEngine — conflict resolution', () => {
+describe('vault/syncEngine — vclock conflict resolution', () => {
   let ctx: Ctx & { auditEntries: ReturnType<typeof recordingAudit>['entries'] }
   beforeEach(() => { ctx = makeCtx() })
 
-  async function uploadRemote(data: Record<string, unknown>): Promise<{ id: string; etag: string }> {
+  async function uploadRemote(data: Record<string, unknown>, vclock: Record<string, number>): Promise<{ id: string; etag: string }> {
     const folderId = await ctx.storage.resolveFolderId('Vendors', 'root-1')
     return ctx.storage.uploadFile(folderId, 'vendor_v1.json', JSON.stringify({
       id: 'v1', type: 'vendor', propertyId: 'prop-1',
       title: 'Ohio HVAC', data, syncState: 'synced',
       localUpdatedAt: '2026-04-19T00:00:00.000Z',
+      vclock,
     }), 'application/json')
   }
 
-  it('auto-merges when local and remote mutate disjoint fields', async () => {
-    // 1. Upload v1 remotely
-    const { id, etag } = await uploadRemote({ id: 'v1', name: 'Ohio HVAC', phone: '555-1234' })
-    // 2. Local believes ETag is the v1 etag, but another client bumps it
-    ctx.localIndex.upsert(makeVendorRecord({
-      data: { id: 'v1', name: 'Ohio HVAC', phone: '555-1234', filename: 'vendor_v1.json',
-              rootFolderId: 'root-1', categoryId: 'vendor', notes: 'prefers morning' },
-      driveFileId: id, driveEtag: etag,
-    }))
-    // 3. Remote writes a disjoint field (rating), bumping etag to v2
-    await ctx.storage.updateFile(id, JSON.stringify({
-      id: 'v1', type: 'vendor', propertyId: 'prop-1',
-      title: 'Ohio HVAC',
-      data: { id: 'v1', name: 'Ohio HVAC', phone: '555-1234', rating: 5 },
-      syncState: 'synced', localUpdatedAt: '2026-04-19T01:00:00.000Z',
-    }), 'application/json')
-
-    // 4. Local push — should hit 412, then auto-merge (no overlap: local adds notes, remote added rating)
-    const result = await pushPending(ctx)
-    assert.equal(result.uploaded, 0)  // the initial upload failed
-    const mergedInfo = ctx.auditEntries.find(e => e.action === 'sync.conflict')
-    assert.ok(mergedInfo, 'auto-merge audit entry expected')
-    assert.equal(mergedInfo?.level, 'info')
-
-    // Record is now synced with merged data
-    const r = ctx.localIndex.getById('v1')!
-    assert.equal(r.syncState, 'synced')
-    const merged = await ctx.storage.downloadFile(id)
-    const parsed = JSON.parse(merged.content) as { data: Record<string, unknown> }
-    assert.equal(parsed.data.notes, 'prefers morning')
-    assert.equal(parsed.data.rating, 5)
-  })
-
-  it('splits into v2 copy when same field mutated on both sides', async () => {
-    const { id, etag } = await uploadRemote({ id: 'v1', name: 'Ohio HVAC', phone: '555-1234' })
+  it('push: ETag conflict + concurrent vclocks → conflict state with field-level diff', async () => {
+    // Remote has its own write history (device-other bumped twice).
+    const { id, etag } = await uploadRemote(
+      { id: 'v1', name: 'Ohio HVAC', phone: '555-1234' },
+      { 'device-other': 2 },
+    )
+    // Local also edited concurrently — TEST_DEVICE bumped once on top of the
+    // pre-merge baseline, so its vclock is { TEST_DEVICE: 1 }. The clocks are
+    // concurrent (neither dominates).
     ctx.localIndex.upsert(makeVendorRecord({
       data: { id: 'v1', name: 'Ohio HVAC', phone: '555-9999', filename: 'vendor_v1.json',
               rootFolderId: 'root-1', categoryId: 'vendor' },
       driveFileId: id, driveEtag: etag,
     }))
-    // Remote changes phone too — same field, different value
+    // Remote moved past our last-known etag.
     await ctx.storage.updateFile(id, JSON.stringify({
       id: 'v1', type: 'vendor', propertyId: 'prop-1',
-      title: 'Ohio HVAC', data: { id: 'v1', name: 'Ohio HVAC', phone: '555-7777' },
+      title: 'Ohio HVAC',
+      data: { id: 'v1', name: 'Ohio HVAC', phone: '555-7777' },
       syncState: 'synced', localUpdatedAt: '2026-04-19T01:00:00.000Z',
+      vclock: { 'device-other': 3 },
     }), 'application/json')
 
     await pushPending(ctx)
 
-    // Original is flagged as conflict and linked to v2
-    const original = ctx.localIndex.getById('v1')!
-    assert.equal(original.syncState, 'conflict')
-    assert.ok(original.conflictWithId?.startsWith('conflict_v2_v1_'))
-    assert.equal(ctx.localIndex.getConflicts().length, 1)
+    // Vclock-aware merge: this is concurrent (neither dominates). Record is
+    // flagged conflict with field-level diff for the resolver UI.
+    const r = ctx.localIndex.getById('v1')!
+    assert.equal(r.syncState, 'conflict')
+    assert.ok(r.conflictFields, 'conflictFields populated')
+    const phoneConflict = r.conflictFields!.find(f => f.path === 'phone')
+    assert.ok(phoneConflict, 'phone field appears in the conflict diff')
+    assert.equal(phoneConflict!.local,  '555-9999')
+    assert.equal(phoneConflict!.remote, '555-7777')
 
-    // v2 is stored in the adapter too
+    // Vclock merged so future writes advance from the OR of both lineages.
+    assert.equal(r.vclock?.['device-other'], 3)
+    assert.ok((r.vclock?.['device-test'] ?? 0) >= 1)
+
+    // No legacy "_v2_<ts>.json" sibling file — the conflict lives in-place.
     const folderId = await ctx.storage.resolveFolderId('Vendors', 'root-1')
-    const files = await ctx.storage.listFiles(folderId)
-    assert.ok(files.some(f => /_v2_\d+\.json$/.test(f.name)))
+    const files    = await ctx.storage.listFiles(folderId)
+    assert.equal(files.filter(f => /_v2_\d+\.json$/.test(f.name)).length, 0)
 
     const warn = ctx.auditEntries.find(e => e.level === 'warn' && e.action === 'sync.conflict')
     assert.ok(warn, 'conflict warn audit entry expected')
+  })
+
+  it('push: ETag conflict + local dominates → re-upload wins, no conflict surfaced', async () => {
+    // Local already pulled the remote write once, then made an edit on top of
+    // it — its vclock dominates the remote's. The 412 we hit is just a stale
+    // etag race; the merge should re-upload and succeed.
+    const { id, etag } = await uploadRemote(
+      { id: 'v1', name: 'Ohio HVAC', phone: '555-1234' },
+      { 'device-other': 1 },
+    )
+    // Local has the old vclock + 1 from this device — so local dominates.
+    ctx.localIndex.upsert(makeVendorRecord({
+      data: { id: 'v1', name: 'Ohio HVAC', phone: '555-9999', filename: 'vendor_v1.json',
+              rootFolderId: 'root-1', categoryId: 'vendor' },
+      driveFileId: id, driveEtag: etag,
+      vclock: { 'device-other': 1, 'device-test': 1 },
+    }))
+    // Force etag drift without changing causal history (simulates a rename or
+    // metadata bump on Drive's side).
+    await ctx.storage.updateFile(id, JSON.stringify({
+      id: 'v1', type: 'vendor', propertyId: 'prop-1',
+      title: 'Ohio HVAC',
+      data: { id: 'v1', name: 'Ohio HVAC', phone: '555-1234' },
+      syncState: 'synced', localUpdatedAt: '2026-04-19T01:00:00.000Z',
+      vclock: { 'device-other': 1 },
+    }), 'application/json')
+
+    await pushPending(ctx)
+    const r = ctx.localIndex.getById('v1')!
+    assert.equal(r.syncState, 'synced', 'local-wins re-upload should leave synced state')
+    const remote = await ctx.storage.downloadFile(id)
+    const parsed = JSON.parse(remote.content) as { data: Record<string, unknown> }
+    assert.equal(parsed.data.phone, '555-9999', 'local edit prevailed on Drive')
+  })
+})
+
+describe('vault/syncEngine — pullFromDrive vclock semantics', () => {
+  let ctx: Ctx & { auditEntries: ReturnType<typeof recordingAudit>['entries'] }
+  beforeEach(() => { ctx = makeCtx() })
+
+  it('first-time pull: drive wins, vclock seeded from remote', async () => {
+    const folderId = await ctx.storage.resolveFolderId('Vendors', 'root-1')
+    await ctx.storage.uploadFile(folderId, 'vendor_v9.json', JSON.stringify({
+      id: 'v9', type: 'vendor', propertyId: 'prop-1',
+      title: 'Imported', data: { id: 'v9', name: 'Imported', phone: '111' },
+      syncState: 'synced', localUpdatedAt: '2026-04-19T00:00:00Z',
+      vclock: { 'device-other': 4 },
+    }), 'application/json')
+
+    const r = await pullFromDrive(ctx, 'prop-1')
+    assert.equal(r.pulled, 1)
+    assert.equal(r.conflicts, 0)
+    const stored = ctx.localIndex.getById('v9')!
+    assert.equal((stored.data as { phone: string }).phone, '111')
+    assert.equal(stored.vclock?.['device-other'], 4)
+  })
+
+  it('drive dominates local → local replaced, vclock merged', async () => {
+    const folderId = await ctx.storage.resolveFolderId('Vendors', 'root-1')
+    const { id } = await ctx.storage.uploadFile(folderId, 'vendor_v1.json', JSON.stringify({
+      id: 'v1', type: 'vendor', propertyId: 'prop-1',
+      title: 'Ohio HVAC', data: { id: 'v1', name: 'Ohio HVAC', phone: '555-NEW' },
+      syncState: 'synced', localUpdatedAt: '2026-04-19T00:00:00Z',
+      vclock: { 'device-other': 5, 'device-test': 1 },
+    }), 'application/json')
+    // Local has the older vclock — drive strictly dominates.
+    ctx.localIndex.upsert(makeVendorRecord({
+      data: { id: 'v1', name: 'Ohio HVAC', phone: '555-old' },
+      driveFileId: id, driveEtag: 'old',
+      vclock: { 'device-other': 4, 'device-test': 1 },
+    }), 'remote')
+
+    const r = await pullFromDrive(ctx, 'prop-1')
+    assert.equal(r.pulled, 1)
+    assert.equal(r.conflicts, 0)
+    const stored = ctx.localIndex.getById('v1')!
+    assert.equal((stored.data as { phone: string }).phone, '555-NEW')
+    assert.equal(stored.syncState, 'synced')
+    assert.equal(stored.vclock?.['device-other'], 5)
+  })
+
+  it('local dominates drive → local kept, queued for upload', async () => {
+    const folderId = await ctx.storage.resolveFolderId('Vendors', 'root-1')
+    const { id } = await ctx.storage.uploadFile(folderId, 'vendor_v1.json', JSON.stringify({
+      id: 'v1', type: 'vendor', propertyId: 'prop-1',
+      title: 'Ohio HVAC', data: { id: 'v1', name: 'Ohio HVAC', phone: '555-stale' },
+      syncState: 'synced', localUpdatedAt: '2026-04-19T00:00:00Z',
+      vclock: { 'device-other': 1 },
+    }), 'application/json')
+    // Local strictly dominates: knows about device-other:1 and has its own write.
+    ctx.localIndex.upsert(makeVendorRecord({
+      data: { id: 'v1', name: 'Ohio HVAC', phone: '555-fresh' },
+      driveFileId: id, driveEtag: 'old-etag',
+      vclock: { 'device-other': 1, 'device-test': 2 },
+    }), 'remote')
+
+    const r = await pullFromDrive(ctx, 'prop-1')
+    assert.equal(r.pulled, 0, 'local-wins does not increment pulled count')
+    assert.equal(r.conflicts, 0)
+    const stored = ctx.localIndex.getById('v1')!
+    assert.equal((stored.data as { phone: string }).phone, '555-fresh', 'local content preserved')
+    assert.equal(stored.syncState, 'pending_upload', 'queued for re-push so drive catches up')
+  })
+
+  it('concurrent edit on the same field → conflict state + conflictFields', async () => {
+    const folderId = await ctx.storage.resolveFolderId('Vendors', 'root-1')
+    const { id } = await ctx.storage.uploadFile(folderId, 'vendor_v1.json', JSON.stringify({
+      id: 'v1', type: 'vendor', propertyId: 'prop-1',
+      title: 'Ohio HVAC',
+      data: { id: 'v1', name: 'Ohio HVAC', phone: '555-remote', notes: 'remote-notes' },
+      syncState: 'synced', localUpdatedAt: '2026-04-19T00:00:00Z',
+      vclock: { 'device-other': 3 },
+    }), 'application/json')
+    // Local edited the same record concurrently — vclocks neither dominate.
+    ctx.localIndex.upsert(makeVendorRecord({
+      data: { id: 'v1', name: 'Ohio HVAC', phone: '555-local', notes: 'local-notes' },
+      driveFileId: id, driveEtag: 'old',
+      vclock: { 'device-test': 2 },
+    }), 'remote')
+
+    const r = await pullFromDrive(ctx, 'prop-1')
+    assert.equal(r.pulled, 0)
+    assert.equal(r.conflicts, 1)
+    const stored = ctx.localIndex.getById('v1')!
+    assert.equal(stored.syncState, 'conflict')
+    assert.ok(stored.conflictFields, 'conflictFields populated')
+    assert.equal(stored.conflictFields!.length, 2, 'phone + notes conflict')
+    const phoneConflict = stored.conflictFields!.find(f => f.path === 'phone')
+    assert.equal(phoneConflict!.local,  '555-local')
+    assert.equal(phoneConflict!.remote, '555-remote')
+    // Local data preserved (so the user doesn't lose in-flight typing).
+    assert.equal((stored.data as { phone: string }).phone, '555-local')
+    // Vclock is the OR — both lineages are now visible.
+    assert.equal(stored.vclock?.['device-other'], 3)
+    assert.equal(stored.vclock?.['device-test'],  2)
+  })
+
+  it('etag short-circuit: identical etag → no re-download', async () => {
+    const folderId = await ctx.storage.resolveFolderId('Vendors', 'root-1')
+    const upload = await ctx.storage.uploadFile(folderId, 'vendor_v1.json', JSON.stringify({
+      id: 'v1', type: 'vendor', propertyId: 'prop-1',
+      title: 'Ohio HVAC', data: { id: 'v1', name: 'Ohio HVAC' },
+      syncState: 'synced', localUpdatedAt: '2026-04-19T00:00:00Z',
+      vclock: { 'device-other': 1 },
+    }), 'application/json')
+    ctx.localIndex.upsert(makeVendorRecord({
+      data: { id: 'v1', name: 'Ohio HVAC' },
+      driveFileId: upload.id, driveEtag: upload.etag,
+      vclock: { 'device-other': 1 },
+    }), 'remote')
+
+    const r = await pullFromDrive(ctx, 'prop-1')
+    assert.equal(r.pulled, 0)
+    assert.equal(r.conflicts, 0)
   })
 })
 

@@ -45,7 +45,7 @@ export interface CreateRecordVaultOptions {
 export interface RecordVault {
   localIndex: LocalIndex
   pushPending(): Promise<{ uploaded: number; failed: number; errors: string[] }>
-  pullFromDrive(propertyId: string): Promise<{ pulled: number; failed: number }>
+  pullFromDrive(propertyId: string): Promise<{ pulled: number; failed: number; conflicts: number }>
   syncAll(propertyId: string): Promise<SyncResult>
   exportMarkdown(
     propertyId: string,

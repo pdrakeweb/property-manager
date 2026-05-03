@@ -79,6 +79,9 @@ export interface SyncResult {
   uploadErrors: string[]
   pulled: number
   pullFailed: number
+  /** Records that came down in `'conflict'` state during the pull — either
+   *  a concurrent vclock edit or a schema-validation failure. */
+  pullConflicts: number
 }
 
 // ─── Storage adapter (remote backend) ────────────────────────────────────────
