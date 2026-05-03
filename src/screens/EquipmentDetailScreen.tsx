@@ -4,11 +4,12 @@ import { ChevronLeft, Link2, Link2Off, Loader2, Wifi, WifiOff, RefreshCw, CloudD
 import { cn } from '../utils/cn'
 import { CATEGORIES } from '../data/mockData'
 import { localIndex } from '../lib/localIndex'
-import { fetchEntityState } from '../lib/haClient'
+import { fetchEntityState, getEntityHistory, type HAHistoryPoint } from '../lib/haClient'
 import { HAEntityBrowser } from '../components/HAEntityBrowser'
 import { useRecordSync } from '../hooks/useRecordSync'
 import { getInspectionsForEquipment, sortByDateDesc } from '../lib/inspectionStore'
 import { ConditionBadge } from '../components/inspection/ConditionBadge'
+import { Sparkline } from '../components/Sparkline'
 import { getThreshold, setThreshold, clearThreshold, checkThreshold } from '../lib/haThresholds'
 import { refreshAlerts } from '../lib/haAlerts'
 import type { HAEntityState } from '../types'
@@ -60,6 +61,15 @@ export function EquipmentDetailScreen() {
   }, [haEntityId])
 
   const pastInspections = useMemo(() => sortByDateDesc(getInspectionsForEquipment(id)), [id])
+
+  // 24h history for the sparkline. Re-fetched whenever the linked entity
+  // changes; null while loading, [] when empty / HA unreachable.
+  const [history, setHistory] = useState<HAHistoryPoint[] | null>(null)
+  useEffect(() => {
+    if (!haEntityId) { setHistory(null); return }
+    setHistory(null)
+    getEntityHistory(haEntityId, 24).then(pts => setHistory(pts))
+  }, [haEntityId])
 
   const numericValue   = entityState && Number.isFinite(Number(entityState.state))
   const stateUnitForUi = entityState?.attributes.unit_of_measurement as string | undefined
@@ -289,6 +299,16 @@ export function EquipmentDetailScreen() {
                   Unlink
                 </button>
               </div>
+
+              {/* 24h sparkline — only shown for numeric entities with data */}
+              {history && history.length > 1 && Number.isFinite(Number(history[0]?.state)) && (
+                <div className="flex items-center justify-between gap-3 bg-slate-50 dark:bg-slate-700/30 rounded-xl px-3 py-2">
+                  <span className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">
+                    Last 24h
+                  </span>
+                  <Sparkline points={history} />
+                </div>
+              )}
 
               {entityState && (
                 <div className="text-xs text-slate-400 dark:text-slate-500">
