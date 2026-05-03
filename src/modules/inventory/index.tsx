@@ -48,7 +48,7 @@ export const InventoryModule: ModuleDefinition = {
   routes: [
     { path: '/inventory',              element: <InventoryScreen />        },
     { path: '/equipment/:id',          element: <EquipmentDetailScreen />  },
-    { path: '/capture/:id',            element: <EquipmentFormScreen />    },
+    { path: '/capture/:categoryId',    element: <EquipmentFormScreen />    },
     { path: '/equipment/:id/inspect',  element: <InspectionScreen />       },
   ],
 

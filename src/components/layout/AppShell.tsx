@@ -1,12 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import {
-  LayoutDashboard, Camera, Wrench, BarChart3,
-  MessageSquare, ClipboardList, Settings, ChevronDown, ChevronRight,
-  Building2, TreePine, Users, Droplets, Receipt, Home, Zap, CalendarDays,
-  RefreshCw, Shield, FileCheck, CheckSquare, Activity, MapPin, Map,
-  Search, ShieldAlert, FileText,
-  Sun, Moon, Monitor, DollarSign, HardHat, BookOpen, Library, AlertTriangle, X, Package,
+  Camera, Settings, ChevronDown, ChevronRight,
+  Building2, TreePine,
+  RefreshCw, AlertTriangle, X,
+  Sun, Moon, Monitor, DollarSign, HardHat, BookOpen,
 } from 'lucide-react'
 import { cn } from '../../utils/cn'
 import { useAppStore } from '../../store/AppStoreContext'
@@ -25,61 +23,127 @@ import {
 } from '../../lib/offlineQueue'
 import type { QueuedUpload } from '../../lib/offlineQueue'
 import { getTotalInboxQueueCount, INBOX_QUEUE_CHANGED_EVENT } from '../../lib/inboxPoller'
+import { moduleRegistry, useActiveModuleIds, type NavGroup, type NavItem as ModuleNavItem } from '../../modules/_registry'
 
-type NavItem = { to: string; icon: React.ComponentType<{ className?: string }>; label: string; mobileShow: boolean }
-type NavSection = { label: string; icon: React.ComponentType<{ className?: string }>; items: NavItem[] }
+/**
+ * AppShell nav row. Module-driven entries plug their own NavItem (label,
+ * path, icon, optional badge hook); the static "Capture" tile is the one
+ * non-module top entry — its screen is the modal-style capture-source
+ * picker that lives outside the module surface.
+ */
+type ShellNavItem = {
+  to: string
+  icon: React.ComponentType<{ className?: string }>
+  label: string
+  /** Optional badge hook contributed by the owning module. */
+  useBadge?: () => number | undefined
+}
+type ShellNavSection = { label: string; icon: React.ComponentType<{ className?: string }>; items: ShellNavItem[] }
 
-const TOP_NAV: NavItem[] = [
-  { to: '/',           icon: LayoutDashboard, label: 'Dashboard',   mobileShow: true  },
-  { to: '/capture',    icon: Camera,          label: 'Capture',     mobileShow: true  },
-  { to: '/maintenance',icon: Wrench,          label: 'Maintenance', mobileShow: true  },
-  { to: '/calendar',   icon: CalendarDays,    label: 'Calendar',    mobileShow: true  },
-  { to: '/checklists', icon: CheckSquare,     label: 'Checklists',  mobileShow: true  },
-  { to: '/advisor',    icon: MessageSquare,   label: 'Ask AI',      mobileShow: true  },
-  { to: '/search',     icon: Search,          label: 'Search',      mobileShow: false },
-  { to: '/import',     icon: FileText,        label: 'Import',      mobileShow: false },
+/** Hardcoded top-rail items not owned by any module (Capture-source picker). */
+const STATIC_TOP_NAV: ShellNavItem[] = [
+  { to: '/capture', icon: Camera, label: 'Capture' },
 ]
 
-const NAV_SECTIONS: NavSection[] = [
-  {
-    label: 'Financial',
-    icon: DollarSign,
-    items: [
-      { to: '/budget',     icon: BarChart3, label: 'Budget',      mobileShow: false },
-      { to: '/tax',        icon: Receipt,   label: 'Property Tax', mobileShow: false },
-      { to: '/mortgage',   icon: Home,      label: 'Mortgage',    mobileShow: false },
-      { to: '/utilities',  icon: Zap,       label: 'Utilities',   mobileShow: false },
-      { to: '/insurance',  icon: Shield,    label: 'Insurance',   mobileShow: false },
-    ],
-  },
-  {
-    label: 'Property',
-    icon: HardHat,
-    items: [
-      { to: '/profile',    icon: BookOpen,      label: 'Profile',     mobileShow: false },
-      { to: '/home-book',  icon: Library,       label: 'Home Book',   mobileShow: false },
-      { to: '/map',        icon: Map,           label: 'Map',         mobileShow: false },
-      { to: '/risk-brief', icon: ShieldAlert,   label: 'Risk Brief',  mobileShow: false },
-      { to: '/inventory',  icon: ClipboardList, label: 'Inventory',   mobileShow: false },
-      { to: '/contents',   icon: Package,       label: 'Contents',    mobileShow: false },
-      { to: '/vendors',    icon: Users,         label: 'Vendors',     mobileShow: false },
-      { to: '/permits',    icon: FileCheck,     label: 'Permits',     mobileShow: false },
-      { to: '/fuel',       icon: Droplets,      label: 'Fuel',        mobileShow: false },
-      { to: '/generator',  icon: Activity,      label: 'Generator',   mobileShow: false },
-      { to: '/road',       icon: MapPin,        label: 'Roads',       mobileShow: false },
-    ],
-  },
-]
-
-// Flat list for mobile bottom nav and route matching
-const NAV_ITEMS = [
-  ...TOP_NAV,
-  ...NAV_SECTIONS.flatMap(s => s.items),
-]
+/**
+ * Build the sidebar layout from the active module set. The grouping
+ * semantics live in `NavGroup` (see registry/types.ts):
+ *   - 'property' → flat top rail (Dashboard, Maintenance, …)
+ *   - 'tools'    → "Tools" collapsible section
+ *   - 'finance'  → "Financial" collapsible section
+ *   - 'systems'  → "Systems" collapsible section
+ *   - 'admin'    → not rendered here; the bottom-rail Settings link is
+ *                  hard-wired since it must stay reachable even with the
+ *                  core module disabled in development.
+ */
+function useShellNav(): { topNav: ShellNavItem[]; sections: ShellNavSection[]; flat: ShellNavItem[] } {
+  const activeIds = useActiveModuleIds()
+  return useMemo(() => {
+    const byGroup: Record<NavGroup, ShellNavItem[]> = {
+      property: [],
+      tools:    [],
+      finance:  [],
+      systems:  [],
+      admin:    [],
+    }
+    for (const mod of moduleRegistry.getAll()) {
+      if (!activeIds.has(mod.id)) continue
+      for (const item of (mod.navItems ?? []) as ModuleNavItem[]) {
+        byGroup[item.group].push({
+          to:       item.path,
+          icon:     item.icon,
+          label:    item.label,
+          useBadge: item.useBadge,
+        })
+      }
+    }
+    const topNav: ShellNavItem[] = [...STATIC_TOP_NAV, ...byGroup.property]
+    const sections: ShellNavSection[] = [
+      { label: 'Tools',     icon: BookOpen,    items: byGroup.tools   },
+      { label: 'Financial', icon: DollarSign,  items: byGroup.finance },
+      { label: 'Systems',   icon: HardHat,     items: byGroup.systems },
+    ].filter(s => s.items.length > 0)
+    const flat = [...topNav, ...sections.flatMap(s => s.items)]
+    return { topNav, sections, flat }
+  }, [activeIds])
+}
 
 const PROPERTY_ICONS = { residence: Building2, camp: TreePine, land: Building2 }
 
-function NavSectionGroup({ section, pathname }: { section: NavSection; pathname: string }) {
+/**
+ * Top-rail nav row. Calls the module-supplied `useBadge` hook if any
+ * (rules-of-hooks safe because the hook identity is stable per active
+ * set — modules don't get mounted/unmounted between renders during a
+ * single navigation), and folds in the cross-cutting inbox / alert badges
+ * AppShell already manages.
+ */
+function TopNavLink({
+  item, inboxCount, alertCount,
+}: {
+  item: ShellNavItem
+  inboxCount: number
+  alertCount: number
+}) {
+  const moduleBadge = item.useBadge?.() ?? 0
+  const Icon = item.icon
+  const inboxBadge = item.to === '/import' && inboxCount > 0 ? inboxCount : 0
+  const alertBadge = item.to === '/'        && alertCount > 0 ? alertCount : 0
+  // First non-zero wins; modules never overlap with the cross-cutting badges
+  // today, but if they do the module's value takes precedence (it's the
+  // route owner's choice).
+  const badge = moduleBadge > 0 ? moduleBadge : (inboxBadge || alertBadge)
+  const badgeLabel =
+    moduleBadge > 0 ? `${moduleBadge} pending`
+    : inboxBadge   > 0 ? `${inboxBadge} pending inbox item${inboxBadge === 1 ? '' : 's'}`
+    : alertBadge   > 0 ? `${alertBadge} HA alerts`
+    : undefined
+
+  return (
+    <NavLink
+      to={item.to}
+      end={item.to === '/'}
+      className={({ isActive }) => cn(
+        'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
+        isActive
+          ? 'bg-green-600 text-white'
+          : 'text-slate-300 hover:bg-slate-700 hover:text-white',
+      )}
+    >
+      <Icon className="w-4 h-4 shrink-0" />
+      <span className="flex-1">{item.label}</span>
+      {badge > 0 && (
+        <span
+          aria-label={badgeLabel}
+          className="bg-red-500 text-white text-[10px] font-bold rounded-full px-1.5 py-0.5 min-w-[18px] text-center"
+        >
+          {badge > 99 ? '99+' : badge}
+        </span>
+      )}
+    </NavLink>
+  )
+}
+
+function NavSectionGroup({ section, pathname }: { section: ShellNavSection; pathname: string }) {
   const hasActiveChild = section.items.some(item =>
     item.to === '/' ? pathname === '/' : pathname.startsWith(item.to)
   )
@@ -652,8 +716,9 @@ interface AppShellProps {
 export function AppShell({ children }: AppShellProps) {
   const location = useLocation()
   const inboxCount = useInboxBadgeCount()
+  const { topNav, sections, flat } = useShellNav()
 
-  const currentNav = NAV_ITEMS.find(n =>
+  const currentNav = flat.find(n =>
     n.to === '/' ? location.pathname === '/' : location.pathname.startsWith(n.to)
   )
 
@@ -683,46 +748,16 @@ export function AppShell({ children }: AppShellProps) {
 
         {/* Nav items */}
         <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-          {TOP_NAV.map(({ to, icon: Icon, label }) => {
-            // Per-route badges. Only one badge slot per row; the routes that
-            // get badges don't overlap, so a single ternary is enough.
-            const inboxBadge = to === '/import' && inboxCount > 0 ? inboxCount : 0
-            const alertBadge = to === '/'        && alertCount > 0 ? alertCount : 0
-            return (
-              <NavLink
-                key={to}
-                to={to}
-                end={to === '/'}
-                className={({ isActive }) => cn(
-                  'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
-                  isActive
-                    ? 'bg-green-600 text-white'
-                    : 'text-slate-300 hover:bg-slate-700 hover:text-white',
-                )}
-              >
-                <Icon className="w-4 h-4 shrink-0" />
-                <span className="flex-1">{label}</span>
-                {inboxBadge > 0 && (
-                  <span
-                    aria-label={`${inboxBadge} pending inbox item${inboxBadge === 1 ? '' : 's'}`}
-                    className="bg-red-500 text-white text-[10px] font-bold rounded-full px-1.5 py-0.5 min-w-[18px] text-center"
-                  >
-                    {inboxBadge > 99 ? '99+' : inboxBadge}
-                  </span>
-                )}
-                {alertBadge > 0 && (
-                  <span
-                    aria-label={`${alertBadge} HA alerts`}
-                    className="shrink-0 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center tabular-nums"
-                  >
-                    {alertBadge > 9 ? '9+' : alertBadge}
-                  </span>
-                )}
-              </NavLink>
-            )
-          })}
+          {topNav.map(item => (
+            <TopNavLink
+              key={item.to}
+              item={item}
+              inboxCount={inboxCount}
+              alertCount={alertCount}
+            />
+          ))}
           <div className="pt-3 space-y-1">
-            {NAV_SECTIONS.map(section => (
+            {sections.map(section => (
               <NavSectionGroup key={section.label} section={section} pathname={location.pathname} />
             ))}
           </div>
@@ -791,7 +826,7 @@ export function AppShell({ children }: AppShellProps) {
       {/* ── Mobile Bottom Nav ─────────────────────────────────────────── */}
       <nav className="lg:hidden fixed bottom-0 inset-x-0 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 z-30 safe-bottom">
         <div className="flex items-center">
-          {NAV_ITEMS.filter(n => n.mobileShow).map(({ to, icon: Icon, label }) => (
+          {topNav.map(({ to, icon: Icon, label }) => (
             <NavLink
               key={to}
               to={to}

@@ -44,13 +44,13 @@ export const AIModule: ModuleDefinition = {
   ],
 
   routes: [
-    { path: '/ai-advisory',           element: <AIAdvisoryScreen /> },
+    { path: '/advisor',           element: <AIAdvisoryScreen /> },
     { path: '/equipment/:id/inspect', element: <InspectionScreen /> },
     { path: '/risk-brief',            element: <RiskBriefScreen /> },
   ],
 
   navItems: [
-    { label: 'AI Advisor', path: '/ai-advisory', icon: MessageSquare, group: 'tools' },
+    { label: 'AI Advisor', path: '/advisor', icon: MessageSquare, group: 'tools' },
     { label: 'Risk Brief', path: '/risk-brief',  icon: ShieldAlert,   group: 'tools' },
   ],
 

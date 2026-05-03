@@ -29,11 +29,11 @@ export const WellModule: ModuleDefinition = {
   ],
 
   routes: [
-    { path: '/well', element: <WellTestScreen /> },
+    { path: '/well-tests', element: <WellTestScreen /> },
   ],
 
   navItems: [
-    { label: 'Well', path: '/well', icon: FlaskConical, group: 'systems' },
+    { label: 'Well', path: '/well-tests', icon: FlaskConical, group: 'systems' },
   ],
 
   recordTypes: [

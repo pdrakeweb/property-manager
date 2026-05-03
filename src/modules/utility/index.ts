@@ -36,11 +36,11 @@ export const UtilityModule: ModuleDefinition = {
   // and AppShell continues to wire `/utilities` until the route block
   // becomes module-driven.
   routes: [
-    { path: '/utility', element: createElement(UtilityScreen) },
+    { path: '/utilities', element: createElement(UtilityScreen) },
   ],
 
   navItems: [
-    { label: 'Utility', path: '/utility', icon: Zap, group: 'systems' },
+    { label: 'Utility', path: '/utilities', icon: Zap, group: 'systems' },
   ],
 
   recordTypes: [

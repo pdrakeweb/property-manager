@@ -1,18 +1,14 @@
-import { useState, useEffect, lazy, Suspense } from 'react'
-import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { useState, useEffect, lazy, Suspense, useMemo } from 'react'
+import { HashRouter, Navigate, useRoutes, type RouteObject } from 'react-router-dom'
+import { useActiveModuleIds, buildRoutes } from './modules/_registry'
 import { Building2, Loader2, AlertCircle, Eye, EyeOff } from 'lucide-react'
 
 import { AppStoreProvider } from './store/AppStoreContext'
 import { AppShell }             from './components/layout/AppShell'
 import { ErrorBoundary }        from './components/ErrorBoundary'
 import { ScreenSkeleton }       from './components/ScreenSkeleton'
-import { DashboardScreen }      from './screens/DashboardScreen'
 import { CaptureSelectScreen }  from './screens/CaptureSelectScreen'
-import { InventoryScreen }      from './screens/InventoryScreen'
-import { ExpiryManageScreen }   from './screens/ExpiryManageScreen'
-import { SepticScreen }         from './screens/SepticScreen'
 import { PropertyProfileScreen }       from './screens/PropertyProfileScreen'
-import { EquipmentDetailScreen }       from './screens/EquipmentDetailScreen'
 import { syncAll, seedTasksForProperty, syncPropertyConfig, syncAuditLog, pollDriveChanges, syncPendingPhotos } from './lib/syncEngine'
 import { pollAllInboxes } from './lib/inboxPoller'
 import { exportAllMarkdownToDrive } from './lib/markdownExport'
@@ -30,37 +26,12 @@ import {
 } from './auth/oauth'
 import { getOpenRouterKey, setSetting, SETTINGS } from './store/settings'
 
-// Lazy-loaded heavy screens (>400 lines, not on first load) — split into per-route chunks
-const BudgetScreen             = lazy(() => import('./screens/BudgetScreen').then(m => ({ default: m.BudgetScreen })))
-const AIAdvisoryScreen         = lazy(() => import('./screens/AIAdvisoryScreen').then(m => ({ default: m.AIAdvisoryScreen })))
-const WellTestScreen           = lazy(() => import('./screens/WellTestScreen').then(m => ({ default: m.WellTestScreen })))
-const TaxScreen                = lazy(() => import('./screens/TaxScreen').then(m => ({ default: m.TaxScreen })))
-const MortgageScreen           = lazy(() => import('./screens/MortgageScreen').then(m => ({ default: m.MortgageScreen })))
-const InsuranceScreen          = lazy(() => import('./screens/InsuranceScreen').then(m => ({ default: m.InsuranceScreen })))
-const EquipmentFormScreen      = lazy(() => import('./screens/EquipmentFormScreen').then(m => ({ default: m.EquipmentFormScreen })))
-const MaintenanceScreen        = lazy(() => import('./screens/MaintenanceScreen').then(m => ({ default: m.MaintenanceScreen })))
-const SettingsScreen           = lazy(() => import('./screens/SettingsScreen').then(m => ({ default: m.SettingsScreen })))
-const VendorScreen             = lazy(() => import('./screens/VendorScreen').then(m => ({ default: m.VendorScreen })))
+// Lazy-loaded screens that aren't owned by any module (admin/emergency/
+// fallback surfaces). Module-owned screens are lazy-imported inside their
+// own module index files; AppRoutes assembles them dynamically below.
 const EmergencyScreen          = lazy(() => import('./screens/EmergencyScreen').then(m => ({ default: m.EmergencyScreen })))
-const FuelScreen               = lazy(() => import('./screens/FuelScreen').then(m => ({ default: m.FuelScreen })))
-const UtilityScreen            = lazy(() => import('./screens/UtilityScreen').then(m => ({ default: m.UtilityScreen })))
-const CalendarScreen           = lazy(() => import('./screens/CalendarScreen').then(m => ({ default: m.CalendarScreen })))
-const PermitsScreen            = lazy(() => import('./screens/PermitsScreen').then(m => ({ default: m.PermitsScreen })))
-const ChecklistScreen          = lazy(() => import('./screens/ChecklistScreen').then(m => ({ default: m.ChecklistScreen })))
-const ChecklistRunScreen       = lazy(() => import('./screens/ChecklistRunScreen').then(m => ({ default: m.ChecklistRunScreen })))
-const ChecklistGuidedScreen    = lazy(() => import('./screens/ChecklistGuidedScreen').then(m => ({ default: m.ChecklistGuidedScreen })))
-const GeneratorScreen          = lazy(() => import('./screens/GeneratorScreen').then(m => ({ default: m.GeneratorScreen })))
-const RoadScreen               = lazy(() => import('./screens/RoadScreen').then(m => ({ default: m.RoadScreen })))
 const ConflictResolutionScreen = lazy(() => import('./screens/ConflictResolutionScreen').then(m => ({ default: m.ConflictResolutionScreen })))
-const SyncScreen               = lazy(() => import('./screens/SyncScreen').then(m => ({ default: m.SyncScreen })))
 const ActivityScreen           = lazy(() => import('./screens/ActivityScreen').then(m => ({ default: m.ActivityScreen })))
-const MapScreen                = lazy(() => import('./screens/MapScreen').then(m => ({ default: m.MapScreen })))
-const SearchScreen             = lazy(() => import('./screens/SearchScreen').then(m => ({ default: m.SearchScreen })))
-const InspectionScreen         = lazy(() => import('./screens/InspectionScreen').then(m => ({ default: m.InspectionScreen })))
-const RiskBriefScreen          = lazy(() => import('./screens/RiskBriefScreen').then(m => ({ default: m.RiskBriefScreen })))
-const ImportScreen             = lazy(() => import('./screens/ImportScreen').then(m => ({ default: m.ImportScreen })))
-const ContentsScreen           = lazy(() => import('./screens/ContentsScreen').then(m => ({ default: m.ContentsScreen })))
-const HomeBookScreen           = lazy(() => import('./screens/HomeBookScreen').then(m => ({ default: m.HomeBookScreen })))
 const ModuleSettingsScreen     = lazy(() => import('./screens/ModuleSettingsScreen').then(m => ({ default: m.ModuleSettingsScreen })))
 
 // ── Sign-in screen ───────────────────────────────────────────────────────────
@@ -486,6 +457,38 @@ function useScheduledMarkdownExport() {
 
 // ── Main app routes ──────────────────────────────────────────────────────────
 
+/**
+ * Static fallback routes — paths that no module owns. Module-owned paths
+ * (Dashboard, Maintenance, Budget, …) are produced by `buildRoutes()` from
+ * the active module set; these admin / emergency / utility surfaces remain
+ * static so they're always reachable regardless of which modules the user
+ * has enabled.
+ *
+ * Order matters in `useRoutes`: module routes are evaluated first so they
+ * win on overlapping paths, then this list catches everything else and the
+ * `*` catch-all redirects unknown URLs home.
+ */
+const staticFallbackRoutes: RouteObject[] = [
+  { path: '/capture',              element: <CaptureSelectScreen /> },
+  { path: '/profile',              element: <PropertyProfileScreen /> },
+  { path: '/settings/modules',     element: <ModuleSettingsScreen /> },
+  { path: '/emergency/:propertyId', element: <EmergencyScreen /> },
+  { path: '/emergency',            element: <EmergencyScreen /> },
+  { path: '/conflicts',            element: <ConflictResolutionScreen /> },
+  { path: '/activity',             element: <ActivityScreen /> },
+  { path: '*',                     element: <Navigate to="/" /> },
+]
+
+function AppRoutes() {
+  const activeIds = useActiveModuleIds()
+  const moduleRoutes = useMemo(() => buildRoutes(activeIds), [activeIds])
+  const allRoutes = useMemo(
+    () => [...moduleRoutes, ...staticFallbackRoutes],
+    [moduleRoutes],
+  )
+  return useRoutes(allRoutes)
+}
+
 function MainApp() {
   useStartupSync()
   useScheduledMarkdownExport()
@@ -495,49 +498,7 @@ function MainApp() {
       <AppShell>
         <ErrorBoundary>
         <Suspense fallback={<ScreenSkeleton />}>
-
-        <Routes>
-          <Route path="/"                    element={<DashboardScreen />}     />
-          <Route path="/capture"             element={<CaptureSelectScreen />} />
-          <Route path="/capture/:categoryId" element={<EquipmentFormScreen />} />
-          <Route path="/maintenance"         element={<MaintenanceScreen />}   />
-          <Route path="/budget"              element={<BudgetScreen />}        />
-          <Route path="/advisor"             element={<AIAdvisoryScreen />}    />
-          <Route path="/inventory"           element={<InventoryScreen />}     />
-          <Route path="/contents"            element={<ContentsScreen />}      />
-          <Route path="/settings"            element={<SettingsScreen />}      />
-          <Route path="/settings/modules"    element={<ModuleSettingsScreen />} />
-          <Route path="/vendors"             element={<VendorScreen />}        />
-          <Route path="/expiry"              element={<ExpiryManageScreen />}  />
-          <Route path="/emergency/:propertyId" element={<EmergencyScreen />}  />
-          <Route path="/emergency"           element={<EmergencyScreen />}     />
-          <Route path="/well-tests"          element={<WellTestScreen />}      />
-          <Route path="/septic-log"          element={<SepticScreen />}        />
-          <Route path="/fuel"                element={<FuelScreen />}          />
-          <Route path="/tax"                 element={<TaxScreen />}           />
-          <Route path="/mortgage"            element={<MortgageScreen />}      />
-          <Route path="/utilities"           element={<UtilityScreen />}       />
-          <Route path="/calendar"            element={<CalendarScreen />}      />
-          <Route path="/insurance"           element={<InsuranceScreen />}     />
-          <Route path="/permits"             element={<PermitsScreen />}       />
-          <Route path="/checklists"          element={<ChecklistScreen />}     />
-          <Route path="/checklists/:runId"          element={<ChecklistRunScreen />}    />
-          <Route path="/checklists/:runId/guided"   element={<ChecklistGuidedScreen />} />
-          <Route path="/generator"           element={<GeneratorScreen />}     />
-          <Route path="/road"                element={<RoadScreen />}          />
-          <Route path="/profile"             element={<PropertyProfileScreen />} />
-          <Route path="/conflicts"           element={<ConflictResolutionScreen />} />
-          <Route path="/equipment/:id"         element={<EquipmentDetailScreen />}   />
-          <Route path="/equipment/:id/inspect" element={<InspectionScreen />}        />
-          <Route path="/risk-brief"            element={<RiskBriefScreen />}         />
-          <Route path="/import"                element={<ImportScreen />}            />
-          <Route path="/home-book"             element={<HomeBookScreen />}          />
-          <Route path="/sync"                element={<SyncScreen />}              />
-          <Route path="/activity"            element={<ActivityScreen />}          />
-          <Route path="/map"                 element={<MapScreen />}               />
-          <Route path="/search"              element={<SearchScreen />}            />
-          <Route path="*"                    element={<Navigate to="/" />}     />
-        </Routes>
+          <AppRoutes />
         </Suspense>
         </ErrorBoundary>
       </AppShell>

@@ -32,11 +32,11 @@ export const SepticModule: ModuleDefinition = {
   ],
 
   routes: [
-    { path: '/septic', element: <SepticScreen /> },
+    { path: '/septic-log', element: <SepticScreen /> },
   ],
 
   navItems: [
-    { label: 'Septic', path: '/septic', icon: Droplets, group: 'systems' },
+    { label: 'Septic', path: '/septic-log', icon: Droplets, group: 'systems' },
   ],
 
   recordTypes: [
