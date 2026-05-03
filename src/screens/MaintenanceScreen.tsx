@@ -20,6 +20,7 @@ import { useIndexVersion } from '../lib/useIndexVersion'
 import { useModalA11y } from '../lib/focusTrap'
 import { useToast } from '../components/Toast'
 import { PhotoLightbox } from '../components/photos/PhotoLightbox'
+import { VoiceMemoButton } from '../components/voice/VoiceMemoButton'
 import { syncAllToCalendar } from '../lib/calendarClient'
 import type { DryRunResult } from '../lib/calendarClient'
 import { DryRunModal } from '../components/DryRunModal'
@@ -225,7 +226,21 @@ function DoneModal({ task, propertyId, onConfirm, onClose }: DoneModalProps) {
             <input type="date" value={laborWarrantyExpiry} onChange={e => setLaborWarrantyExpiry(e.target.value)} className={inp} />
           </div>
           <div>
-            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Notes</label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400">Notes</label>
+              <VoiceMemoButton
+                size="sm"
+                contextHint={task.systemLabel || task.title}
+                onApply={(parsed) => {
+                  setDoneNotes(prev => {
+                    const next = parsed.workDone
+                    return prev ? `${prev}\n${next}` : next
+                  })
+                  if (parsed.cost !== undefined && !actualCost) setActualCost(String(parsed.cost))
+                  if (parsed.contractor && !doneContractor) setDoneContractor(parsed.contractor)
+                }}
+              />
+            </div>
             <textarea value={doneNotes} onChange={e => setDoneNotes(e.target.value)} rows={2} placeholder="Any notes about the work done…" className={cn(inp, 'resize-none')} />
           </div>
           {/* Photos */}
