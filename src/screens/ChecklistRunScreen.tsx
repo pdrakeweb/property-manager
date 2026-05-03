@@ -381,6 +381,15 @@ export function ChecklistRunScreen() {
           </div>
         </div>
 
+        {!isReadOnly && (
+          <button
+            onClick={() => navigate(`/checklists/${run.id}/guided`)}
+            className="btn btn-info mt-3"
+          >
+            Guided mode →
+          </button>
+        )}
+
         {/* Progress bar */}
         <div className="mt-3 bg-slate-200 rounded-full h-2">
           <div

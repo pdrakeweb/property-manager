@@ -45,6 +45,7 @@ const CalendarScreen           = lazy(() => import('./screens/CalendarScreen').t
 const PermitsScreen            = lazy(() => import('./screens/PermitsScreen').then(m => ({ default: m.PermitsScreen })))
 const ChecklistScreen          = lazy(() => import('./screens/ChecklistScreen').then(m => ({ default: m.ChecklistScreen })))
 const ChecklistRunScreen       = lazy(() => import('./screens/ChecklistRunScreen').then(m => ({ default: m.ChecklistRunScreen })))
+const ChecklistGuidedScreen    = lazy(() => import('./screens/ChecklistGuidedScreen').then(m => ({ default: m.ChecklistGuidedScreen })))
 const GeneratorScreen          = lazy(() => import('./screens/GeneratorScreen').then(m => ({ default: m.GeneratorScreen })))
 const RoadScreen               = lazy(() => import('./screens/RoadScreen').then(m => ({ default: m.RoadScreen })))
 const ConflictResolutionScreen = lazy(() => import('./screens/ConflictResolutionScreen').then(m => ({ default: m.ConflictResolutionScreen })))
@@ -468,7 +469,8 @@ function MainApp() {
           <Route path="/insurance"           element={<InsuranceScreen />}     />
           <Route path="/permits"             element={<PermitsScreen />}       />
           <Route path="/checklists"          element={<ChecklistScreen />}     />
-          <Route path="/checklists/:runId"   element={<ChecklistRunScreen />}  />
+          <Route path="/checklists/:runId"          element={<ChecklistRunScreen />}    />
+          <Route path="/checklists/:runId/guided"   element={<ChecklistGuidedScreen />} />
           <Route path="/generator"           element={<GeneratorScreen />}     />
           <Route path="/road"                element={<RoadScreen />}          />
           <Route path="/profile"             element={<PropertyProfileScreen />} />
