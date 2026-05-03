@@ -491,9 +491,16 @@ function MortgageDetail({
   onBack: () => void
   onDeleted: () => void
 }) {
-  const [tab,        setTab]        = useState<DetailTab>('payments')
-  const [addingPmt,  setAddingPmt]  = useState(false)
-  const [tick,       setTick]       = useState(0)
+  const [tab,           setTab]           = useState<DetailTab>('payments')
+  const [addingPmt,     setAddingPmt]     = useState(false)
+  const [tick,          setTick]          = useState(0)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+
+  function confirmDeleteNow() {
+    mortgageStore.remove(mortgage.id)
+    setConfirmDelete(false)
+    onDeleted()
+  }
 
   const payments = getPaymentsForMortgage(mortgage.id)
   const ltv = mortgage.currentBalance / (mortgage.originalBalance || 1) * 100
@@ -530,7 +537,7 @@ function MortgageDetail({
             {mortgage.accountNumber && <p className="text-xs text-slate-400 font-mono">#{mortgage.accountNumber}</p>}
           </div>
           <button
-            onClick={() => { mortgageStore.remove(mortgage.id); onDeleted() }}
+            onClick={() => setConfirmDelete(true)}
             className="text-xs text-red-400 hover:text-red-600"
           >
             Delete
@@ -619,6 +626,34 @@ function MortgageDetail({
       )}
 
       {tab === 'amortization' && <AmortizationView mortgage={mortgage} />}
+
+      {confirmDelete && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
+          onClick={() => setConfirmDelete(false)}
+        >
+          <div
+            className="modal-surface w-full max-w-sm rounded-2xl shadow-xl"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-700">
+              <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">Delete mortgage?</h2>
+            </div>
+            <div className="px-5 py-4 space-y-2">
+              <p className="text-sm text-slate-700 dark:text-slate-300">
+                Remove <strong>{mortgage.label}</strong> ({mortgage.lender})?
+              </p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Logged payments for this mortgage will remain in storage but will no longer roll up under any mortgage. This action cannot be undone from the UI.
+              </p>
+            </div>
+            <div className="px-5 py-3 border-t border-slate-200 dark:border-slate-700 flex justify-end gap-2">
+              <button onClick={() => setConfirmDelete(false)} className="btn btn-secondary btn-sm">Cancel</button>
+              <button onClick={confirmDeleteNow} className="btn btn-danger btn-sm">Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
