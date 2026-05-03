@@ -18,10 +18,22 @@
  */
 
 import { moduleRegistry } from './_registry'
-import { CoreModule } from './core'
+import { CoreModule }    from './core'
+import { HaModule }      from './ha'
+import { FuelModule }    from './fuel'
+import { UtilityModule } from './utility'
+import { MapModule }     from './map'
+import { VendorModule }  from './vendor'
 
 // Phase 1 — always-on baseline.
 moduleRegistry.register(CoreModule)
+
+// Phase 2 — systems & tools modules.
+moduleRegistry.register(HaModule)
+moduleRegistry.register(FuelModule)
+moduleRegistry.register(UtilityModule)
+moduleRegistry.register(MapModule)
+moduleRegistry.register(VendorModule)
 
 // ─── Phase 2 placeholders (22 modules) ──────────────────────────────────────
 //
