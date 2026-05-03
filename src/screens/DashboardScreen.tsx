@@ -4,6 +4,7 @@ import {
   Camera, Wrench, BarChart3, MessageSquare, AlertTriangle,
   CheckCircle2, Circle, ChevronRight, Zap, ShieldAlert, Receipt, Home,
   Plus, X, ChevronDown, ChevronUp, Building2, TreePine, WifiOff,
+  RefreshCw, Settings as SettingsIcon, Thermometer, Activity, ToggleRight,
 } from 'lucide-react'
 import { cn } from '../utils/cn'
 import { CATEGORIES } from '../data/mockData'
@@ -16,7 +17,7 @@ import { getNextTaxPayment, getOverdueTaxPayments, getAssessmentsForProperty } f
 import { getTotalMortgageBalance } from '../lib/mortgageStore'
 import { customTaskStore, getActiveTasks } from '../lib/maintenanceStore'
 import { localIndex } from '../lib/localIndex'
-import { fetchEntityState } from '../lib/haClient'
+import { fetchEntityState, isHAConfigured } from '../lib/haClient'
 import { useAppStore } from '../store/AppStoreContext'
 import { propertyStore } from '../lib/propertyStore'
 import { useIndexVersion } from '../lib/useIndexVersion'
@@ -304,11 +305,14 @@ export function DashboardScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activePropertyId, indexVersion])
 
-  const [haStates, setHaStates] = useState<Record<string, HAEntityState | null>>({})
-  const [haLoading, setHaLoading] = useState(false)
+  const [haStates,   setHaStates]   = useState<Record<string, HAEntityState | null>>({})
+  const [haLoading,  setHaLoading]  = useState(false)
+  const [haLastFetch, setHaLastFetch] = useState<Date | null>(null)
+  const [haRefreshTick, setHaRefreshTick] = useState(0)
+  const haConfigured = isHAConfigured()
 
   useEffect(() => {
-    if (linkedEquipment.length === 0) {
+    if (linkedEquipment.length === 0 || !haConfigured) {
       setHaStates({})
       return
     }
@@ -325,8 +329,46 @@ export function DashboardScreen() {
       for (const [id, state] of pairs) map[id] = state
       setHaStates(map)
       setHaLoading(false)
+      setHaLastFetch(new Date())
     })
     return () => { cancelled = true }
+  }, [linkedEquipment, haRefreshTick, haConfigured])
+
+  // Auto-refresh every 60s while the panel is mounted and HA is configured.
+  useEffect(() => {
+    if (!haConfigured || linkedEquipment.length === 0) return
+    const id = setInterval(() => setHaRefreshTick(t => t + 1), 60_000)
+    return () => clearInterval(id)
+  }, [haConfigured, linkedEquipment.length])
+
+  // Group linked equipment by entity domain for the Live Status panel.
+  type DomainGroup = {
+    domain: string
+    label:  string
+    icon:   typeof Activity
+    items:  Array<typeof linkedEquipment[number]>
+  }
+  const haDomainGroups = useMemo<DomainGroup[]>(() => {
+    const meta: Record<string, { label: string; icon: typeof Activity; order: number }> = {
+      climate:        { label: 'Climate',     icon: Thermometer,  order: 0 },
+      sensor:         { label: 'Sensors',     icon: Activity,     order: 1 },
+      binary_sensor:  { label: 'Binary',      icon: AlertTriangle, order: 2 },
+      switch:         { label: 'Switches',    icon: ToggleRight,  order: 3 },
+      other:          { label: 'Other',       icon: Activity,     order: 99 },
+    }
+    const buckets = new Map<string, DomainGroup>()
+    for (const eq of linkedEquipment) {
+      const dom = eq.entityId.split('.')[0] ?? 'other'
+      const m   = meta[dom] ?? meta.other
+      const key = meta[dom] ? dom : 'other'
+      if (!buckets.has(key)) {
+        buckets.set(key, { domain: key, label: m.label, icon: m.icon, items: [] })
+      }
+      buckets.get(key)!.items.push(eq)
+    }
+    return [...buckets.values()].sort(
+      (a, b) => (meta[a.domain]?.order ?? 99) - (meta[b.domain]?.order ?? 99),
+    )
   }, [linkedEquipment])
 
   // ── Recent activity: completed events + completed tasks + road events ─────
@@ -754,17 +796,43 @@ export function DashboardScreen() {
               {/* Live HA Status */}
               <Card>
                 <div className="px-5 pt-5 pb-4">
-                  <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center justify-between mb-3 gap-2">
                     <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide">Live Status</h2>
-                    <div className="flex items-center gap-1.5">
-                      <div className={cn(
-                        'w-1.5 h-1.5 rounded-full',
-                        linkedEquipment.length > 0 ? 'bg-emerald-400 animate-pulse' : 'bg-slate-300 dark:bg-slate-600',
-                      )} />
-                      <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">Home Assistant</span>
+                    <div className="flex items-center gap-2">
+                      {haConfigured && linkedEquipment.length > 0 && (
+                        <button
+                          onClick={() => setHaRefreshTick(t => t + 1)}
+                          disabled={haLoading}
+                          aria-label="Refresh HA states"
+                          className="text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 disabled:opacity-50 transition-colors"
+                        >
+                          <RefreshCw className={cn('w-3.5 h-3.5', haLoading && 'animate-spin')} />
+                        </button>
+                      )}
+                      <div className="flex items-center gap-1.5">
+                        <div className={cn(
+                          'w-1.5 h-1.5 rounded-full',
+                          haConfigured && linkedEquipment.length > 0 ? 'bg-emerald-400 animate-pulse' : 'bg-slate-300 dark:bg-slate-600',
+                        )} />
+                        <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">Home Assistant</span>
+                      </div>
                     </div>
                   </div>
-                  {linkedEquipment.length === 0 ? (
+
+                  {!haConfigured ? (
+                    <div className="text-center py-4">
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">
+                        Home Assistant is not configured.
+                      </p>
+                      <button
+                        onClick={() => navigate('/settings')}
+                        className="inline-flex items-center gap-1.5 text-sm font-medium text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 transition-colors"
+                      >
+                        <SettingsIcon className="w-4 h-4" />
+                        Configure HA
+                      </button>
+                    </div>
+                  ) : linkedEquipment.length === 0 ? (
                     <button
                       onClick={() => navigate('/inventory')}
                       className="w-full text-left text-sm text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
@@ -772,23 +840,45 @@ export function DashboardScreen() {
                       No HA entities linked — link equipment in the Inventory screen
                     </button>
                   ) : (
-                    <div className="space-y-2.5">
-                      {linkedEquipment.map(eq => {
-                        const state = haStates[eq.entityId] ?? null
-                        const kind  = liveStateKind(state)
+                    <div className="space-y-4">
+                      {haDomainGroups.map(group => {
+                        const GroupIcon = group.icon
                         return (
-                          <div key={eq.recordId} className="flex items-center justify-between gap-3">
-                            <div className="flex items-center gap-2 min-w-0">
-                              <div className={cn('w-2 h-2 rounded-full shrink-0', liveStateDot(kind))} />
-                              <span className="text-sm text-slate-700 dark:text-slate-300 truncate">{eq.title}</span>
+                          <div key={group.domain}>
+                            <div className="flex items-center gap-1.5 mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                              <GroupIcon className="w-3 h-3" />
+                              {group.label}
                             </div>
-                            <span className={cn('text-sm font-semibold tabular-nums shrink-0 flex items-center gap-1', liveStateColor(kind))}>
-                              {!haLoading && !state && <WifiOff className="w-3 h-3" />}
-                              {formatLiveValue(state)}
-                            </span>
+                            <div className="space-y-2">
+                              {group.items.map(eq => {
+                                const state = haStates[eq.entityId] ?? null
+                                const kind  = liveStateKind(state)
+                                const friendly = state
+                                  ? String(state.attributes.friendly_name ?? eq.title)
+                                  : eq.title
+                                return (
+                                  <div key={eq.recordId} className="flex items-center justify-between gap-3">
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <div className={cn('w-2 h-2 rounded-full shrink-0', liveStateDot(kind))} />
+                                      <span className="text-sm text-slate-700 dark:text-slate-300 truncate">{friendly}</span>
+                                    </div>
+                                    <span className={cn('text-sm font-semibold tabular-nums shrink-0 flex items-center gap-1', liveStateColor(kind))}>
+                                      {!haLoading && !state && <WifiOff className="w-3 h-3" />}
+                                      {formatLiveValue(state)}
+                                    </span>
+                                  </div>
+                                )
+                              })}
+                            </div>
                           </div>
                         )
                       })}
+
+                      {haLastFetch && (
+                        <div className="pt-2 mt-1 border-t border-slate-100 dark:border-slate-700/50 text-[11px] text-slate-400 dark:text-slate-500">
+                          Updated {haLastFetch.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })} · auto-refresh 60s
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
