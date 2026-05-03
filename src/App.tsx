@@ -54,6 +54,7 @@ const MapScreen                = lazy(() => import('./screens/MapScreen').then(m
 const SearchScreen             = lazy(() => import('./screens/SearchScreen').then(m => ({ default: m.SearchScreen })))
 const InspectionScreen         = lazy(() => import('./screens/InspectionScreen').then(m => ({ default: m.InspectionScreen })))
 const RiskBriefScreen          = lazy(() => import('./screens/RiskBriefScreen').then(m => ({ default: m.RiskBriefScreen })))
+const ImportScreen             = lazy(() => import('./screens/ImportScreen').then(m => ({ default: m.ImportScreen })))
 
 // ── Sign-in screen ───────────────────────────────────────────────────────────
 
@@ -475,6 +476,7 @@ function MainApp() {
           <Route path="/equipment/:id"         element={<EquipmentDetailScreen />}   />
           <Route path="/equipment/:id/inspect" element={<InspectionScreen />}        />
           <Route path="/risk-brief"            element={<RiskBriefScreen />}         />
+          <Route path="/import"                element={<ImportScreen />}            />
           <Route path="/sync"                element={<SyncScreen />}              />
           <Route path="/activity"            element={<ActivityScreen />}          />
           <Route path="/map"                 element={<MapScreen />}               />
