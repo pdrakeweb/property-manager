@@ -4,6 +4,7 @@ import { Building2, Loader2, AlertCircle, Eye, EyeOff } from 'lucide-react'
 
 import { AppStoreProvider } from './store/AppStoreContext'
 import { AppShell }             from './components/layout/AppShell'
+import { ErrorBoundary }        from './components/ErrorBoundary'
 import { DashboardScreen }      from './screens/DashboardScreen'
 import { CaptureSelectScreen }  from './screens/CaptureSelectScreen'
 import { InventoryScreen }      from './screens/InventoryScreen'
@@ -21,6 +22,7 @@ import {
   getClientId,
   getValidToken,
   getAuthRefreshFailedAt,
+  clearAuthRefreshFailed,
 } from './auth/oauth'
 import { getOpenRouterKey, setSetting, SETTINGS } from './store/settings'
 
@@ -94,6 +96,7 @@ function SignInScreen({ onSignIn }: { onSignIn: () => void }) {
     localStorage.setItem('google_token_expires_at', String(Date.now() + 3600_000))
     localStorage.setItem('google_user_email',       'dev@local')
     localStorage.setItem('google_user_name',        'Dev User')
+    clearAuthRefreshFailed()
     onSignIn()
   }
 
@@ -434,6 +437,7 @@ function MainApp() {
   return (
     <HashRouter>
       <AppShell>
+        <ErrorBoundary>
         <Suspense fallback={<RouteFallback />}>
         <Routes>
           <Route path="/"                    element={<DashboardScreen />}     />
@@ -470,6 +474,7 @@ function MainApp() {
           <Route path="*"                    element={<Navigate to="/" />}     />
         </Routes>
         </Suspense>
+        </ErrorBoundary>
       </AppShell>
     </HashRouter>
   )
