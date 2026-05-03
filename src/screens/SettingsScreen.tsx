@@ -680,9 +680,12 @@ export function SettingsScreen() {
               </button>
             </div>
           </Row>
-          <Row label="Entity Mapping" sub="Map HA entities to property systems">
-            <button className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400 font-medium">
-              Configure <ChevronRight className="w-3 h-3" />
+          <Row label="Entity Mapping" sub="Link HA entities per equipment item via Inventory">
+            <button
+              onClick={() => navigate('/inventory')}
+              className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400 font-medium hover:text-green-700 dark:hover:text-green-300"
+            >
+              Open Inventory <ChevronRight className="w-3 h-3" />
             </button>
           </Row>
         </Section>

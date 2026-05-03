@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import {
   Send, Sparkles, ChevronDown, Database, Loader2,
-  Copy, ThumbsUp, Save, RefreshCw, AlertCircle, Settings, Wrench,
+  Copy, RefreshCw, AlertCircle, Settings, Wrench,
   FileText, X,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
@@ -165,13 +165,6 @@ function MessageBubble({ msg }: { msg: AIMessage }) {
             >
               <Copy className="w-3 h-3" />
               {copied ? 'Copied!' : 'Copy'}
-            </button>
-            <button className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 px-1.5 py-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
-              <Save className="w-3 h-3" />
-              Save
-            </button>
-            <button className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 px-1.5 py-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
-              <ThumbsUp className="w-3 h-3" />
             </button>
           </div>
         )}
