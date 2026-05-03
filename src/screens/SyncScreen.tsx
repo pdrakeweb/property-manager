@@ -9,6 +9,7 @@ import { propertyStore } from '../lib/propertyStore'
 import { getQueueCount, retryAll } from '../lib/offlineQueue'
 import { auditLog } from '../lib/auditLog'
 import type { LogEntry } from '../lib/auditLog'
+import { useToast } from '../components/Toast'
 
 type KbStatus = {
   syncing: boolean
@@ -41,6 +42,8 @@ export function SyncScreen() {
 
   const kbScopeProperty = kbScope === 'all' ? null : kbEligible.find(p => p.id === kbScope) ?? null
   const kbFolderId      = kbScopeProperty ? getKnowledgebaseFolderId(kbScopeProperty.id) : null
+
+  const toast = useToast()
 
   function refresh() {
     setStats(localIndex.getSyncStats())
@@ -77,8 +80,17 @@ export function SyncScreen() {
       if (failed > 0)     parts.push(`${failed} upload error${failed > 1 ? 's' : ''}`)
       if (pullFailed > 0) parts.push(`${pullFailed} pull error${pullFailed > 1 ? 's' : ''}`)
       setLastResult(parts.join(' · '))
+      if (failed > 0 || pullFailed > 0) {
+        toast.warn(`Sync finished with errors: ${parts.join(' · ')}`)
+      } else if (uploaded > 0 || pulled > 0) {
+        toast.success(`Synced — ${parts.join(' · ')}`)
+      } else {
+        toast.info('Already up to date')
+      }
     } catch (err) {
-      setLastResult(`Sync failed: ${err instanceof Error ? err.message : String(err)}`)
+      const msg = err instanceof Error ? err.message : String(err)
+      setLastResult(`Sync failed: ${msg}`)
+      toast.error(`Sync failed: ${msg}`)
     } finally {
       setSyncing(false)
       refresh()

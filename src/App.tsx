@@ -45,12 +45,17 @@ const CalendarScreen           = lazy(() => import('./screens/CalendarScreen').t
 const PermitsScreen            = lazy(() => import('./screens/PermitsScreen').then(m => ({ default: m.PermitsScreen })))
 const ChecklistScreen          = lazy(() => import('./screens/ChecklistScreen').then(m => ({ default: m.ChecklistScreen })))
 const ChecklistRunScreen       = lazy(() => import('./screens/ChecklistRunScreen').then(m => ({ default: m.ChecklistRunScreen })))
+const ChecklistGuidedScreen    = lazy(() => import('./screens/ChecklistGuidedScreen').then(m => ({ default: m.ChecklistGuidedScreen })))
 const GeneratorScreen          = lazy(() => import('./screens/GeneratorScreen').then(m => ({ default: m.GeneratorScreen })))
 const RoadScreen               = lazy(() => import('./screens/RoadScreen').then(m => ({ default: m.RoadScreen })))
 const ConflictResolutionScreen = lazy(() => import('./screens/ConflictResolutionScreen').then(m => ({ default: m.ConflictResolutionScreen })))
 const SyncScreen               = lazy(() => import('./screens/SyncScreen').then(m => ({ default: m.SyncScreen })))
 const ActivityScreen           = lazy(() => import('./screens/ActivityScreen').then(m => ({ default: m.ActivityScreen })))
 const MapScreen                = lazy(() => import('./screens/MapScreen').then(m => ({ default: m.MapScreen })))
+const SearchScreen             = lazy(() => import('./screens/SearchScreen').then(m => ({ default: m.SearchScreen })))
+const InspectionScreen         = lazy(() => import('./screens/InspectionScreen').then(m => ({ default: m.InspectionScreen })))
+const RiskBriefScreen          = lazy(() => import('./screens/RiskBriefScreen').then(m => ({ default: m.RiskBriefScreen })))
+const ImportScreen             = lazy(() => import('./screens/ImportScreen').then(m => ({ default: m.ImportScreen })))
 
 // ── Sign-in screen ───────────────────────────────────────────────────────────
 
@@ -464,15 +469,20 @@ function MainApp() {
           <Route path="/insurance"           element={<InsuranceScreen />}     />
           <Route path="/permits"             element={<PermitsScreen />}       />
           <Route path="/checklists"          element={<ChecklistScreen />}     />
-          <Route path="/checklists/:runId"   element={<ChecklistRunScreen />}  />
+          <Route path="/checklists/:runId"          element={<ChecklistRunScreen />}    />
+          <Route path="/checklists/:runId/guided"   element={<ChecklistGuidedScreen />} />
           <Route path="/generator"           element={<GeneratorScreen />}     />
           <Route path="/road"                element={<RoadScreen />}          />
           <Route path="/profile"             element={<PropertyProfileScreen />} />
           <Route path="/conflicts"           element={<ConflictResolutionScreen />} />
-          <Route path="/equipment/:id"       element={<EquipmentDetailScreen />}   />
+          <Route path="/equipment/:id"         element={<EquipmentDetailScreen />}   />
+          <Route path="/equipment/:id/inspect" element={<InspectionScreen />}        />
+          <Route path="/risk-brief"            element={<RiskBriefScreen />}         />
+          <Route path="/import"                element={<ImportScreen />}            />
           <Route path="/sync"                element={<SyncScreen />}              />
           <Route path="/activity"            element={<ActivityScreen />}          />
           <Route path="/map"                 element={<MapScreen />}               />
+          <Route path="/search"              element={<SearchScreen />}            />
           <Route path="*"                    element={<Navigate to="/" />}     />
         </Routes>
         </Suspense>

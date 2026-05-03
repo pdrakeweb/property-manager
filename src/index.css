@@ -328,3 +328,25 @@
 :where(.dark) .border-amber-200   { border-color: rgb(120 53 15 / 0.7); }
 :where(.dark) .border-orange-200  { border-color: rgb(124 45 18 / 0.7); }
 :where(.dark) .border-red-200     { border-color: rgb(127 29 29 / 0.7); }
+
+/* ── Print mode for guided-checklist completion reports ─────────────────────
+   When a [data-print-root] element is present and the user invokes Print
+   (Ctrl/Cmd+P or our "Save as PDF" button), we hide everything except that
+   subtree so the browser's print-to-PDF produces a clean document. The
+   shell sidebar/header are unmounted from the print frame, leaving the
+   completion summary as the page content. */
+@media print {
+  body * { visibility: hidden !important; }
+  [data-print-root], [data-print-root] * { visibility: visible !important; }
+  [data-print-root] {
+    position: absolute !important;
+    inset: 0 !important;
+    background: white !important;
+    color: black !important;
+    padding: 24px !important;
+    max-width: none !important;
+  }
+  [data-print-root] .no-print { display: none !important; }
+  [data-print-root] img { max-width: 480px !important; height: auto !important; }
+  [data-print-root] a { color: black !important; text-decoration: none !important; }
+}

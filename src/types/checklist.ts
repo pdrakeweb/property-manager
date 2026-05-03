@@ -55,12 +55,23 @@ export interface ChecklistTemplate {
   updatedAt?: string
 }
 
+export interface ChecklistRunPhoto {
+  id:           string
+  /** data: URL captured locally; cleared after Drive upload (future). */
+  localDataUrl: string
+  takenAt:      string
+}
+
 export interface ChecklistRunItem {
   itemId: string
   done: boolean
   skipped: boolean
   note?: string
   completedAt?: string      // ISO timestamp
+  // ── Guided-mode metadata (optional; populated only by the guided runner) ──
+  startedAt?:       string
+  durationSeconds?: number
+  photos?:          ChecklistRunPhoto[]
 }
 
 export interface ChecklistRun {

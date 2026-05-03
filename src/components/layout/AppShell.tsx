@@ -5,6 +5,7 @@ import {
   MessageSquare, ClipboardList, Settings, ChevronDown, ChevronRight,
   Building2, TreePine, Users, Droplets, Receipt, Home, Zap, CalendarDays,
   RefreshCw, Shield, FileCheck, CheckSquare, Activity, MapPin, Map,
+  Search, ShieldAlert, FileText,
   Sun, Moon, Monitor, DollarSign, HardHat, BookOpen, AlertTriangle, X,
 } from 'lucide-react'
 import { cn } from '../../utils/cn'
@@ -31,6 +32,8 @@ const TOP_NAV: NavItem[] = [
   { to: '/calendar',   icon: CalendarDays,    label: 'Calendar',    mobileShow: true  },
   { to: '/checklists', icon: CheckSquare,     label: 'Checklists',  mobileShow: true  },
   { to: '/advisor',    icon: MessageSquare,   label: 'Ask AI',      mobileShow: true  },
+  { to: '/search',     icon: Search,          label: 'Search',      mobileShow: false },
+  { to: '/import',     icon: FileText,        label: 'Import',      mobileShow: false },
 ]
 
 const NAV_SECTIONS: NavSection[] = [
@@ -51,6 +54,7 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { to: '/profile',    icon: BookOpen,      label: 'Profile',     mobileShow: false },
       { to: '/map',        icon: Map,           label: 'Map',         mobileShow: false },
+      { to: '/risk-brief', icon: ShieldAlert,   label: 'Risk Brief',  mobileShow: false },
       { to: '/inventory',  icon: ClipboardList, label: 'Inventory',   mobileShow: false },
       { to: '/vendors',    icon: Users,         label: 'Vendors',     mobileShow: false },
       { to: '/permits',    icon: FileCheck,     label: 'Permits',     mobileShow: false },

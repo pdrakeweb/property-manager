@@ -18,6 +18,9 @@ import {
 import { localIndex } from '../lib/localIndex'
 import { useIndexVersion } from '../lib/useIndexVersion'
 import { useModalA11y } from '../lib/focusTrap'
+import { useToast } from '../components/Toast'
+import { PhotoLightbox } from '../components/photos/PhotoLightbox'
+import { VoiceMemoButton } from '../components/voice/VoiceMemoButton'
 import { syncAllToCalendar } from '../lib/calendarClient'
 import type { DryRunResult } from '../lib/calendarClient'
 import { DryRunModal } from '../components/DryRunModal'
@@ -125,6 +128,7 @@ function DoneModal({ task, propertyId, onConfirm, onClose }: DoneModalProps) {
   // Centralised modal a11y: focus trap, Escape-to-close, focus restore.
   // Replaces the previous ad-hoc Escape handler that lived here.
   const dialogRef = useModalA11y<HTMLDivElement>(onClose)
+  const toast = useToast()
 
   function handlePhotoFiles(e: React.ChangeEvent<HTMLInputElement>) {
     Array.from(e.target.files ?? []).forEach(file => {
@@ -171,6 +175,7 @@ function DoneModal({ task, propertyId, onConfirm, onClose }: DoneModalProps) {
         })
       }
     }
+    toast.success(`Marked complete: ${task.title}`)
     onConfirm()
   }
 
@@ -221,7 +226,21 @@ function DoneModal({ task, propertyId, onConfirm, onClose }: DoneModalProps) {
             <input type="date" value={laborWarrantyExpiry} onChange={e => setLaborWarrantyExpiry(e.target.value)} className={inp} />
           </div>
           <div>
-            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Notes</label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400">Notes</label>
+              <VoiceMemoButton
+                size="sm"
+                contextHint={task.systemLabel || task.title}
+                onApply={(parsed) => {
+                  setDoneNotes(prev => {
+                    const next = parsed.workDone
+                    return prev ? `${prev}\n${next}` : next
+                  })
+                  if (parsed.cost !== undefined && !actualCost) setActualCost(String(parsed.cost))
+                  if (parsed.contractor && !doneContractor) setDoneContractor(parsed.contractor)
+                }}
+              />
+            </div>
             <textarea value={doneNotes} onChange={e => setDoneNotes(e.target.value)} rows={2} placeholder="Any notes about the work done…" className={cn(inp, 'resize-none')} />
           </div>
           {/* Photos */}
@@ -503,6 +522,9 @@ function EventHistoryCard({ event }: { event: ReturnType<typeof costStore.getAll
   const afterPhotos   = event.photos?.filter(p => p.role === 'after')   ?? []
   const generalPhotos = event.photos?.filter(p => p.role === 'general') ?? []
   const hasPhotos = (event.photos?.length ?? 0) > 0
+  // Lightbox state — index into the full event.photos array, not a sub-bucket.
+  const [lightboxIdx, setLightboxIdx] = useState<number | null>(null)
+  const allPhotos = event.photos ?? []
 
   return (
     <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-sm overflow-hidden">
@@ -550,16 +572,25 @@ function EventHistoryCard({ event }: { event: ReturnType<typeof costStore.getAll
                   <div key={label}>
                     <p className={cn('text-[11px] font-semibold mb-1.5 uppercase tracking-wide', cls)}>{label}</p>
                     {photos.length > 0
-                      ? photos.map(p => (
-                          <div key={p.id} className={cn('rounded-xl overflow-hidden border mb-2', border)}>
-                            {p.localDataUrl
-                              ? <img src={p.localDataUrl} alt={label} className="w-full object-cover" />
-                              : <div className="aspect-square bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-slate-300 dark:text-slate-600">
-                                  <ImageIcon className="w-6 h-6" />
-                                </div>
-                            }
-                          </div>
-                        ))
+                      ? photos.map(p => {
+                          const idxInAll = allPhotos.indexOf(p)
+                          return (
+                            <button
+                              type="button"
+                              key={p.id}
+                              onClick={() => setLightboxIdx(idxInAll)}
+                              aria-label={`Open ${label.toLowerCase()} photo`}
+                              className={cn('block w-full rounded-xl overflow-hidden border mb-2 hover:opacity-90 transition-opacity', border)}
+                            >
+                              {p.localDataUrl
+                                ? <img src={p.localDataUrl} alt={label} className="w-full object-cover" />
+                                : <div className="aspect-square bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-slate-300 dark:text-slate-600">
+                                    <ImageIcon className="w-6 h-6" />
+                                  </div>
+                              }
+                            </button>
+                          )
+                        })
                       : <div className="aspect-square rounded-xl bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-slate-300 dark:text-slate-600">
                           <ImageIcon className="w-6 h-6" />
                         </div>
@@ -573,21 +604,31 @@ function EventHistoryCard({ event }: { event: ReturnType<typeof costStore.getAll
             <div>
               <p className="section-title mb-2">General</p>
               <div className="grid grid-cols-3 gap-2">
-                {generalPhotos.map(p => (
-                  <div key={p.id} className="rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700">
-                    {p.localDataUrl
-                      ? <img src={p.localDataUrl} alt="General" className="w-full aspect-square object-cover" />
-                      : <div className="w-full aspect-square bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-slate-300 dark:text-slate-600">
-                          <ImageIcon className="w-6 h-6" />
-                        </div>
-                    }
-                  </div>
-                ))}
+                {generalPhotos.map(p => {
+                  const idxInAll = allPhotos.indexOf(p)
+                  return (
+                    <button
+                      type="button"
+                      key={p.id}
+                      onClick={() => setLightboxIdx(idxInAll)}
+                      aria-label="Open photo"
+                      className="rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 hover:opacity-90 transition-opacity"
+                    >
+                      {p.localDataUrl
+                        ? <img src={p.localDataUrl} alt="General" className="w-full aspect-square object-cover" />
+                        : <div className="w-full aspect-square bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-slate-300 dark:text-slate-600">
+                            <ImageIcon className="w-6 h-6" />
+                          </div>
+                      }
+                    </button>
+                  )
+                })}
               </div>
             </div>
           )}
         </div>
       )}
+      <PhotoLightbox photos={allPhotos} startIndex={lightboxIdx} onClose={() => setLightboxIdx(null)} />
     </div>
   )
 }
