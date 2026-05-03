@@ -23,16 +23,31 @@ import type { Property } from '../types'
 
 const FILE_ID_KEY = 'pm_properties_file_id'
 
+// Lazy-init the underlying synced store. We *cannot* invoke
+// `makeSyncedStore` at module load: the chain
+//   syncedStore → localIndex → vaultSingleton → propertyStore → syncedStore
+// is a 5-node import cycle. Vite's browser pipeline tolerates the cycle
+// (every module finishes top-level evaluation before any function runs),
+// but Vite's SSR pipeline (used by Vitest + the Phase D vault test
+// harness) tracks each import as a lazy `__vite_ssr_import_*` binding —
+// calling `getDefinition(...)` from a syncedStore body that's still
+// mid-load throws TDZ.
+//
 // Self-referential propertyId — properties are records of themselves, so
 // their owning propertyId for index/sync purposes is their own id.
-const baseStore = makeSyncedStore<Property>(
-  'pm_properties_v1', 'property', 'property',
-  (p) => p.id,
-)
+let _baseStore: ReturnType<typeof makeSyncedStore<Property>> | null = null
+function baseStore(): ReturnType<typeof makeSyncedStore<Property>> {
+  if (_baseStore) return _baseStore
+  _baseStore = makeSyncedStore<Property>(
+    'pm_properties_v1', 'property', 'property',
+    (p) => p.id,
+  )
+  return _baseStore
+}
 
 /** Sorted-by-name list of properties. */
 function getAllSorted(): Property[] {
-  return [...baseStore.getAll()].sort((a, b) => a.name.localeCompare(b.name))
+  return [...baseStore().getAll()].sort((a, b) => a.name.localeCompare(b.name))
 }
 
 /**
@@ -50,39 +65,40 @@ export const propertyStore = {
   getAll(): Property[] { return getAllSorted() },
 
   getById(id: string): Property | null {
-    return baseStore.getById(id) ?? null
+    return baseStore().getById(id) ?? null
   },
 
   upsert(property: Property): void {
-    baseStore.upsert(property)
+    baseStore().upsert(property)
     notifyPropertyChange(property.id)
   },
 
   add(property: Property): void {
-    baseStore.add(property)
+    baseStore().add(property)
     notifyPropertyChange(property.id)
   },
 
   update(property: Property): void {
-    baseStore.update(property)
+    baseStore().update(property)
     notifyPropertyChange(property.id)
   },
 
   remove(id: string): void {
-    baseStore.remove(id)
+    baseStore().remove(id)
     notifyPropertyChange(id)
   },
 
   hasAny(): boolean {
-    return baseStore.getAll().length > 0
+    return baseStore().getAll().length > 0
   },
 
   /** Replace entire list — used when pulling from Drive on a fresh device. */
   replaceAll(props: Property[]): void {
-    for (const existing of baseStore.getAll()) {
-      if (!props.some(p => p.id === existing.id)) baseStore.remove(existing.id)
+    const store = baseStore()
+    for (const existing of store.getAll()) {
+      if (!props.some(p => p.id === existing.id)) store.remove(existing.id)
     }
-    for (const p of props) baseStore.upsert(p)
+    for (const p of props) store.upsert(p)
     syncBus.emit({ type: 'index-updated', recordIds: props.map(p => p.id), source: 'remote' })
   },
 

@@ -9,7 +9,7 @@
 
 import { makeStore } from './localStore'
 import { localIndex, type IndexRecordType } from './localIndex'
-import { propertyStore } from './propertyStore'
+import { getPropertyDriveRoot } from './propertyDriveRoot'
 import { auditLog } from './auditLog'
 import { getDefinition } from '../records/registry'
 import { resolveTitle } from '../records/_framework'
@@ -61,8 +61,10 @@ export function makeSyncedStore<T extends { id: string }>(
   function syncToIndex(item: T): void {
     const propId = resolvePropertyId(item)
     if (!propId) return
-    const property = propertyStore.getById(propId)
-    const rootFolderId = property?.driveRootFolderId ?? ''
+    // Read driveRootFolderId via the dependency-free helper rather than
+    // `propertyStore.getById` to keep this file off the syncedStore↔
+    // propertyStore cycle. See `lib/propertyDriveRoot.ts` for the why.
+    const rootFolderId = getPropertyDriveRoot(propId)
 
     // Don't queue if no Drive root (e.g. Camp with empty driveRootFolderId)
     if (!rootFolderId) return
