@@ -34,6 +34,12 @@ export interface CreateRecordVaultOptions {
   audit?:    AuditLogger
   /** Override the localStorage key for the index. */
   indexKey?: string
+  /**
+   * Stable id for THIS device, used as the actor on CRDT vector clocks.
+   * Browser builds inject the value from `lib/deviceId.ts`; tests pass a
+   * fixed string so vclock assertions are deterministic.
+   */
+  deviceId?: string
 }
 
 export interface RecordVault {
@@ -55,9 +61,9 @@ export interface RecordVault {
 }
 
 export function createRecordVault(opts: CreateRecordVaultOptions): RecordVault {
-  const { storage, kvStore, registry, host, audit = nullAuditLogger, indexKey } = opts
-  const localIndex = createLocalIndex({ kvStore, indexKey })
-  const ctx = { storage, localIndex, registry, host, audit }
+  const { storage, kvStore, registry, host, audit = nullAuditLogger, indexKey, deviceId } = opts
+  const localIndex = createLocalIndex({ kvStore, indexKey, deviceId })
+  const ctx = { storage, localIndex, registry, host, audit, deviceId: deviceId ?? 'unknown-device' }
 
   return {
     localIndex,

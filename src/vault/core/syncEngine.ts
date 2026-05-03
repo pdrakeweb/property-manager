@@ -27,6 +27,9 @@ export interface SyncEngineContext {
   registry: VaultRegistry
   host: HostMetadataStore
   audit: AuditLogger
+  /** This device's id — used as the actor on CRDT vector-clock writes
+   *  performed by the sync engine itself (e.g. merge writes during pull). */
+  deviceId: string
 }
 
 /** Field-by-field comparison — returns the keys where both sides have non-null, differing values. */

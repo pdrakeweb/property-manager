@@ -32,7 +32,7 @@ describe('vault/localDiskAdapter — functional round-trip', () => {
 
     localIndex.upsert(makeVendorRecord())
 
-    const result = await pushPending({ storage, localIndex, registry, host, audit: logger })
+    const result = await pushPending({ storage, localIndex, registry, host, audit: logger, deviceId: 'device-test' })
     assert.equal(result.uploaded, 1)
 
     const files = snapshotDiskAdapter(storage)
@@ -61,7 +61,7 @@ describe('vault/localDiskAdapter — functional round-trip', () => {
         syncState: 'synced', localUpdatedAt: '2026-04-19T00:00:00Z',
       }), 'application/json')
 
-      const result = await pullFromDrive({ storage, localIndex, registry, host, audit: logger }, 'prop-1')
+      const result = await pullFromDrive({ storage, localIndex, registry, host, audit: logger, deviceId: 'device-test' }, 'prop-1')
       assert.equal(result.pulled, 1)
       assert.equal(localIndex.getById('imp')?.title, 'Imported Vendor')
     } finally {
@@ -77,7 +77,7 @@ describe('vault/localDiskAdapter — functional round-trip', () => {
       const registry   = testRegistry()
       const host       = testHost({ 'prop-1': 'root-1' })
       const { logger } = recordingAudit()
-      const ctx = { storage, localIndex, registry, host, audit: logger }
+      const ctx = { storage, localIndex, registry, host, audit: logger, deviceId: 'device-test' }
 
       localIndex.upsert(makeVendorRecord())
       const first = await syncAll(ctx, 'prop-1')

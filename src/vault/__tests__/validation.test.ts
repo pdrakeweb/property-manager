@@ -24,6 +24,7 @@ interface Ctx {
   registry: VaultRegistry
   host: HostMetadataStore
   audit: AuditLogger
+  deviceId: string
   auditEntries: ReturnType<typeof recordingAudit>['entries']
 }
 
@@ -46,10 +47,14 @@ async function seedRemoteVendor(
 
 function makeCtx(registry: VaultRegistry): Ctx {
   const storage    = createMemoryAdapter()
-  const localIndex = createLocalIndex({ kvStore: memoryKV(), now: () => '2026-04-20T00:00:00.000Z' })
+  const localIndex = createLocalIndex({
+    kvStore: memoryKV(),
+    now: () => '2026-04-20T00:00:00.000Z',
+    deviceId: 'device-test',
+  })
   const host       = testHost({ 'prop-1': 'root-1' })
   const { logger, entries } = recordingAudit()
-  return { storage, localIndex, registry, host, audit: logger, auditEntries: entries }
+  return { storage, localIndex, registry, host, audit: logger, deviceId: 'device-test', auditEntries: entries }
 }
 
 describe('vault/syncEngine — validation on pull', () => {

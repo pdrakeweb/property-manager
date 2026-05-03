@@ -25,15 +25,22 @@ interface Ctx {
   registry: VaultRegistry
   host: HostMetadataStore
   audit: AuditLogger
+  deviceId: string
 }
+
+const TEST_DEVICE = 'device-test'
 
 function makeCtx(): Ctx & { auditEntries: ReturnType<typeof recordingAudit>['entries'] } {
   const storage = createMemoryAdapter()
-  const localIndex = createLocalIndex({ kvStore: memoryKV(), now: () => '2026-04-20T00:00:00.000Z' })
+  const localIndex = createLocalIndex({
+    kvStore: memoryKV(),
+    now: () => '2026-04-20T00:00:00.000Z',
+    deviceId: TEST_DEVICE,
+  })
   const registry = testRegistry()
   const host = testHost({ 'prop-1': 'root-1', 'prop-empty': null })
   const { logger, entries } = recordingAudit()
-  return { storage, localIndex, registry, host, audit: logger, auditEntries: entries }
+  return { storage, localIndex, registry, host, audit: logger, deviceId: TEST_DEVICE, auditEntries: entries }
 }
 
 describe('vault/syncEngine — push', () => {

@@ -7,6 +7,7 @@
  */
 
 import type { IndexRecord, KVStore, SyncStats } from './types'
+import { ensureVClock, increment as vIncrement } from './vclock'
 
 /**
  * Write-origin tag carried on index-change notifications.
@@ -52,6 +53,13 @@ export interface LocalIndexOptions {
   indexKey?: string
   /** Time source — tests override to get deterministic timestamps. */
   now?: () => string
+  /**
+   * Stable id for THIS device — used as the actor on vector-clock writes.
+   * Tests override; the browser builds inject the value from
+   * `lib/deviceId.ts` via the vault singleton. Defaults to `'unknown-device'`
+   * so legacy callers still work, but production callers always pass a real id.
+   */
+  deviceId?: string
 }
 
 /**
@@ -62,7 +70,12 @@ export interface LocalIndexOptions {
  * state is never cached.
  */
 export function createLocalIndex(opts: LocalIndexOptions): LocalIndex {
-  const { kvStore, indexKey = 'pm_index_v1', now = () => new Date().toISOString() } = opts
+  const {
+    kvStore,
+    indexKey = 'pm_index_v1',
+    now = () => new Date().toISOString(),
+    deviceId = 'unknown-device',
+  } = opts
 
   const subscribers = new Set<IndexChangeHandler>()
   function emit(ids: readonly string[], source: IndexChangeSource): void {
@@ -97,7 +110,25 @@ export function createLocalIndex(opts: LocalIndexOptions): LocalIndex {
 
     upsert(record, source = 'local') {
       const index = load()
-      index[record.id] = { ...record, localUpdatedAt: now() } as IndexRecord
+      const prior = index[record.id]
+      const incoming = { ...record, localUpdatedAt: now() } as IndexRecord
+
+      if (source === 'local') {
+        // Local mutation: bump THIS device's counter. Start from the prior
+        // record's clock so a new device joining a record's history advances
+        // its causal knowledge instead of forking a fresh chain.
+        const baseClock = ensureVClock(record.vclock ?? prior?.vclock, deviceId)
+        incoming.vclock = vIncrement(baseClock, deviceId)
+      } else {
+        // Remote-sourced upsert: caller is responsible for setting `vclock`
+        // (typically the merged remote+local clock from pullFromDrive).
+        // Backfill via ensureVClock when missing for back-compat.
+        if (!incoming.vclock) {
+          incoming.vclock = ensureVClock(prior?.vclock, deviceId)
+        }
+      }
+
+      index[record.id] = incoming
       save(index)
       emit([record.id], source)
     },
@@ -152,7 +183,18 @@ export function createLocalIndex(opts: LocalIndexOptions): LocalIndex {
     softDelete(id) {
       const index = load()
       if (!index[id]) return
-      index[id] = { ...index[id], deletedAt: now() }
+      // Tombstone: bump the clock so this delete dominates any concurrent
+      // edit on another device. syncState='deleted' marks it for upload as
+      // a tombstone rather than a live record (see pull-side resurrection
+      // protection in syncEngine.pullFromDrive).
+      const prior = index[index[id].id]
+      const baseClock = ensureVClock(prior.vclock, deviceId)
+      index[id] = {
+        ...index[id],
+        deletedAt: now(),
+        syncState: 'deleted',
+        vclock: vIncrement(baseClock, deviceId),
+      }
       save(index)
       emit([id], 'local')
     },

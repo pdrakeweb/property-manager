@@ -12,8 +12,14 @@ import assert from 'node:assert/strict'
 import { createLocalIndex, type LocalIndex } from '../core/localIndex'
 import { memoryKV, makeVendorRecord } from './testFixtures'
 
+const TEST_DEVICE = 'device-A'
+
 function freshIndex(): LocalIndex {
-  return createLocalIndex({ kvStore: memoryKV(), now: () => '2026-04-20T00:00:00.000Z' })
+  return createLocalIndex({
+    kvStore: memoryKV(),
+    now: () => '2026-04-20T00:00:00.000Z',
+    deviceId: TEST_DEVICE,
+  })
 }
 
 describe('vault/localIndex', () => {
@@ -136,5 +142,56 @@ describe('vault/localIndex', () => {
     idx2.upsert(makeVendorRecord())
     assert.ok(kv.getItem('alt_key'))
     assert.equal(kv.getItem('pm_index_v1'), null)
+  })
+
+  // ─── Vector-clock semantics ────────────────────────────────────────────────
+
+  it('local upsert stamps a vclock and increments this device on subsequent writes', () => {
+    idx.upsert(makeVendorRecord())
+    const r1 = idx.getById('v1')!
+    assert.deepEqual(r1.vclock, { [TEST_DEVICE]: 1 })
+
+    idx.upsert(r1)  // re-upsert
+    const r2 = idx.getById('v1')!
+    assert.deepEqual(r2.vclock, { [TEST_DEVICE]: 2 })
+
+    idx.upsert(r2)
+    assert.deepEqual(idx.getById('v1')!.vclock, { [TEST_DEVICE]: 3 })
+  })
+
+  it('back-compat: incoming record without vclock is normalised on local upsert', () => {
+    const noClock = makeVendorRecord({ vclock: undefined })
+    idx.upsert(noClock)
+    // Treated as { TEST_DEVICE: 0 } baseline, then incremented to 1.
+    assert.deepEqual(idx.getById('v1')!.vclock, { [TEST_DEVICE]: 1 })
+  })
+
+  it('remote-sourced upsert does NOT bump the local device counter', () => {
+    // Simulates a record landing from pullFromDrive with a clock from another device.
+    idx.upsert(
+      { ...makeVendorRecord(), vclock: { 'device-other': 4, [TEST_DEVICE]: 2 } },
+      'remote',
+    )
+    // Vclock preserved verbatim — the engine pre-merged before calling upsert.
+    assert.deepEqual(idx.getById('v1')!.vclock, { 'device-other': 4, [TEST_DEVICE]: 2 })
+  })
+
+  it('local write after a remote pull advances on top of the merged clock', () => {
+    idx.upsert(
+      { ...makeVendorRecord(), vclock: { 'device-other': 4, [TEST_DEVICE]: 2 } },
+      'remote',
+    )
+    const merged = idx.getById('v1')!
+    idx.upsert(merged)  // local edit
+    assert.deepEqual(idx.getById('v1')!.vclock, { 'device-other': 4, [TEST_DEVICE]: 3 })
+  })
+
+  it('softDelete bumps the vclock so the tombstone dominates', () => {
+    idx.upsert(makeVendorRecord())  // vclock = { A: 1 }
+    idx.softDelete('v1')             // vclock = { A: 2 }
+    const r = idx.getById('v1')!
+    assert.deepEqual(r.vclock, { [TEST_DEVICE]: 2 })
+    assert.equal(r.syncState, 'deleted')
+    assert.ok(r.deletedAt)
   })
 })
