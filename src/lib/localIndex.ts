@@ -41,6 +41,7 @@ export type IndexRecordType =
   | 'road'
   | 'generator_log'
   | 'property'
+  | 'content_item'
 
 export type SyncState = VaultSyncState
 export type SyncStats = VaultSyncStats

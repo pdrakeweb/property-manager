@@ -82,3 +82,6 @@ export type { GeneratorRecordDsl } from './generator'
 
 export { PropertyZ, propertyDef } from './property'
 export type { PropertyDsl } from './property'
+
+export { ContentItemZ, contentItemDef, CONTENT_CATEGORIES, contentCategoryLabel } from './contentItem'
+export type { ContentItem, ContentCategory } from './contentItem'
