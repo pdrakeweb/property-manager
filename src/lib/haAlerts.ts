@@ -228,6 +228,11 @@ if (typeof window !== 'undefined') {
 // ─── Focus-based polling installer ───────────────────────────────────────────
 
 let installed = false
+// Stable references so `uninstallFocusPolling` can remove the same listeners
+// `installFocusPolling` added.
+let focusTick:      (() => void) | null = null
+let visibilityTick: (() => void) | null = null
+let initialTimerId: ReturnType<typeof setTimeout> | null = null
 
 /**
  * Wire up window focus + interval polling. Idempotent — call once at app
@@ -238,17 +243,37 @@ export function installFocusPolling(): void {
   if (installed || typeof window === 'undefined') return
   installed = true
 
-  const tick = () => { void refreshAlerts() }
+  focusTick = () => { void refreshAlerts() }
+  visibilityTick = () => {
+    if (document.visibilityState === 'visible' && focusTick) focusTick()
+  }
 
-  window.addEventListener('focus', tick)
+  window.addEventListener('focus', focusTick)
   // Also fire on visibilitychange → visible (covers tab switches without
   // window focus events on some browsers).
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') tick()
-  })
+  document.addEventListener('visibilitychange', visibilityTick)
 
   // Initial tick after boot — slight delay so we don't block first paint.
-  setTimeout(tick, 1500)
+  initialTimerId = setTimeout(focusTick, 1500)
+}
+
+/**
+ * Tear down the focus polling installed by `installFocusPolling`.
+ * Removes window/document listeners, cancels the boot-time initial tick,
+ * and resets the installed flag so a later `installFocusPolling()` call
+ * re-installs cleanly. Safe to call when polling was never installed.
+ */
+export function uninstallFocusPolling(): void {
+  if (!installed || typeof window === 'undefined') return
+  if (focusTick)      window.removeEventListener('focus', focusTick)
+  if (visibilityTick) document.removeEventListener('visibilitychange', visibilityTick)
+  if (initialTimerId !== null) {
+    clearTimeout(initialTimerId)
+    initialTimerId = null
+  }
+  focusTick      = null
+  visibilityTick = null
+  installed      = false
 }
 
 // ─── React hook ──────────────────────────────────────────────────────────────
