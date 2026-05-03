@@ -65,7 +65,11 @@ async function resolveRecordFolder(
 export async function pushPending(
   ctx: SyncEngineContext,
 ): Promise<{ uploaded: number; failed: number; errors: string[] }> {
-  const pending = ctx.localIndex.getPending()
+  // Live records that need (re)upload + tombstones (deletes that need to
+  // propagate to peers). Tombstones serialize as the same JSON shape but
+  // carry `syncState: 'deleted'` and a `deletedAt` timestamp — peers see
+  // these on pull and refuse to resurrect.
+  const pending = [...ctx.localIndex.getPending(), ...ctx.localIndex.getPendingTombstones()]
   let uploaded = 0
   const errors: string[] = []
 
@@ -276,9 +280,12 @@ export async function pullFromDrive(
   for (const r of ctx.localIndex.getAllForProperty(propertyId)) {
     if (r.driveFileId) byDriveId.set(r.driveFileId, r)
   }
-  // Also include tombstones (which getAllForProperty hides) — their drive
-  // ids must be matched against incoming files so we don't resurrect them.
-  // (Phase 3 will add a getAllIncludingDeleted helper; for now scan via id-by-id.)
+  // Tombstones too — `getAllForProperty` filters them out, but we need them
+  // here so an incoming non-deleted record we've locally tombstoned can be
+  // refused (resurrection protection).
+  for (const r of ctx.localIndex.getAllTombstones()) {
+    if (r.propertyId === propertyId && r.driveFileId) byDriveId.set(r.driveFileId, r)
+  }
 
   let pulled = 0
   let failed = 0
@@ -329,20 +336,32 @@ export async function pullFromDrive(
           }
 
           // No prior local copy → first-time pull, drive wins by default.
+          // If the incoming record is a tombstone, mirror it locally so we
+          // don't accidentally "discover" a deleted record as if it were live.
           if (!local) {
+            const adoptingTombstone = !!remote.deletedAt
             ctx.localIndex.upsert({
               ...remote,
               propertyId,
-              syncState:      'synced',
+              syncState:      adoptingTombstone ? 'deleted' : 'synced',
               conflictReason: undefined,
               driveFileId:    file.id,
               driveEtag:      fileData.etag,
               driveUpdatedAt: new Date().toISOString(),
               vclock:         ensureVClock(remote.vclock, ctx.deviceId),
             }, 'remote')
-            pulled++
+            if (!adoptingTombstone) pulled++
             continue
           }
+
+          // Resurrection protection. If local has a tombstone and remote is
+          // a live record, vclock arbitrates: tombstone-wins keeps the delete
+          // (don't resurrect); remote-wins lets the un-delete through (a
+          // peer un-deleted by writing on top of a stale clock — rare but
+          // legitimate). The mergeRecords call below handles both cases.
+          //
+          // Likewise if remote is itself a tombstone and we have a live
+          // record: vclock decides whether to apply the delete.
 
           // Vclock-aware three-way merge against the existing local copy.
           const outcome = mergeRecords(local, remote, ctx.deviceId)
@@ -359,14 +378,20 @@ export async function pullFromDrive(
           }
 
           if (outcome.kind === 'local-wins') {
-            // Local has newer causal knowledge — push will sync it back. Don't
-            // overwrite local content; just remember we've seen this etag so
-            // we don't keep re-downloading the same stale file.
+            // Local has newer causal knowledge — push will sync it back.
+            // Refresh the etag so we don't keep re-downloading the stale
+            // remote, and reset syncState so push picks the record up:
+            // tombstones go back to 'deleted' (handled by
+            // getPendingTombstones); live records to 'pending_upload'.
+            //
+            // Do NOT touch driveUpdatedAt for tombstones — `getPendingTombstones`
+            // uses `driveUpdatedAt < deletedAt` to detect "needs re-push", and
+            // we still need to push this delete to Drive.
             ctx.localIndex.upsert({
               ...local,
               driveEtag:      fileData.etag,
-              driveUpdatedAt: new Date().toISOString(),
-              syncState:      'pending_upload',
+              ...(local.deletedAt ? {} : { driveUpdatedAt: new Date().toISOString() }),
+              syncState:      local.deletedAt ? 'deleted' : 'pending_upload',
             }, 'remote')
             continue
           }
@@ -374,10 +399,15 @@ export async function pullFromDrive(
           if (outcome.kind === 'drive-wins') {
             // Remote dominates — adopt it, with the merged clock. Clear any
             // stale conflictReason / conflictFields from a prior bad pull.
+            // If remote is itself a tombstone, mirror that into the local
+            // state machine; otherwise mark synced (which will resurrect
+            // any prior local tombstone — the un-delete had a higher clock,
+            // so this is the user's intent).
+            const adoptingTombstone = !!remote.deletedAt
             ctx.localIndex.upsert({
               ...remote,
               propertyId,
-              syncState:      'synced',
+              syncState:      adoptingTombstone ? 'deleted' : 'synced',
               conflictReason: undefined,
               conflictFields: undefined,
               driveFileId:    file.id,

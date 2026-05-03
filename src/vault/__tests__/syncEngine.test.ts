@@ -383,6 +383,115 @@ describe('vault/syncEngine — pullFromDrive vclock semantics', () => {
   })
 })
 
+describe('vault/syncEngine — tombstones', () => {
+  let ctx: Ctx & { auditEntries: ReturnType<typeof recordingAudit>['entries'] }
+  beforeEach(() => { ctx = makeCtx() })
+
+  it('push uploads a fresh tombstone alongside the live records', async () => {
+    ctx.localIndex.upsert(makeVendorRecord({ id: 'a' }))
+    ctx.localIndex.upsert(makeVendorRecord({ id: 'b' }))
+    await pushPending(ctx)
+    ctx.localIndex.softDelete('a')
+
+    const result = await pushPending(ctx)
+    assert.equal(result.uploaded, 1)
+    // The tombstone file is on Drive and carries the deletedAt marker.
+    const folderId = await ctx.storage.resolveFolderId('Vendors', 'root-1')
+    const files    = await ctx.storage.listFiles(folderId)
+    const aFile = files.find(f => f.name === 'vendor_a.json')!
+    const data  = await ctx.storage.downloadFile(aFile.id)
+    const parsed = JSON.parse(data.content) as { deletedAt?: string; syncState: string }
+    assert.ok(parsed.deletedAt, 'remote tombstone carries deletedAt')
+    assert.equal(parsed.syncState, 'deleted')
+  })
+
+  it('push does not loop on a successfully-uploaded tombstone', async () => {
+    ctx.localIndex.upsert(makeVendorRecord({ id: 'a' }))
+    await pushPending(ctx)
+    ctx.localIndex.softDelete('a')
+    const r1 = await pushPending(ctx)
+    assert.equal(r1.uploaded, 1)
+    // Local tombstone is still present; pending list shouldn't keep it.
+    assert.equal(ctx.localIndex.getPendingTombstones().length, 0,
+      'tombstone is no longer pending after the push')
+    const r2 = await pushPending(ctx)
+    assert.equal(r2.uploaded, 0, 'second push is a no-op')
+  })
+
+  it('pull resurrects a remotely-undeleted record only when remote vclock dominates', async () => {
+    // Local has tombstoned 'a' with vclock { device-test: 2 }
+    ctx.localIndex.upsert(makeVendorRecord({ id: 'a' }))
+    await pushPending(ctx)  // syncs once
+    const folderId = await ctx.storage.resolveFolderId('Vendors', 'root-1')
+    const files    = await ctx.storage.listFiles(folderId)
+    const driveId  = files[0].id
+    ctx.localIndex.softDelete('a')
+
+    // Peer un-deletes by writing a live record with a vclock that dominates
+    // local's tombstone clock (device-other:5 > anything local has).
+    await ctx.storage.updateFile(driveId, JSON.stringify({
+      id: 'a', type: 'vendor', propertyId: 'prop-1',
+      title: 'Ohio HVAC', data: { id: 'a', name: 'Ohio HVAC' },
+      syncState: 'synced', localUpdatedAt: '2026-04-21T00:00:00Z',
+      vclock: { 'device-test': 5, 'device-other': 5 },
+    }), 'application/json')
+
+    await pullFromDrive(ctx, 'prop-1')
+    const r = ctx.localIndex.getById('a')!
+    assert.equal(r.syncState, 'synced', 'resurrection succeeded')
+    assert.equal(r.deletedAt, undefined, 'tombstone cleared')
+  })
+
+  it('pull does NOT resurrect when local tombstone vclock dominates', async () => {
+    ctx.localIndex.upsert(makeVendorRecord({ id: 'a' }))
+    await pushPending(ctx)
+    const folderId = await ctx.storage.resolveFolderId('Vendors', 'root-1')
+    const files    = await ctx.storage.listFiles(folderId)
+    const driveId  = files[0].id
+
+    // Local edits a few times then deletes — vclock = { device-test: 4 }
+    const r0 = ctx.localIndex.getById('a')!
+    ctx.localIndex.upsert(r0)
+    ctx.localIndex.upsert(ctx.localIndex.getById('a')!)
+    ctx.localIndex.softDelete('a')
+
+    // Peer writes a live record but with the OLD vclock — they never saw
+    // local's edits or tombstone. Local clock dominates.
+    await ctx.storage.updateFile(driveId, JSON.stringify({
+      id: 'a', type: 'vendor', propertyId: 'prop-1',
+      title: 'Ohio HVAC', data: { id: 'a', name: 'Stale' },
+      syncState: 'synced', localUpdatedAt: '2026-04-21T00:00:00Z',
+      vclock: { 'device-test': 1 },
+    }), 'application/json')
+
+    await pullFromDrive(ctx, 'prop-1')
+    const r = ctx.localIndex.getById('a')!
+    assert.equal(r.syncState, 'deleted', 'tombstone preserved — no resurrection')
+    assert.ok(r.deletedAt)
+  })
+
+  it('pull mirrors a remote tombstone into the local state machine', async () => {
+    // Drive has a never-seen-locally tombstone; first-time pull adopts it.
+    const folderId = await ctx.storage.resolveFolderId('Vendors', 'root-1')
+    await ctx.storage.uploadFile(folderId, 'vendor_z.json', JSON.stringify({
+      id: 'z', type: 'vendor', propertyId: 'prop-1',
+      title: 'Gone', data: { id: 'z', name: 'Gone' },
+      syncState: 'deleted',
+      deletedAt: '2026-04-19T00:00:00Z',
+      localUpdatedAt: '2026-04-19T00:00:00Z',
+      vclock: { 'device-other': 1 },
+    }), 'application/json')
+
+    const result = await pullFromDrive(ctx, 'prop-1')
+    assert.equal(result.pulled, 0, 'tombstones are not counted as live pulls')
+    const r = ctx.localIndex.getById('z')!
+    assert.equal(r.syncState, 'deleted')
+    assert.ok(r.deletedAt)
+    // And the record is correctly hidden from list views.
+    assert.equal(ctx.localIndex.getAll('vendor', 'prop-1').length, 0)
+  })
+})
+
 describe('vault/syncEngine — full sync', () => {
   it('pulls then pushes in one call and audits the summary', async () => {
     const ctx = makeCtx()

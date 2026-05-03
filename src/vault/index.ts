@@ -58,6 +58,10 @@ export interface RecordVault {
   markdownFilename(record: IndexRecord): string
   /** Shortcut to `localIndex.getSyncStats`. */
   syncStats(propertyId?: string): SyncStats
+  /** Sweep tombstones older than `olderThanMs` ago (default 30 days).
+   *  Returns the number purged. Safe to call frequently — cheap when no
+   *  tombstones are due for collection. */
+  gcTombstones(olderThanMs?: number): number
 }
 
 export function createRecordVault(opts: CreateRecordVaultOptions): RecordVault {
@@ -75,6 +79,7 @@ export function createRecordVault(opts: CreateRecordVaultOptions): RecordVault {
     renderMarkdown:   (record) => renderRecordMarkdown(registry, record),
     markdownFilename: (record) => resolveMarkdownFilename(registry, record),
     syncStats:        (propertyId) => localIndex.getSyncStats(propertyId),
+    gcTombstones:     (olderThanMs) => localIndex.gcTombstones(olderThanMs),
   }
 }
 

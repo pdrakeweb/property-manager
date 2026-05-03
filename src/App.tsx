@@ -16,6 +16,7 @@ import { EquipmentDetailScreen }       from './screens/EquipmentDetailScreen'
 import { syncAll, seedTasksForProperty, syncPropertyConfig, syncAuditLog, pollDriveChanges, syncPendingPhotos } from './lib/syncEngine'
 import { exportAllMarkdownToDrive } from './lib/markdownExport'
 import { propertyStore, seedPropertiesFromMock } from './lib/propertyStore'
+import { getVault } from './lib/vaultSingleton'
 import {
   isAuthenticated,
   startOAuthFlow,
@@ -301,6 +302,20 @@ function useStartupSync() {
   useEffect(() => {
     // 1. Migrate: seed properties from mock data if localStorage is empty
     seedPropertiesFromMock()
+
+    // 1b. Sweep tombstones older than 30 days. Cheap when nothing is due
+    //     (single localStorage read + scan). Drive's own trash retention is
+    //     ~30 days too, so by the time we drop a tombstone the file it
+    //     marks for deletion is gone — no resurrection risk.
+    try {
+      const purged = getVault().gcTombstones()
+      if (purged > 0) {
+        // Imported lazily to keep the module graph clean.
+        import('./lib/auditLog').then(({ auditLog }) =>
+          auditLog.info('sync.gc', `Purged ${purged} tombstone${purged === 1 ? '' : 's'} (>30d old)`),
+        )
+      }
+    } catch { /* GC failure is non-fatal — try again next boot */ }
 
     // 2. Seed tasks for all properties immediately (no network needed)
     const seedAll = async () => {

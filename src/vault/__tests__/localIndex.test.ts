@@ -194,4 +194,83 @@ describe('vault/localIndex', () => {
     assert.equal(r.syncState, 'deleted')
     assert.ok(r.deletedAt)
   })
+
+  // ─── Tombstones ────────────────────────────────────────────────────────────
+
+  it('getPendingTombstones lists fresh deletes that have not been pushed', () => {
+    idx.upsert(makeVendorRecord({ id: 'a' }))
+    idx.upsert(makeVendorRecord({ id: 'b' }))
+    idx.softDelete('a')
+    assert.equal(idx.getPendingTombstones().length, 1)
+    assert.equal(idx.getPendingTombstones()[0].id, 'a')
+  })
+
+  it('getPendingTombstones excludes tombstones already pushed (driveUpdatedAt >= deletedAt)', () => {
+    idx.upsert(makeVendorRecord())
+    idx.softDelete('v1')
+    // Simulate push: markSynced sets driveUpdatedAt to NOW. Force the
+    // tombstone's deletedAt to be older so the comparison works regardless
+    // of ms granularity in the test now() stub (which returns a fixed string).
+    const before = idx.getById('v1')!
+    idx.upsert({ ...before, deletedAt: '2026-04-19T00:00:00.000Z' })
+    idx.markSynced('v1', 'drive-id', '2026-04-19T01:00:00.000Z', 'etag')
+    assert.equal(idx.getPendingTombstones().length, 0,
+      'tombstone with driveUpdatedAt > deletedAt is no longer pending')
+  })
+
+  it('markSynced preserves the deleted state on tombstones', () => {
+    idx.upsert(makeVendorRecord())
+    idx.softDelete('v1')
+    idx.markSynced('v1', 'drive-id', '2030-01-01T00:00:00.000Z', 'etag')
+    const r = idx.getById('v1')!
+    assert.equal(r.syncState, 'deleted', 'tombstone stays deleted, not flipped to synced')
+    assert.ok(r.deletedAt)
+    assert.equal(r.driveFileId, 'drive-id')
+  })
+
+  it('getAllTombstones includes pushed AND unpushed deletes', () => {
+    idx.upsert(makeVendorRecord({ id: 'a' }))
+    idx.upsert(makeVendorRecord({ id: 'b' }))
+    idx.softDelete('a')
+    idx.softDelete('b')
+    idx.markSynced('a', 'drive-a', '2030-01-01T00:00:00.000Z')
+    assert.equal(idx.getAllTombstones().length, 2)
+  })
+
+  it('gcTombstones purges tombstones older than the cutoff', () => {
+    idx.upsert(makeVendorRecord({ id: 'old' }))
+    idx.upsert(makeVendorRecord({ id: 'fresh' }))
+    idx.softDelete('old')
+    idx.softDelete('fresh')
+    // Backdate `old` by 60 days; leave `fresh` at the test now() time.
+    const oldRec = idx.getById('old')!
+    idx.upsert({ ...oldRec, deletedAt: new Date(Date.now() - 60 * 24 * 60 * 60_000).toISOString() })
+
+    const purged = idx.gcTombstones()  // default 30 days
+    assert.equal(purged, 1)
+    assert.equal(idx.getById('old'), null, 'old tombstone hard-deleted')
+    assert.ok(idx.getById('fresh'),       'fresh tombstone retained')
+  })
+
+  it('gcTombstones honors a custom cutoff', () => {
+    idx.upsert(makeVendorRecord({ id: 'a' }))
+    idx.softDelete('a')
+    const aRec = idx.getById('a')!
+    // Two-day-old tombstone
+    idx.upsert({ ...aRec, deletedAt: new Date(Date.now() - 2 * 24 * 60 * 60_000).toISOString() })
+
+    assert.equal(idx.gcTombstones(7 * 24 * 60 * 60_000), 0, '<7d old: kept')
+    assert.equal(idx.gcTombstones(1 * 24 * 60 * 60_000), 1, '>1d old: purged')
+  })
+
+  it('gcTombstones leaves live records alone', () => {
+    idx.upsert(makeVendorRecord({ id: 'a' }))
+    idx.upsert(makeVendorRecord({ id: 'b' }))
+    idx.softDelete('a')
+    const aRec = idx.getById('a')!
+    idx.upsert({ ...aRec, deletedAt: new Date(Date.now() - 60 * 24 * 60 * 60_000).toISOString() })
+
+    idx.gcTombstones()
+    assert.ok(idx.getById('b'), 'live record untouched')
+  })
 })
