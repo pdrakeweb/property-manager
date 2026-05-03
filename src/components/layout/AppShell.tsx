@@ -21,6 +21,7 @@ import {
   getQueueCount, getFailedCount, getFailedItems, resetItem, resetFailedItems,
 } from '../../lib/offlineQueue'
 import type { QueuedUpload } from '../../lib/offlineQueue'
+import { getTotalInboxQueueCount, INBOX_QUEUE_CHANGED_EVENT } from '../../lib/inboxPoller'
 
 type NavItem = { to: string; icon: React.ComponentType<{ className?: string }>; label: string; mobileShow: boolean }
 type NavSection = { label: string; icon: React.ComponentType<{ className?: string }>; items: NavItem[] }
@@ -119,6 +120,25 @@ function NavSectionGroup({ section, pathname }: { section: NavSection; pathname:
       )}
     </div>
   )
+}
+
+/**
+ * Live count of items waiting in any property's inbox queue. Re-reads when
+ * the poller fires `pm-inbox-queue-changed` and on storage events from
+ * other tabs so the badge stays in sync without polling.
+ */
+function useInboxBadgeCount(): number {
+  const [count, setCount] = useState(() => getTotalInboxQueueCount())
+  useEffect(() => {
+    const refresh = () => setCount(getTotalInboxQueueCount())
+    window.addEventListener(INBOX_QUEUE_CHANGED_EVENT, refresh)
+    window.addEventListener('storage', refresh)
+    return () => {
+      window.removeEventListener(INBOX_QUEUE_CHANGED_EVENT, refresh)
+      window.removeEventListener('storage', refresh)
+    }
+  }, [])
+  return count
 }
 
 function ThemeToggle() {
@@ -456,6 +476,7 @@ interface AppShellProps {
 
 export function AppShell({ children }: AppShellProps) {
   const location = useLocation()
+  const inboxCount = useInboxBadgeCount()
 
   const currentNav = NAV_ITEMS.find(n =>
     n.to === '/' ? location.pathname === '/' : location.pathname.startsWith(n.to)
@@ -485,22 +506,33 @@ export function AppShell({ children }: AppShellProps) {
 
         {/* Nav items */}
         <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-          {TOP_NAV.map(({ to, icon: Icon, label }) => (
-            <NavLink
-              key={to}
-              to={to}
-              end={to === '/'}
-              className={({ isActive }) => cn(
-                'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
-                isActive
-                  ? 'bg-green-600 text-white'
-                  : 'text-slate-300 hover:bg-slate-700 hover:text-white',
-              )}
-            >
-              <Icon className="w-4 h-4 shrink-0" />
-              {label}
-            </NavLink>
-          ))}
+          {TOP_NAV.map(({ to, icon: Icon, label }) => {
+            const badge = to === '/import' && inboxCount > 0 ? inboxCount : 0
+            return (
+              <NavLink
+                key={to}
+                to={to}
+                end={to === '/'}
+                className={({ isActive }) => cn(
+                  'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
+                  isActive
+                    ? 'bg-green-600 text-white'
+                    : 'text-slate-300 hover:bg-slate-700 hover:text-white',
+                )}
+              >
+                <Icon className="w-4 h-4 shrink-0" />
+                <span className="flex-1">{label}</span>
+                {badge > 0 && (
+                  <span
+                    aria-label={`${badge} pending inbox item${badge === 1 ? '' : 's'}`}
+                    className="bg-red-500 text-white text-[10px] font-bold rounded-full px-1.5 py-0.5 min-w-[18px] text-center"
+                  >
+                    {badge > 99 ? '99+' : badge}
+                  </span>
+                )}
+              </NavLink>
+            )
+          })}
           <div className="pt-3 space-y-1">
             {NAV_SECTIONS.map(section => (
               <NavSectionGroup key={section.label} section={section} pathname={location.pathname} />

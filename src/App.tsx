@@ -14,6 +14,7 @@ import { SepticScreen }         from './screens/SepticScreen'
 import { PropertyProfileScreen }       from './screens/PropertyProfileScreen'
 import { EquipmentDetailScreen }       from './screens/EquipmentDetailScreen'
 import { syncAll, seedTasksForProperty, syncPropertyConfig, syncAuditLog, pollDriveChanges, syncPendingPhotos } from './lib/syncEngine'
+import { pollAllInboxes } from './lib/inboxPoller'
 import { exportAllMarkdownToDrive } from './lib/markdownExport'
 import { propertyStore, seedPropertiesFromMock } from './lib/propertyStore'
 import {
@@ -333,6 +334,10 @@ function useStartupSync() {
         // record with localDataUrl cleared.
         await syncPendingPhotos()
         await syncAuditLog(token)
+        // Inbox poll runs after syncAll so anything Claude (or another
+        // device) dropped into Drive surfaces in the Import tab on next
+        // tick. Failures inside pollAllInboxes are non-fatal by design.
+        await pollAllInboxes(token)
         localStorage.setItem('pm_last_sync_at', new Date().toISOString())
       } catch {
         // Non-fatal — app works offline from local index
@@ -378,11 +383,32 @@ function useStartupSync() {
       if (Number.isNaN(ts)) return true
       return Date.now() - ts > STALE_AFTER_MS
     }
+    // Inbox polling fires on every focus regardless of staleness — Drive
+    // drops are cheap to check and the latency/value tradeoff favors fresh
+    // queue counts over conservative sync.
+    let inboxPolling = false
+    const pollInboxOnFocus = async () => {
+      if (inboxPolling) return
+      inboxPolling = true
+      try {
+        const token = await getValidToken()
+        if (!token) return
+        await pollAllInboxes(token)
+      } catch {
+        // Non-fatal
+      } finally {
+        inboxPolling = false
+      }
+    }
     const onVisibility = () => {
-      if (document.visibilityState === 'visible' && isStale()) run()
+      if (document.visibilityState === 'visible') {
+        if (isStale()) run()
+        pollInboxOnFocus()
+      }
     }
     const onFocus = () => {
       if (isStale()) run()
+      pollInboxOnFocus()
     }
     document.addEventListener('visibilitychange', onVisibility)
     window.addEventListener('focus', onFocus)

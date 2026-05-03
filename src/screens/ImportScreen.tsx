@@ -16,11 +16,12 @@
  *   - notes      → narrativeStore.append (free-form notes)
  */
 
-import { useRef, useState, type ChangeEvent } from 'react'
+import { useEffect, useRef, useState, type ChangeEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Upload, FileText, Loader2, Sparkles, ChevronDown, ChevronUp, Check,
   Wrench, ShoppingCart, CheckCircle2, ClipboardList, StickyNote, AlertTriangle,
+  Inbox, RefreshCw, Copy, X, FolderOpen,
 } from 'lucide-react'
 import { cn } from '../utils/cn'
 import { useAppStore } from '../store/AppStoreContext'
@@ -33,6 +34,13 @@ import { customTaskStore } from '../lib/maintenanceStore'
 import { capitalItemStore } from '../lib/capitalItemStore'
 import { costStore } from '../lib/costStore'
 import { localIndex } from '../lib/localIndex'
+import {
+  getInboxQueue, removeFromInboxQueue, pollInbox,
+  INBOX_QUEUE_CHANGED_EVENT, type QueuedInboxItem,
+} from '../lib/inboxPoller'
+import { DriveClient, INBOX_FOLDER_NAME } from '../lib/driveClient'
+import { propertyStore } from '../lib/propertyStore'
+import { getValidToken } from '../auth/oauth'
 import { getOpenRouterKey } from '../store/settings'
 import { useToast } from '../components/Toast'
 import type { Priority } from '../types'
@@ -211,9 +219,219 @@ function ItemCard({
   )
 }
 
+// ── Review panel (shared by Paste tab and Inbox tab) ────────────────────────
+
+interface ReviewPanelProps {
+  preview:        ImportPreview
+  approved:       Set<number>
+  activePropertyId: string
+  source:         'paste' | 'inbox'
+  inboxFileName?: string
+  onToggle:       (idx: number) => void
+  onChange:       (idx: number, next: ImportItem) => void
+  onBack:         () => void
+  onCommit:       () => void
+}
+
+function ReviewPanel({
+  preview, approved, activePropertyId, source, inboxFileName,
+  onToggle, onChange, onBack, onCommit,
+}: ReviewPanelProps) {
+  const groups = preview.items.reduce<Record<string, number[]>>((acc, _, i) => {
+    const k = preview.items[i].kind
+    ;(acc[k] = acc[k] ?? []).push(i)
+    return acc
+  }, {})
+
+  return (
+    <>
+      <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-sm p-4 flex items-center gap-3 flex-wrap">
+        <Sparkles className="w-4 h-4 text-sky-500" />
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate">
+            {source === 'inbox' && inboxFileName
+              ? <>Reviewing <span className="font-mono">{inboxFileName}</span></>
+              : <>{preview.items.length} item{preview.items.length === 1 ? '' : 's'} extracted ({preview.source === 'llm' ? 'AI' : 'fast path'})</>
+            }
+          </p>
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            {approved.size} of {preview.items.length} approved
+          </p>
+        </div>
+        <button onClick={onBack} className="btn">Back</button>
+        <button
+          onClick={onCommit}
+          disabled={approved.size === 0}
+          className="btn btn-primary"
+        >
+          Import {approved.size}
+        </button>
+      </div>
+
+      {(['task', 'purchase', 'completed', 'inventory', 'note'] as const).map(kind => {
+        const indices = groups[kind] ?? []
+        if (indices.length === 0) return null
+        const meta = KIND_LABEL[kind]
+        const Icon = meta.icon
+        return (
+          <section key={kind} className="space-y-2">
+            <h2 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+              <Icon className={cn('w-3.5 h-3.5', meta.color)} />
+              {meta.label} ({indices.length})
+            </h2>
+            <div className="space-y-2">
+              {indices.map(i => {
+                const it = preview.items[i]
+                const titleForDupe = it.kind === 'note' ? '' : it.title
+                return (
+                  <ItemCard
+                    key={i}
+                    item={it}
+                    idx={i}
+                    approved={approved.has(i)}
+                    dupe={titleForDupe ? isProbableDupe(titleForDupe, preview.propertyId || activePropertyId) : false}
+                    onToggle={() => onToggle(i)}
+                    onChange={(next) => onChange(i, next)}
+                  />
+                )
+              })}
+            </div>
+          </section>
+        )
+      })}
+    </>
+  )
+}
+
+// ── Inbox helper banner (folder path + manual refresh) ──────────────────────
+
+function InboxFolderHelper({ propertyId }: { propertyId: string }) {
+  const toast = useToast()
+  const [polling, setPolling] = useState(false)
+  const property = propertyStore.getById(propertyId)
+  const path = `${property?.shortName ?? 'property'}/${INBOX_FOLDER_NAME}/`
+
+  async function copyPath() {
+    try {
+      await navigator.clipboard.writeText(path)
+      toast.success(`Copied "${path}" to clipboard`)
+    } catch {
+      toast.error('Could not copy to clipboard')
+    }
+  }
+
+  async function pollNow() {
+    setPolling(true)
+    try {
+      const token = await getValidToken()
+      if (!token) {
+        toast.error('Not signed in to Drive')
+        return
+      }
+      if (property?.driveRootFolderId) {
+        // Pre-create the folder so the first poll has somewhere to look.
+        await DriveClient.ensureInboxFolder(token, property.driveRootFolderId)
+      }
+      const result = await pollInbox(propertyId, token)
+      if (result.itemsQueued > 0) {
+        toast.success(`Queued ${result.itemsQueued} new file${result.itemsQueued === 1 ? '' : 's'}`)
+      } else if (result.errors.length > 0) {
+        toast.error(`Poll failed: ${result.errors[0]}`)
+      } else {
+        toast.info('No new files in inbox')
+      }
+    } finally {
+      setPolling(false)
+    }
+  }
+
+  return (
+    <div className="bg-sky-50 dark:bg-sky-900/20 border border-sky-200 dark:border-sky-800 rounded-2xl p-4 space-y-2">
+      <div className="flex items-start gap-2">
+        <FolderOpen className="w-4 h-4 text-sky-600 dark:text-sky-400 mt-0.5 shrink-0" />
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+            Drop markdown files into the inbox folder on Drive
+          </p>
+          <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
+            Anything Claude (or you) drops in <span className="font-mono">{path}</span> will surface here automatically on the next sync.
+          </p>
+        </div>
+      </div>
+      <div className="flex gap-2 flex-wrap">
+        <button onClick={copyPath} className="btn">
+          <Copy className="w-3.5 h-3.5" />
+          Copy folder path
+        </button>
+        <button onClick={pollNow} disabled={polling} className="btn">
+          {polling ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+          Check now
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ── Inbox queue list ────────────────────────────────────────────────────────
+
+function InboxQueueList({
+  items, onReview, onDismiss,
+}: {
+  items:     QueuedInboxItem[]
+  onReview:  (q: QueuedInboxItem) => void
+  onDismiss: (q: QueuedInboxItem) => void
+}) {
+  if (items.length === 0) {
+    return (
+      <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-sm p-8 text-center">
+        <Inbox className="w-8 h-8 mx-auto text-slate-300 dark:text-slate-600 mb-2" />
+        <p className="text-sm text-slate-500 dark:text-slate-400">Nothing waiting in the inbox.</p>
+        <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
+          Drop a <span className="font-mono">.md</span> file into your Drive inbox folder, or hit "Check now".
+        </p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-2">
+      {items.map(q => (
+        <div
+          key={q.fileId}
+          className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-sm p-3 flex items-start gap-3"
+        >
+          <FileText className="w-4 h-4 text-sky-500 mt-0.5 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate">{q.fileName}</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              {q.items.length} item{q.items.length === 1 ? '' : 's'} extracted ({q.source === 'llm' ? 'AI' : 'fast-path'})
+              {' · queued '}{new Date(q.queuedAt).toLocaleString()}
+            </p>
+          </div>
+          <button
+            onClick={() => onReview(q)}
+            className="btn btn-primary"
+            disabled={q.items.length === 0}
+          >
+            Review
+          </button>
+          <button
+            onClick={() => onDismiss(q)}
+            className="btn"
+            aria-label={`Dismiss ${q.fileName}`}
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 // ── Main screen ──────────────────────────────────────────────────────────────
 
 type Stage = 'input' | 'parsing' | 'review' | 'committing'
+type Tab   = 'paste' | 'inbox'
 
 export function ImportScreen() {
   const navigate = useNavigate()
@@ -221,11 +439,28 @@ export function ImportScreen() {
   const { activePropertyId } = useAppStore()
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  const [tab,     setTab]     = useState<Tab>('paste')
   const [text,    setText]    = useState('')
   const [stage,   setStage]   = useState<Stage>('input')
   const [error,   setError]   = useState('')
   const [preview, setPreview] = useState<ImportPreview | null>(null)
   const [approved, setApproved] = useState<Set<number>>(new Set())
+  /** When non-null, the active review came from this inbox file. */
+  const [reviewingInboxFileId, setReviewingInboxFileId] = useState<string | null>(null)
+  const [inboxQueue, setInboxQueue] = useState<QueuedInboxItem[]>(() => getInboxQueue(activePropertyId))
+
+  // Refresh queue on property change AND on poller-emitted events. The
+  // storage event covers writes from other tabs.
+  useEffect(() => {
+    const refresh = () => setInboxQueue(getInboxQueue(activePropertyId))
+    refresh()
+    window.addEventListener(INBOX_QUEUE_CHANGED_EVENT, refresh)
+    window.addEventListener('storage', refresh)
+    return () => {
+      window.removeEventListener(INBOX_QUEUE_CHANGED_EVENT, refresh)
+      window.removeEventListener('storage', refresh)
+    }
+  }, [activePropertyId])
 
   const hasKey = !!getOpenRouterKey()
 
@@ -319,15 +554,40 @@ export function ImportScreen() {
     if (counts.inventory > 0) {
       toast.info(`${counts.inventory} inventory item${counts.inventory === 1 ? '' : 's'} need capture — head to Inventory.`)
     }
-    navigate('/maintenance')
+
+    // Inbox source: remove the file from the queue so the badge ticks down
+    // and the user isn't re-prompted. Stay on this screen so they can act
+    // on the next queued file. Paste source: navigate away as before.
+    if (reviewingInboxFileId) {
+      removeFromInboxQueue(activePropertyId, reviewingInboxFileId)
+      setReviewingInboxFileId(null)
+      setPreview(null)
+      setStage('input')
+      setTab('inbox')
+    } else {
+      navigate('/maintenance')
+    }
   }
 
-  // grouped by kind for display
-  const groups = (preview?.items ?? []).reduce<Record<string, number[]>>((acc, _, i) => {
-    const k = preview!.items[i].kind
-    ;(acc[k] = acc[k] ?? []).push(i)
-    return acc
-  }, {})
+  function openInboxItem(q: QueuedInboxItem) {
+    setPreview({ propertyId: q.propertyId, source: q.source, items: q.items })
+    setApproved(new Set(q.items.map((_, i) => i)))
+    setReviewingInboxFileId(q.fileId)
+    setStage('review')
+  }
+
+  function dismissInboxItem(q: QueuedInboxItem) {
+    removeFromInboxQueue(activePropertyId, q.fileId)
+    toast.info(`Dismissed ${q.fileName}`)
+  }
+
+  function backFromReview() {
+    const wasInbox = !!reviewingInboxFileId
+    setStage('input')
+    setPreview(null)
+    setReviewingInboxFileId(null)
+    if (wasInbox) setTab('inbox')
+  }
 
   return (
     <div className="space-y-5 pb-8">
@@ -337,11 +597,46 @@ export function ImportScreen() {
           Import Conversation
         </h1>
         <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-          Paste or upload a Claude conversation summary. Fenced blocks parse instantly; prose-only inputs use OpenRouter to extract.
+          Paste a Claude conversation summary, or let the inbox poller pick up files dropped into your Drive folder.
         </p>
       </div>
 
-      {stage === 'input' || stage === 'parsing' ? (
+      {/* Tabs — hidden during review so the user focuses on the items at hand */}
+      {stage !== 'review' && (
+        <div className="flex gap-1 border-b border-slate-200 dark:border-slate-700">
+          <button
+            onClick={() => setTab('paste')}
+            className={cn(
+              'px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
+              tab === 'paste'
+                ? 'border-sky-500 text-sky-600 dark:text-sky-400'
+                : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200',
+            )}
+          >
+            Paste
+          </button>
+          <button
+            onClick={() => setTab('inbox')}
+            className={cn(
+              'px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-1.5',
+              tab === 'inbox'
+                ? 'border-sky-500 text-sky-600 dark:text-sky-400'
+                : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200',
+            )}
+          >
+            <Inbox className="w-3.5 h-3.5" />
+            Inbox
+            {inboxQueue.length > 0 && (
+              <span className="bg-red-500 text-white text-[10px] font-bold rounded-full px-1.5 min-w-[18px] text-center">
+                {inboxQueue.length}
+              </span>
+            )}
+          </button>
+        </div>
+      )}
+
+      {/* Paste tab — original input flow */}
+      {tab === 'paste' && (stage === 'input' || stage === 'parsing') && (
         <>
           <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-sm p-4 space-y-3">
             <div className="flex items-center gap-2">
@@ -385,62 +680,33 @@ export function ImportScreen() {
           </div>
           {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
         </>
-      ) : null}
+      )}
 
-      {stage === 'review' && preview && (
+      {/* Inbox tab */}
+      {tab === 'inbox' && stage !== 'review' && stage !== 'committing' && (
         <>
-          <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-sm p-4 flex items-center gap-3">
-            <Sparkles className="w-4 h-4 text-sky-500" />
-            <div className="flex-1">
-              <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">
-                {preview.items.length} item{preview.items.length === 1 ? '' : 's'} extracted ({preview.source === 'llm' ? 'AI' : 'fast path'})
-              </p>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                {approved.size} of {preview.items.length} approved
-              </p>
-            </div>
-            <button onClick={() => { setStage('input'); setPreview(null) }} className="btn">Back</button>
-            <button
-              onClick={commit}
-              disabled={approved.size === 0}
-              className="btn btn-primary"
-            >
-              Import {approved.size}
-            </button>
-          </div>
-
-          {(['task', 'purchase', 'completed', 'inventory', 'note'] as const).map(kind => {
-            const indices = groups[kind] ?? []
-            if (indices.length === 0) return null
-            const meta = KIND_LABEL[kind]
-            const Icon = meta.icon
-            return (
-              <section key={kind} className="space-y-2">
-                <h2 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                  <Icon className={cn('w-3.5 h-3.5', meta.color)} />
-                  {meta.label} ({indices.length})
-                </h2>
-                <div className="space-y-2">
-                  {indices.map(i => {
-                    const it = preview.items[i]
-                    const titleForDupe = it.kind === 'note' ? '' : it.title
-                    return (
-                      <ItemCard
-                        key={i}
-                        item={it}
-                        idx={i}
-                        approved={approved.has(i)}
-                        dupe={titleForDupe ? isProbableDupe(titleForDupe, preview.propertyId || activePropertyId) : false}
-                        onToggle={() => toggleApproval(i)}
-                        onChange={(next) => updateItem(i, next)}
-                      />
-                    )
-                  })}
-                </div>
-              </section>
-            )
-          })}
+          <InboxFolderHelper propertyId={activePropertyId} />
+          <InboxQueueList
+            items={inboxQueue}
+            onReview={openInboxItem}
+            onDismiss={dismissInboxItem}
+          />
         </>
+      )}
+
+      {/* Review (shared) */}
+      {stage === 'review' && preview && (
+        <ReviewPanel
+          preview={preview}
+          approved={approved}
+          activePropertyId={activePropertyId}
+          source={reviewingInboxFileId ? 'inbox' : 'paste'}
+          inboxFileName={inboxQueue.find(q => q.fileId === reviewingInboxFileId)?.fileName}
+          onToggle={toggleApproval}
+          onChange={updateItem}
+          onBack={backFromReview}
+          onCommit={commit}
+        />
       )}
 
       {stage === 'committing' && (
