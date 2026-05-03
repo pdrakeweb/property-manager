@@ -18,6 +18,7 @@ import { getTotalMortgageBalance } from '../lib/mortgageStore'
 import { customTaskStore, getActiveTasks } from '../lib/maintenanceStore'
 import { localIndex } from '../lib/localIndex'
 import { fetchEntityState, isHAConfigured } from '../lib/haClient'
+import { useActiveAlerts, dismissAlert, type HAAlert } from '../lib/haAlerts'
 import { useAppStore } from '../store/AppStoreContext'
 import { propertyStore } from '../lib/propertyStore'
 import { useIndexVersion } from '../lib/useIndexVersion'
@@ -216,6 +217,52 @@ function healthBadge(overdueCount: number) {
 }
 
 const PROP_ICONS = { residence: Building2, camp: TreePine, land: Building2 }
+
+// ── HA Alerts Banner ──────────────────────────────────────────────────────────
+
+function alertSeverityClasses(severity: HAAlert['severity']) {
+  return {
+    critical: 'bg-red-50 dark:bg-red-900/20    border-red-200    dark:border-red-800    text-red-700    dark:text-red-300',
+    warning:  'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300',
+    info:     'bg-sky-50 dark:bg-sky-900/20    border-sky-200    dark:border-sky-800    text-sky-700    dark:text-sky-300',
+  }[severity]
+}
+
+function HAAlertsBanner({ alerts }: { alerts: HAAlert[] }) {
+  if (alerts.length === 0) return null
+
+  // Show the highest-severity alert first; collapse the rest into a count.
+  const rank: Record<HAAlert['severity'], number> = { critical: 0, warning: 1, info: 2 }
+  const sorted = [...alerts].sort((a, b) => rank[a.severity] - rank[b.severity])
+  const lead = sorted[0]
+  const extra = sorted.length - 1
+
+  return (
+    <div
+      role="alert"
+      className={cn('flex items-start gap-3 border rounded-xl px-4 py-3', alertSeverityClasses(lead.severity))}
+    >
+      <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-semibold leading-tight">
+          {lead.label} — {lead.reason}
+        </p>
+        {extra > 0 && (
+          <p className="text-xs mt-0.5 opacity-80">
+            +{extra} more HA alert{extra === 1 ? '' : 's'}
+          </p>
+        )}
+      </div>
+      <button
+        onClick={() => dismissAlert(lead.id)}
+        aria-label="Dismiss alert"
+        className="shrink-0 opacity-60 hover:opacity-100 transition-opacity"
+      >
+        <X className="w-4 h-4" />
+      </button>
+    </div>
+  )
+}
 
 // ── Main Screen ───────────────────────────────────────────────────────────────
 
@@ -448,8 +495,13 @@ export function DashboardScreen() {
     ? (latestAssess.marketValue ?? latestAssess.totalAssessed) - totalMtgBalance
     : null
 
+  const haAlerts = useActiveAlerts()
+
   return (
     <div className="space-y-6">
+
+      {/* ── HA Alerts Banner (above page header — highest priority) ─────── */}
+      <HAAlertsBanner alerts={haAlerts} />
 
       {/* ── Page Header ─────────────────────────────────────────────────── */}
       <div className="flex items-start justify-between">

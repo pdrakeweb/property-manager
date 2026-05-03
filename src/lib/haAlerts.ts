@@ -16,6 +16,7 @@
  * by alert id so they don't reappear until the underlying state changes.
  */
 
+import { useEffect, useState } from 'react'
 import { listEntities, fetchEntityState, isHAConfigured } from './haClient'
 import { getAllThresholds, checkThreshold } from './haThresholds'
 import type { HAEntityState } from '../types'
@@ -248,4 +249,19 @@ export function installFocusPolling(): void {
 
   // Initial tick after boot — slight delay so we don't block first paint.
   setTimeout(tick, 1500)
+}
+
+// ─── React hook ──────────────────────────────────────────────────────────────
+
+/**
+ * React hook returning the live list of active (non-dismissed) alerts.
+ * Re-renders when the alert list or dismissals change in any tab.
+ */
+export function useActiveAlerts(): HAAlert[] {
+  const [alerts, setAlerts] = useState<HAAlert[]>(() => getActiveAlerts())
+  useEffect(() => {
+    const unsub = subscribeAlerts(() => setAlerts(getActiveAlerts()))
+    return unsub
+  }, [])
+  return alerts
 }

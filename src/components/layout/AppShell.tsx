@@ -14,6 +14,7 @@ import { useProperties } from '../../lib/propertyStore'
 import { localIndex } from '../../lib/localIndex'
 import type { SyncStats } from '../../lib/localIndex'
 import { isDev } from '../../auth/oauth'
+import { useActiveAlerts } from '../../lib/haAlerts'
 import { useModalA11y } from '../../lib/focusTrap'
 import { useTheme } from '../../contexts/ThemeContext'
 import { BackgroundSyncIndicator } from '../BackgroundSyncIndicator'
@@ -459,6 +460,8 @@ export function AppShell({ children }: AppShellProps) {
     n.to === '/' ? location.pathname === '/' : location.pathname.startsWith(n.to)
   )
 
+  const alertCount = useActiveAlerts().length
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-800/50">
 
@@ -496,7 +499,15 @@ export function AppShell({ children }: AppShellProps) {
               )}
             >
               <Icon className="w-4 h-4 shrink-0" />
-              {label}
+              <span className="flex-1">{label}</span>
+              {to === '/' && alertCount > 0 && (
+                <span
+                  aria-label={`${alertCount} HA alerts`}
+                  className="shrink-0 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center tabular-nums"
+                >
+                  {alertCount > 9 ? '9+' : alertCount}
+                </span>
+              )}
             </NavLink>
           ))}
           <div className="pt-3 space-y-1">
@@ -582,10 +593,18 @@ export function AppShell({ children }: AppShellProps) {
               {({ isActive }) => (
                 <>
                   <div className={cn(
-                    'w-8 h-8 flex items-center justify-center rounded-lg transition-colors',
+                    'w-8 h-8 flex items-center justify-center rounded-lg transition-colors relative',
                     isActive && 'bg-green-50 dark:bg-green-900/20',
                   )}>
                     <Icon className="w-5 h-5" />
+                    {to === '/' && alertCount > 0 && (
+                      <span
+                        aria-label={`${alertCount} HA alerts`}
+                        className="absolute -top-0.5 -right-0.5 min-w-[16px] h-[16px] px-1 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center tabular-nums"
+                      >
+                        {alertCount > 9 ? '9+' : alertCount}
+                      </span>
+                    )}
                   </div>
                   <span className="font-medium">{label}</span>
                 </>

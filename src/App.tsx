@@ -16,6 +16,7 @@ import { EquipmentDetailScreen }       from './screens/EquipmentDetailScreen'
 import { syncAll, seedTasksForProperty, syncPropertyConfig, syncAuditLog, pollDriveChanges, syncPendingPhotos } from './lib/syncEngine'
 import { exportAllMarkdownToDrive } from './lib/markdownExport'
 import { propertyStore, seedPropertiesFromMock } from './lib/propertyStore'
+import { installFocusPolling } from './lib/haAlerts'
 import {
   isAuthenticated,
   startOAuthFlow,
@@ -301,6 +302,11 @@ function useStartupSync() {
   useEffect(() => {
     // 1. Migrate: seed properties from mock data if localStorage is empty
     seedPropertiesFromMock()
+
+    // Install HA alert polling (runs on focus + visibility change). Idempotent
+    // and self-quieting when HA is unconfigured, so it's safe to install
+    // unconditionally at boot.
+    installFocusPolling()
 
     // 2. Seed tasks for all properties immediately (no network needed)
     const seedAll = async () => {
