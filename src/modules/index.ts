@@ -39,6 +39,9 @@ import { RoadModule } from './road'
 import { WellModule } from './well'
 import { SepticModule } from './septic'
 import { GeneratorModule } from './generator'
+import { ContentsModule } from './contents'
+import { HomeBookModule } from './homebook'
+import { InventoryModule } from './inventory'
 
 // Phase 1 — always-on baseline.
 moduleRegistry.register(CoreModule)
@@ -64,6 +67,9 @@ moduleRegistry.register(RoadModule)
 moduleRegistry.register(WellModule)
 moduleRegistry.register(SepticModule)
 moduleRegistry.register(GeneratorModule)
+moduleRegistry.register(ContentsModule)
+moduleRegistry.register(HomeBookModule)
+moduleRegistry.register(InventoryModule)
 
 // ─── Phase 2 placeholders (22 modules) ──────────────────────────────────────
 //
@@ -78,11 +84,9 @@ moduleRegistry.register(GeneratorModule)
 //
 // Property records:
 //   moduleRegistry.register(ProfileModule)        // narrative property profile
-//   moduleRegistry.register(HomeBookModule)       // long-form home book export
 //   moduleRegistry.register(MapModule)            // geolocation / climate
 //   moduleRegistry.register(RiskBriefModule)      // hazard / risk summary
-//   moduleRegistry.register(InventoryModule)      // equipment inventory
-//   moduleRegistry.register(ContentsModule)       // contents inventory (insurance)
+// (HomeBookModule, InventoryModule, ContentsModule registered above.)
 //
 // Property systems (remaining placeholders):
 //   moduleRegistry.register(VendorsModule)        // contractor directory
