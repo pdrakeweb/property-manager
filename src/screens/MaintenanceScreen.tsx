@@ -19,6 +19,7 @@ import { localIndex } from '../lib/localIndex'
 import { useIndexVersion } from '../lib/useIndexVersion'
 import { useModalA11y } from '../lib/focusTrap'
 import { useToast } from '../components/Toast'
+import { PhotoLightbox } from '../components/photos/PhotoLightbox'
 import { syncAllToCalendar } from '../lib/calendarClient'
 import type { DryRunResult } from '../lib/calendarClient'
 import { DryRunModal } from '../components/DryRunModal'
@@ -506,6 +507,9 @@ function EventHistoryCard({ event }: { event: ReturnType<typeof costStore.getAll
   const afterPhotos   = event.photos?.filter(p => p.role === 'after')   ?? []
   const generalPhotos = event.photos?.filter(p => p.role === 'general') ?? []
   const hasPhotos = (event.photos?.length ?? 0) > 0
+  // Lightbox state — index into the full event.photos array, not a sub-bucket.
+  const [lightboxIdx, setLightboxIdx] = useState<number | null>(null)
+  const allPhotos = event.photos ?? []
 
   return (
     <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-sm overflow-hidden">
@@ -553,16 +557,25 @@ function EventHistoryCard({ event }: { event: ReturnType<typeof costStore.getAll
                   <div key={label}>
                     <p className={cn('text-[11px] font-semibold mb-1.5 uppercase tracking-wide', cls)}>{label}</p>
                     {photos.length > 0
-                      ? photos.map(p => (
-                          <div key={p.id} className={cn('rounded-xl overflow-hidden border mb-2', border)}>
-                            {p.localDataUrl
-                              ? <img src={p.localDataUrl} alt={label} className="w-full object-cover" />
-                              : <div className="aspect-square bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-slate-300 dark:text-slate-600">
-                                  <ImageIcon className="w-6 h-6" />
-                                </div>
-                            }
-                          </div>
-                        ))
+                      ? photos.map(p => {
+                          const idxInAll = allPhotos.indexOf(p)
+                          return (
+                            <button
+                              type="button"
+                              key={p.id}
+                              onClick={() => setLightboxIdx(idxInAll)}
+                              aria-label={`Open ${label.toLowerCase()} photo`}
+                              className={cn('block w-full rounded-xl overflow-hidden border mb-2 hover:opacity-90 transition-opacity', border)}
+                            >
+                              {p.localDataUrl
+                                ? <img src={p.localDataUrl} alt={label} className="w-full object-cover" />
+                                : <div className="aspect-square bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-slate-300 dark:text-slate-600">
+                                    <ImageIcon className="w-6 h-6" />
+                                  </div>
+                              }
+                            </button>
+                          )
+                        })
                       : <div className="aspect-square rounded-xl bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-slate-300 dark:text-slate-600">
                           <ImageIcon className="w-6 h-6" />
                         </div>
@@ -576,21 +589,31 @@ function EventHistoryCard({ event }: { event: ReturnType<typeof costStore.getAll
             <div>
               <p className="section-title mb-2">General</p>
               <div className="grid grid-cols-3 gap-2">
-                {generalPhotos.map(p => (
-                  <div key={p.id} className="rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700">
-                    {p.localDataUrl
-                      ? <img src={p.localDataUrl} alt="General" className="w-full aspect-square object-cover" />
-                      : <div className="w-full aspect-square bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-slate-300 dark:text-slate-600">
-                          <ImageIcon className="w-6 h-6" />
-                        </div>
-                    }
-                  </div>
-                ))}
+                {generalPhotos.map(p => {
+                  const idxInAll = allPhotos.indexOf(p)
+                  return (
+                    <button
+                      type="button"
+                      key={p.id}
+                      onClick={() => setLightboxIdx(idxInAll)}
+                      aria-label="Open photo"
+                      className="rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 hover:opacity-90 transition-opacity"
+                    >
+                      {p.localDataUrl
+                        ? <img src={p.localDataUrl} alt="General" className="w-full aspect-square object-cover" />
+                        : <div className="w-full aspect-square bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-slate-300 dark:text-slate-600">
+                            <ImageIcon className="w-6 h-6" />
+                          </div>
+                      }
+                    </button>
+                  )
+                })}
               </div>
             </div>
           )}
         </div>
       )}
+      <PhotoLightbox photos={allPhotos} startIndex={lightboxIdx} onClose={() => setLightboxIdx(null)} />
     </div>
   )
 }
