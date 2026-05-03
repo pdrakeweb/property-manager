@@ -266,6 +266,136 @@ function allFolderNames(ctx: SyncEngineContext): string[] {
   return [...names]
 }
 
+/**
+ * Per-file vclock-aware merge — the core CRDT integration logic. Used by
+ * `pullFromDrive` (folder scan) AND by single-record paths like the host's
+ * `pullSingleRecord` (delta polling, detail-screen mount), so both surfaces
+ * apply the SAME conflict-detection rules.
+ *
+ * Returns one of:
+ *  - `'pulled'`     — drive-wins or first-time pull, local index updated
+ *  - `'conflict'`   — concurrent edit detected, conflictFields stashed
+ *  - `'noop'`       — equal vclocks or local-wins (no surfaceable change)
+ *
+ * Invariants:
+ *  - On `'conflict'`, the caller's record stays in `'conflict'` syncState
+ *    with `conflictFields` populated for the resolver UI.
+ *  - On `local-wins`, the local record is REQUEUED for push so Drive
+ *    catches up — even though we report `'noop'` to the caller's tally.
+ *  - Validation failures are reported as `'conflict'` with a `conflictReason`
+ *    and DO NOT silently overwrite a good local copy.
+ *
+ * Pure-ish: only mutates the local index; never touches storage.
+ */
+export function mergeRemoteRecord(
+  ctx:        SyncEngineContext,
+  propertyId: string,
+  fileId:     string,
+  remoteEtag: string,
+  remote:     IndexRecord,
+  local:      IndexRecord | null,
+): 'pulled' | 'conflict' | 'noop' {
+  // Schema validation runs first — a garbled remote should never silently
+  // win on vclock alone, and should never wipe a valid local copy.
+  const typeInfo   = ctx.registry.get(remote.type)
+  const validation = typeInfo?.validate?.(remote.data)
+  if (validation && !validation.ok) {
+    const reason = `Invalid data from remote: ${validation.errors.slice(0, 5).join('; ')}`
+    ctx.audit.warn('sync.validation', reason, propertyId)
+    ctx.localIndex.upsert({
+      ...(local ?? remote),
+      ...remote,
+      propertyId,
+      syncState:      'conflict',
+      conflictReason: reason,
+      driveFileId:    fileId,
+      driveEtag:      remoteEtag,
+      driveUpdatedAt: new Date().toISOString(),
+      vclock:         mergeClocks(local?.vclock, remote.vclock),
+    }, 'remote')
+    return 'conflict'
+  }
+
+  // First-time pull — drive wins by default. Mirror tombstones into the
+  // local state machine so we don't "discover" a deleted record as live.
+  if (!local) {
+    const adoptingTombstone = !!remote.deletedAt
+    ctx.localIndex.upsert({
+      ...remote,
+      propertyId,
+      syncState:      adoptingTombstone ? 'deleted' : 'synced',
+      conflictReason: undefined,
+      driveFileId:    fileId,
+      driveEtag:      remoteEtag,
+      driveUpdatedAt: new Date().toISOString(),
+      vclock:         ensureVClock(remote.vclock, ctx.deviceId),
+    }, 'remote')
+    return adoptingTombstone ? 'noop' : 'pulled'
+  }
+
+  const outcome = mergeRecords(local, remote, ctx.deviceId)
+
+  if (outcome.kind === 'equal') {
+    // Same causal state — refresh etag so the next pull short-circuits.
+    ctx.localIndex.upsert({
+      ...local,
+      driveEtag:      remoteEtag,
+      driveUpdatedAt: new Date().toISOString(),
+    }, 'remote')
+    return 'noop'
+  }
+
+  if (outcome.kind === 'local-wins') {
+    // Local supersedes drive — keep local data, requeue for push, but don't
+    // touch driveUpdatedAt for tombstones (getPendingTombstones uses
+    // driveUpdatedAt < deletedAt to detect "still needs push").
+    ctx.localIndex.upsert({
+      ...local,
+      driveEtag:      remoteEtag,
+      ...(local.deletedAt ? {} : { driveUpdatedAt: new Date().toISOString() }),
+      syncState:      local.deletedAt ? 'deleted' : 'pending_upload',
+    }, 'remote')
+    return 'noop'
+  }
+
+  if (outcome.kind === 'drive-wins') {
+    // Remote dominates — adopt it, with the merged clock.
+    const adoptingTombstone = !!remote.deletedAt
+    ctx.localIndex.upsert({
+      ...remote,
+      propertyId,
+      syncState:      adoptingTombstone ? 'deleted' : 'synced',
+      conflictReason: undefined,
+      conflictFields: undefined,
+      driveFileId:    fileId,
+      driveEtag:      remoteEtag,
+      driveUpdatedAt: new Date().toISOString(),
+      vclock:         mergeClocks(local.vclock, remote.vclock),
+    }, 'remote')
+    return adoptingTombstone ? 'noop' : 'pulled'
+  }
+
+  // Concurrent — keep LOCAL data so the user doesn't lose in-flight edits,
+  // but mark conflict and stash the remote field values for "Keep theirs".
+  ctx.localIndex.upsert({
+    ...local,
+    propertyId,
+    syncState:      'conflict',
+    conflictReason: `Concurrent edits on ${outcome.conflictFields.length} field${outcome.conflictFields.length === 1 ? '' : 's'}`,
+    conflictFields: outcome.conflictFields,
+    driveFileId:    fileId,
+    driveEtag:      remoteEtag,
+    driveUpdatedAt: new Date().toISOString(),
+    vclock:         outcome.mergedClock,
+  }, 'remote')
+  ctx.audit.warn(
+    'sync.conflict',
+    `Concurrent edit on ${remote.title}: ${outcome.conflictFields.map(f => f.path).join(', ')}`,
+    propertyId,
+  )
+  return 'conflict'
+}
+
 export async function pullFromDrive(
   ctx:        SyncEngineContext,
   propertyId: string,
@@ -309,136 +439,9 @@ export async function pullFromDrive(
         try {
           const fileData = await ctx.storage.downloadFile(file.id)
           const remote   = JSON.parse(fileData.content) as IndexRecord
-
-          // Schema validation against the registered Zod schema (if any).
-          // An invalid remote payload is still stored locally — but flagged
-          // as a conflict with a human-readable reason so the resolver UI
-          // can surface it. Validation runs BEFORE vclock comparison: a
-          // garbled remote should never silently win on vclock alone.
-          const typeInfo   = ctx.registry.get(remote.type)
-          const validation = typeInfo?.validate?.(remote.data)
-          if (validation && !validation.ok) {
-            const reason = `Invalid data from remote: ${validation.errors.slice(0, 5).join('; ')}`
-            ctx.audit.warn('sync.validation', reason, propertyId)
-            ctx.localIndex.upsert({
-              ...(local ?? remote),
-              ...remote,
-              propertyId,
-              syncState:      'conflict',
-              conflictReason: reason,
-              driveFileId:    file.id,
-              driveEtag:      fileData.etag,
-              driveUpdatedAt: new Date().toISOString(),
-              vclock:         mergeClocks(local?.vclock, remote.vclock),
-            }, 'remote')
-            conflicts++
-            continue
-          }
-
-          // No prior local copy → first-time pull, drive wins by default.
-          // If the incoming record is a tombstone, mirror it locally so we
-          // don't accidentally "discover" a deleted record as if it were live.
-          if (!local) {
-            const adoptingTombstone = !!remote.deletedAt
-            ctx.localIndex.upsert({
-              ...remote,
-              propertyId,
-              syncState:      adoptingTombstone ? 'deleted' : 'synced',
-              conflictReason: undefined,
-              driveFileId:    file.id,
-              driveEtag:      fileData.etag,
-              driveUpdatedAt: new Date().toISOString(),
-              vclock:         ensureVClock(remote.vclock, ctx.deviceId),
-            }, 'remote')
-            if (!adoptingTombstone) pulled++
-            continue
-          }
-
-          // Resurrection protection. If local has a tombstone and remote is
-          // a live record, vclock arbitrates: tombstone-wins keeps the delete
-          // (don't resurrect); remote-wins lets the un-delete through (a
-          // peer un-deleted by writing on top of a stale clock — rare but
-          // legitimate). The mergeRecords call below handles both cases.
-          //
-          // Likewise if remote is itself a tombstone and we have a live
-          // record: vclock decides whether to apply the delete.
-
-          // Vclock-aware three-way merge against the existing local copy.
-          const outcome = mergeRecords(local, remote, ctx.deviceId)
-
-          if (outcome.kind === 'equal') {
-            // Same causal state — just refresh the etag so subsequent pulls
-            // can short-circuit on the etag match above.
-            ctx.localIndex.upsert({
-              ...local,
-              driveEtag:      fileData.etag,
-              driveUpdatedAt: new Date().toISOString(),
-            }, 'remote')
-            continue
-          }
-
-          if (outcome.kind === 'local-wins') {
-            // Local has newer causal knowledge — push will sync it back.
-            // Refresh the etag so we don't keep re-downloading the stale
-            // remote, and reset syncState so push picks the record up:
-            // tombstones go back to 'deleted' (handled by
-            // getPendingTombstones); live records to 'pending_upload'.
-            //
-            // Do NOT touch driveUpdatedAt for tombstones — `getPendingTombstones`
-            // uses `driveUpdatedAt < deletedAt` to detect "needs re-push", and
-            // we still need to push this delete to Drive.
-            ctx.localIndex.upsert({
-              ...local,
-              driveEtag:      fileData.etag,
-              ...(local.deletedAt ? {} : { driveUpdatedAt: new Date().toISOString() }),
-              syncState:      local.deletedAt ? 'deleted' : 'pending_upload',
-            }, 'remote')
-            continue
-          }
-
-          if (outcome.kind === 'drive-wins') {
-            // Remote dominates — adopt it, with the merged clock. Clear any
-            // stale conflictReason / conflictFields from a prior bad pull.
-            // If remote is itself a tombstone, mirror that into the local
-            // state machine; otherwise mark synced (which will resurrect
-            // any prior local tombstone — the un-delete had a higher clock,
-            // so this is the user's intent).
-            const adoptingTombstone = !!remote.deletedAt
-            ctx.localIndex.upsert({
-              ...remote,
-              propertyId,
-              syncState:      adoptingTombstone ? 'deleted' : 'synced',
-              conflictReason: undefined,
-              conflictFields: undefined,
-              driveFileId:    file.id,
-              driveEtag:      fileData.etag,
-              driveUpdatedAt: new Date().toISOString(),
-              vclock:         mergeClocks(local.vclock, remote.vclock),
-            }, 'remote')
-            pulled++
-            continue
-          }
-
-          // Concurrent — store the diff for the resolver UI. We keep LOCAL
-          // data (so the user doesn't lose their in-flight edit) but mark
-          // conflict and stash the remote field values for "Keep theirs".
-          ctx.localIndex.upsert({
-            ...local,
-            propertyId,
-            syncState:      'conflict',
-            conflictReason: `Concurrent edits on ${outcome.conflictFields.length} field${outcome.conflictFields.length === 1 ? '' : 's'}`,
-            conflictFields: outcome.conflictFields,
-            driveFileId:    file.id,
-            driveEtag:      fileData.etag,
-            driveUpdatedAt: new Date().toISOString(),
-            vclock:         outcome.mergedClock,
-          }, 'remote')
-          conflicts++
-          ctx.audit.warn(
-            'sync.conflict',
-            `Concurrent edit on ${remote.title}: ${outcome.conflictFields.map(f => f.path).join(', ')}`,
-            propertyId,
-          )
+          const result   = mergeRemoteRecord(ctx, propertyId, file.id, fileData.etag, remote, local ?? null)
+          if (result === 'pulled')   pulled++
+          if (result === 'conflict') conflicts++
         } catch {
           failed++
         }

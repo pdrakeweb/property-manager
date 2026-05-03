@@ -335,16 +335,19 @@ export async function pullSingleRecord(token: string, recordId: string): Promise
       syncBus.emit({ type: 'sync-end', scope: 'record', recordId, error: 'parse' })
       return false
     }
-    localIndex.upsert({
-      ...stored,
-      propertyId:     record.propertyId,
-      syncState:      'synced',
-      driveFileId:    record.driveFileId,
-      driveEtag:      fileData.etag,
-      driveUpdatedAt: new Date().toISOString(),
-    }, 'remote')
+    // CRDT merge — single-record paths must use the same vclock comparison as
+    // the folder-scan pull, otherwise local pending edits and conflict-state
+    // resolutions get silently overwritten by every 30-second poll.
+    // The vault returns 'pulled' | 'conflict' | 'noop'; we report `true` for
+    // any state change so the caller knows to refresh.
+    const outcome = getVault().mergeRemoteRecord(
+      record.propertyId,
+      record.driveFileId,
+      fileData.etag,
+      stored,
+    )
     syncBus.emit({ type: 'sync-end', scope: 'record', recordId })
-    return true
+    return outcome !== 'noop'
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     syncBus.emit({ type: 'sync-end', scope: 'record', recordId, error: msg })

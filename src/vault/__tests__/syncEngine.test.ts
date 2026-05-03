@@ -14,7 +14,7 @@ import assert from 'node:assert/strict'
 
 import { createLocalIndex, type LocalIndex } from '../core/localIndex'
 import { createMemoryAdapter } from '../adapters/memoryAdapter'
-import { pushPending, pullFromDrive, syncAll } from '../core/syncEngine'
+import { pushPending, pullFromDrive, syncAll, mergeRemoteRecord } from '../core/syncEngine'
 import type { AuditLogger, HostMetadataStore, StorageAdapter, VaultRegistry } from '../core/types'
 
 import { testRegistry, testHost, memoryKV, makeVendorRecord, recordingAudit } from './testFixtures'
@@ -380,6 +380,108 @@ describe('vault/syncEngine — pullFromDrive vclock semantics', () => {
     const r = await pullFromDrive(ctx, 'prop-1')
     assert.equal(r.pulled, 0)
     assert.equal(r.conflicts, 0)
+  })
+})
+
+describe('vault/syncEngine — mergeRemoteRecord (single-record path)', () => {
+  let ctx: Ctx & { auditEntries: ReturnType<typeof recordingAudit>['entries'] }
+  beforeEach(() => { ctx = makeCtx() })
+
+  it('preserves a local conflict-resolution: drive=stale + local=resolved (vclock dominates) → local-wins', async () => {
+    // Reproduces the bug where pullSingleRecord (delta poll, detail-screen
+    // mount) blindly overwrote local — including in-flight conflict resolutions
+    // — whenever the etag had moved on Drive.
+    ctx.localIndex.upsert(makeVendorRecord({
+      data: { id: 'v1', name: 'Ohio HVAC', phone: '555-RESOLVED', filename: 'vendor_v1.json',
+              rootFolderId: 'root-1', categoryId: 'vendor' },
+      driveFileId: 'drive-1', driveEtag: 'v2',
+      // Local has resolved a previous conflict — vclock includes peer's
+      // contribution AND a fresh local bump, so local DOMINATES drive.
+      vclock: { 'device-other': 1, 'device-test': 2 },
+      syncState: 'pending_upload',
+    }), 'remote')  // pre-existing state
+
+    const remote = {
+      id: 'v1', type: 'vendor', propertyId: 'prop-1', title: 'Ohio HVAC',
+      data: { id: 'v1', name: 'Ohio HVAC', phone: '555-OLD' },
+      syncState: 'synced', localUpdatedAt: '2026-04-19T00:00:00Z',
+      vclock: { 'device-other': 1 },
+    } as Parameters<typeof mergeRemoteRecord>[4]
+
+    const result = mergeRemoteRecord(ctx, 'prop-1', 'drive-1', 'v2', remote, ctx.localIndex.getById('v1'))
+    assert.equal(result, 'noop', 'local-wins reports noop to caller')
+
+    const r = ctx.localIndex.getById('v1')!
+    assert.equal((r.data as { phone: string }).phone, '555-RESOLVED', 'local edit preserved')
+    assert.equal(r.syncState, 'pending_upload', 'requeued for push to overwrite drive')
+  })
+
+  it('detects concurrent edits via the single-record path too', async () => {
+    ctx.localIndex.upsert(makeVendorRecord({
+      data: { id: 'v1', name: 'Ohio HVAC', phone: '555-LOCAL', filename: 'vendor_v1.json',
+              rootFolderId: 'root-1', categoryId: 'vendor' },
+      driveFileId: 'drive-1', driveEtag: 'v1',
+      vclock: { 'device-test': 1 },
+      syncState: 'synced',
+    }), 'remote')
+
+    const remote = {
+      id: 'v1', type: 'vendor', propertyId: 'prop-1', title: 'Ohio HVAC',
+      data: { id: 'v1', name: 'Ohio HVAC', phone: '555-PEER' },
+      syncState: 'synced', localUpdatedAt: '2026-04-19T01:00:00Z',
+      vclock: { 'device-other': 1 },  // concurrent with local: neither dominates
+    } as Parameters<typeof mergeRemoteRecord>[4]
+
+    const result = mergeRemoteRecord(ctx, 'prop-1', 'drive-1', 'v2', remote, ctx.localIndex.getById('v1'))
+    assert.equal(result, 'conflict')
+    const r = ctx.localIndex.getById('v1')!
+    assert.equal(r.syncState, 'conflict')
+    assert.equal(r.conflictFields?.length, 1)
+    assert.equal(r.conflictFields![0].path, 'phone')
+    // Local data preserved during conflict.
+    assert.equal((r.data as { phone: string }).phone, '555-LOCAL')
+    // Vclock OR'd.
+    assert.deepEqual(r.vclock, { 'device-test': 1, 'device-other': 1 })
+  })
+
+  it('drive dominates → adopts remote, clears any prior conflictFields', async () => {
+    ctx.localIndex.upsert(makeVendorRecord({
+      data: { id: 'v1', name: 'Ohio HVAC', phone: '555-OLD', filename: 'vendor_v1.json',
+              rootFolderId: 'root-1', categoryId: 'vendor' },
+      driveFileId: 'drive-1', driveEtag: 'v1',
+      vclock: { 'device-test': 1 },
+      syncState: 'conflict',
+      conflictFields: [{ path: 'phone', local: '555-OLD', remote: '???' }],
+    }), 'remote')
+
+    const remote = {
+      id: 'v1', type: 'vendor', propertyId: 'prop-1', title: 'Ohio HVAC',
+      data: { id: 'v1', name: 'Ohio HVAC', phone: '555-NEW' },
+      syncState: 'synced', localUpdatedAt: '2026-04-19T01:00:00Z',
+      vclock: { 'device-test': 1, 'device-other': 5 },  // dominates local
+    } as Parameters<typeof mergeRemoteRecord>[4]
+
+    const result = mergeRemoteRecord(ctx, 'prop-1', 'drive-1', 'v2', remote, ctx.localIndex.getById('v1'))
+    assert.equal(result, 'pulled')
+    const r = ctx.localIndex.getById('v1')!
+    assert.equal(r.syncState, 'synced')
+    assert.equal((r.data as { phone: string }).phone, '555-NEW')
+    assert.equal(r.conflictFields, undefined, 'stale conflictFields cleared on adopt')
+  })
+
+  it('first-time pull (no local) → drive wins, vclock seeded', () => {
+    const remote = {
+      id: 'v9', type: 'vendor', propertyId: 'prop-1', title: 'Imported',
+      data: { id: 'v9', name: 'Imported' },
+      syncState: 'synced', localUpdatedAt: '2026-04-19T00:00:00Z',
+      vclock: { 'device-other': 3 },
+    } as Parameters<typeof mergeRemoteRecord>[4]
+
+    const result = mergeRemoteRecord(ctx, 'prop-1', 'drive-9', 'v1', remote, null)
+    assert.equal(result, 'pulled')
+    const r = ctx.localIndex.getById('v9')!
+    assert.equal(r.syncState, 'synced')
+    assert.equal(r.vclock?.['device-other'], 3)
   })
 })
 

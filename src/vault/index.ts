@@ -11,7 +11,7 @@
  */
 
 import { createLocalIndex, type LocalIndex, type IndexChangeHandler, type IndexChangeSource } from './core/localIndex'
-import { pushPending, pullFromDrive, syncAll } from './core/syncEngine'
+import { pushPending, pullFromDrive, syncAll, mergeRemoteRecord } from './core/syncEngine'
 import { exportAllMarkdown, renderRecordMarkdown, resolveMarkdownFilename } from './core/markdownExport'
 import {
   nullAuditLogger,
@@ -62,6 +62,17 @@ export interface RecordVault {
    *  Returns the number purged. Safe to call frequently — cheap when no
    *  tombstones are due for collection. */
   gcTombstones(olderThanMs?: number): number
+  /** Apply a single record fetched from Drive into the local index using the
+   *  same vclock-aware merge as `pullFromDrive`. Use this in place of any
+   *  ad-hoc `localIndex.upsert(remote)` so single-record paths (delta polling,
+   *  detail-screen refresh) preserve concurrent-edit detection.
+   *  Returns the same outcome strings as the internal helper. */
+  mergeRemoteRecord(
+    propertyId: string,
+    fileId: string,
+    remoteEtag: string,
+    remote: IndexRecord,
+  ): 'pulled' | 'conflict' | 'noop'
 }
 
 export function createRecordVault(opts: CreateRecordVaultOptions): RecordVault {
@@ -80,6 +91,8 @@ export function createRecordVault(opts: CreateRecordVaultOptions): RecordVault {
     markdownFilename: (record) => resolveMarkdownFilename(registry, record),
     syncStats:        (propertyId) => localIndex.getSyncStats(propertyId),
     gcTombstones:     (olderThanMs) => localIndex.gcTombstones(olderThanMs),
+    mergeRemoteRecord: (propertyId, fileId, remoteEtag, remote) =>
+      mergeRemoteRecord(ctx, propertyId, fileId, remoteEtag, remote, localIndex.getById(remote.id)),
   }
 }
 

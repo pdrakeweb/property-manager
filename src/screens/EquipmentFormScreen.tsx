@@ -143,6 +143,10 @@ export function EquipmentFormScreen() {
 
     // 1. Write to local index immediately — visible to all screens right away.
     //    filename is set to .json so pushPending() retries correctly when offline.
+    //
+    //    `id` MUST appear inside `data` too — the EquipmentZ schema validates
+    //    `data` (not the wrapping IndexRecord) and rejects records without it,
+    //    which would mark every cross-device pull as `'conflict'`.
     localIndex.upsert({
       id:         recordId,
       type:       'equipment',
@@ -150,6 +154,7 @@ export function EquipmentFormScreen() {
       propertyId: activePropertyId,
       title,
       data: {
+        id:           recordId,
         values,
         categoryId,
         propertyId:   activePropertyId,
@@ -185,6 +190,7 @@ export function EquipmentFormScreen() {
         propertyId: activePropertyId,
         title,
         data: {
+          id:           recordId,  // required by EquipmentZ — see local upsert above
           values,
           categoryId,
           propertyId:   activePropertyId,

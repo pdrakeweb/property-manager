@@ -341,7 +341,7 @@ export function SyncScreen() {
       {stats.conflicts > 0 && (
         <div className="flex items-center gap-2 text-sm text-red-600 dark:text-red-400">
           <AlertTriangle className="w-4 h-4 shrink-0" />
-          {stats.conflicts} conflict{stats.conflicts > 1 ? 's' : ''} need resolution — go to the Conflicts screen.
+          {stats.conflicts} concurrent edit{stats.conflicts > 1 ? 's' : ''} need resolving — open the conflict pill in the top bar.
         </div>
       )}
 
