@@ -4,6 +4,7 @@ import { Building2, Loader2, AlertCircle, Eye, EyeOff } from 'lucide-react'
 
 import { AppStoreProvider } from './store/AppStoreContext'
 import { AppShell }             from './components/layout/AppShell'
+import { ScreenSkeleton }       from './components/ScreenSkeleton'
 import { DashboardScreen }      from './screens/DashboardScreen'
 import { CaptureSelectScreen }  from './screens/CaptureSelectScreen'
 import { InventoryScreen }      from './screens/InventoryScreen'
@@ -434,7 +435,7 @@ function MainApp() {
   return (
     <HashRouter>
       <AppShell>
-        <Suspense fallback={<RouteFallback />}>
+        <Suspense fallback={<ScreenSkeleton />}>
         <Routes>
           <Route path="/"                    element={<DashboardScreen />}     />
           <Route path="/capture"             element={<CaptureSelectScreen />} />
@@ -472,14 +473,6 @@ function MainApp() {
         </Suspense>
       </AppShell>
     </HashRouter>
-  )
-}
-
-function RouteFallback() {
-  return (
-    <div className="min-h-[40vh] flex items-center justify-center">
-      <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
-    </div>
   )
 }
 

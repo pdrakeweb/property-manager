@@ -19,6 +19,8 @@ import { localIndex } from '../lib/localIndex'
 import { fetchEntityState } from '../lib/haClient'
 import { useAppStore } from '../store/AppStoreContext'
 import { propertyStore } from '../lib/propertyStore'
+import { useIndexVersion } from '../lib/useIndexVersion'
+import { useModalA11y } from '../lib/focusTrap'
 import { PropertyHealthCard } from '../components/dashboard/PropertyHealthCard'
 import type { Priority, HAEntityState, MaintenanceTask } from '../types'
 
@@ -118,6 +120,7 @@ function QuickAddModal({ onClose, onSaved }: { onClose: () => void; onSaved: () 
   const [system,     setSystem]     = useState('')
   const [dueDate,    setDueDate]    = useState(new Date().toISOString().slice(0, 10))
   const [priority,   setPriority]   = useState<Priority>('medium')
+  const dialogRef = useModalA11y<HTMLDivElement>(onClose)
 
   function handleSave() {
     if (!title.trim()) return
@@ -141,10 +144,16 @@ function QuickAddModal({ onClose, onSaved }: { onClose: () => void; onSaved: () 
 
   return (
     <div className="modal-backdrop">
-      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-sm p-5 space-y-4">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="quick-add-title"
+        className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-sm p-5 space-y-4"
+      >
         <div className="flex items-center justify-between">
-          <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">Quick Add Task</h2>
-          <button onClick={onClose} className="text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-400"><X className="w-5 h-5" /></button>
+          <h2 id="quick-add-title" className="text-base font-semibold text-slate-900 dark:text-slate-100">Quick Add Task</h2>
+          <button onClick={onClose} aria-label="Close" className="text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-400"><X className="w-5 h-5" /></button>
         </div>
 
         <div>
@@ -215,7 +224,9 @@ export function DashboardScreen() {
 
   const [showQuickAdd,  setShowQuickAdd]  = useState(false)
   const [detailOpen,    setDetailOpen]    = useState(true)
-  const [tick,          setTick]          = useState(0)
+  // Re-renders on every localIndex mutation so derived data stays fresh
+  // without remounting the screen. Used as a useMemo dep below.
+  const indexVersion = useIndexVersion()
   const [dashboardMode, setDashboardMode] = useState<DashboardMode>(readDashboardMode)
 
   function toggleDashboardMode(mode: DashboardMode) {
@@ -278,7 +289,7 @@ export function DashboardScreen() {
   const allCapitalItems = useMemo(
     () => properties.flatMap(p => getCapitalItemsForProperty(p.id)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [properties, tick],
+    [properties, indexVersion],
   )
 
   // ── Live HA state for linked equipment ────────────────────────────────────
@@ -291,7 +302,7 @@ export function DashboardScreen() {
       }))
       .filter(e => !!e.entityId)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activePropertyId, tick])
+  }, [activePropertyId, indexVersion])
 
   const [haStates, setHaStates] = useState<Record<string, HAEntityState | null>>({})
   const [haLoading, setHaLoading] = useState(false)
@@ -372,7 +383,7 @@ export function DashboardScreen() {
       .sort((a, b) => b.date.localeCompare(a.date))
       .slice(0, 5)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activePropertyId, tick])
+  }, [activePropertyId, indexVersion])
   const hasIndexed   = localIndex.getCount('equipment', activePropertyId) > 0
   const documented   = cats.filter(c => hasIndexed
     ? localIndex.getAll('equipment', activePropertyId).some(r => r.categoryId === c.id)
@@ -396,7 +407,7 @@ export function DashboardScreen() {
     : null
 
   return (
-    <div className="space-y-6" key={tick}>
+    <div className="space-y-6">
 
       {/* ── Page Header ─────────────────────────────────────────────────── */}
       <div className="flex items-start justify-between">
@@ -905,7 +916,7 @@ export function DashboardScreen() {
       {showQuickAdd && (
         <QuickAddModal
           onClose={() => setShowQuickAdd(false)}
-          onSaved={() => setTick(t => t + 1)}
+          onSaved={() => { /* re-render driven by useIndexVersion */ }}
         />
       )}
 

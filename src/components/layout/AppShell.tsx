@@ -13,6 +13,7 @@ import { useProperties } from '../../lib/propertyStore'
 import { localIndex } from '../../lib/localIndex'
 import type { SyncStats } from '../../lib/localIndex'
 import { isDev } from '../../auth/oauth'
+import { useModalA11y } from '../../lib/focusTrap'
 import { useTheme } from '../../contexts/ThemeContext'
 import { BackgroundSyncIndicator } from '../BackgroundSyncIndicator'
 import {
@@ -262,6 +263,8 @@ function FailedItemsModal({
   onClose: () => void
   onChange: () => void
 }) {
+  const dialogRef = useModalA11y<HTMLDivElement>(onClose)
+
   function retryOne(id: string) {
     resetItem(id)
     onChange()
@@ -273,11 +276,17 @@ function FailedItemsModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/60 p-0 sm:p-4">
-      <div className="bg-white dark:bg-slate-800 w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl shadow-xl max-h-[85vh] flex flex-col">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="failed-uploads-title"
+        className="bg-white dark:bg-slate-800 w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl shadow-xl max-h-[85vh] flex flex-col"
+      >
         <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-700">
           <div className="flex items-center gap-2">
             <AlertTriangle className="w-5 h-5 text-red-500" />
-            <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
+            <h2 id="failed-uploads-title" className="text-base font-semibold text-slate-900 dark:text-slate-100">
               {items.length} failed upload{items.length !== 1 ? 's' : ''}
             </h2>
           </div>

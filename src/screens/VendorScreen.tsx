@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Plus, Star, Phone, Trash2, Edit2, X, Users, ChevronLeft } from 'lucide-react'
 import { cn } from '../utils/cn'
 import { vendorStore } from '../lib/vendorStore'
 import { costStore } from '../lib/costStore'
 import { useAppStore } from '../store/AppStoreContext'
 import { propertyStore } from '../lib/propertyStore'
+import { useModalA11y } from '../lib/focusTrap'
 import type { Vendor } from '../schemas'
 
 const VENDOR_TYPES = [
@@ -79,12 +80,7 @@ interface VendorModalProps {
 
 function VendorModal({ initial, onSave, onClose }: VendorModalProps) {
   const [form, setForm] = useState<VendorFormData>(initial ? vendorToForm(initial) : emptyForm())
-
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose() }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [onClose])
+  const dialogRef = useModalA11y<HTMLDivElement>(onClose)
 
   function set(k: keyof VendorFormData, v: string | number | string[]) {
     setForm(f => ({ ...f, [k]: v }))
@@ -115,10 +111,16 @@ function VendorModal({ initial, onSave, onClose }: VendorModalProps) {
 
   return (
     <div className="modal-backdrop">
-      <div className="modal-surface rounded-2xl w-full max-w-sm p-5 space-y-4 max-h-[90vh] overflow-y-auto">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="vendor-form-modal-title"
+        className="modal-surface rounded-2xl w-full max-w-sm p-5 space-y-4 max-h-[90vh] overflow-y-auto"
+      >
         <div className="flex items-center justify-between">
-          <h2 className="text-base font-semibold text-slate-900">{initial ? 'Edit Vendor' : 'Add Vendor'}</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+          <h2 id="vendor-form-modal-title" className="text-base font-semibold text-slate-900">{initial ? 'Edit Vendor' : 'Add Vendor'}</h2>
+          <button onClick={onClose} aria-label="Close" className="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
             <X className="w-5 h-5" />
           </button>
         </div>

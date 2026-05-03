@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import {
   FileCheck, Plus, AlertTriangle, ChevronDown, ChevronUp, X, ExternalLink,
 } from 'lucide-react'
 import { cn } from '../utils/cn'
 import { useAppStore } from '../store/AppStoreContext'
+import { useModalA11y } from '../lib/focusTrap'
 
 import {
   permitStore, getPermitsForProperty,
@@ -103,12 +104,7 @@ function PermitForm({
   const [inspectionDate, setInspectionDate] = useState(initial?.inspectionDate ?? '')
   const [cost,           setCost]           = useState(initial?.cost?.toString() ?? '')
   const [notes,          setNotes]          = useState(initial?.notes ?? '')
-
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose() }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [onClose])
+  const dialogRef = useModalA11y<HTMLDivElement>(onClose)
 
   function applyExtracted(fields: ExtractionResult) {
     setExtracted(fields)
@@ -170,14 +166,20 @@ function PermitForm({
 
   return (
     <div className="modal-backdrop">
-      <div className="bg-white dark:bg-slate-800 rounded-t-2xl sm:rounded-2xl shadow-xl w-full sm:max-w-lg p-5 space-y-4 max-h-[90vh] overflow-y-auto">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="permit-form-modal-title"
+        className="bg-white dark:bg-slate-800 rounded-t-2xl sm:rounded-2xl shadow-xl w-full sm:max-w-lg p-5 space-y-4 max-h-[90vh] overflow-y-auto"
+      >
 
         {/* Header */}
         <div className="flex items-center justify-between">
-          <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
+          <h2 id="permit-form-modal-title" className="text-base font-semibold text-slate-900 dark:text-slate-100">
             {initial ? 'Edit Permit' : 'Add Permit / Inspection'}
           </h2>
-          <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-lg">
+          <button onClick={onClose} aria-label="Close" className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-lg">
             <X className="w-5 h-5" />
           </button>
         </div>

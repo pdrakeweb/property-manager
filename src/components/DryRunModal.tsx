@@ -1,6 +1,7 @@
 import { X, CalendarPlus, RefreshCw, Trash2 } from 'lucide-react'
 import type { DryRunResult } from '../lib/calendarClient'
 import { cn } from '../utils/cn'
+import { useModalA11y } from '../lib/focusTrap'
 
 interface DryRunModalProps {
   result:  DryRunResult
@@ -16,20 +17,27 @@ function formatDate(iso: string): string {
 export function DryRunModal({ result, onClose }: DryRunModalProps) {
   const { toCreate, toUpdate, toDelete, summary } = result
   const isEmpty = summary.willCreate === 0 && summary.willUpdate === 0 && summary.willDelete === 0
+  const dialogRef = useModalA11y<HTMLDivElement>(onClose)
 
   return (
     <div className="modal-backdrop">
-      <div className="modal-surface rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md max-h-[85vh] overflow-y-auto">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="dry-run-modal-title"
+        className="modal-surface rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md max-h-[85vh] overflow-y-auto"
+      >
 
         {/* Header */}
         <div className="sticky top-0 bg-sky-600 rounded-t-2xl px-5 py-4 flex items-start justify-between gap-3">
           <div>
-            <p className="text-white font-bold text-sm">DEV MODE — Calendar Preview</p>
+            <p id="dry-run-modal-title" className="text-white font-bold text-sm">DEV MODE — Calendar Preview</p>
             <p className="text-sky-200 text-xs mt-0.5">
               Not sent — sign in with Google to sync these to your calendar.
             </p>
           </div>
-          <button type="button" onClick={onClose} className="text-sky-200 hover:text-white shrink-0 p-1 -m-1 rounded-lg">
+          <button type="button" onClick={onClose} aria-label="Close" className="text-sky-200 hover:text-white shrink-0 p-1 -m-1 rounded-lg">
             <X className="w-4 h-4" />
           </button>
         </div>

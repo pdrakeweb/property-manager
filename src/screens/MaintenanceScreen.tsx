@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef } from 'react'
 import {
   CheckCircle2, Clock, AlertTriangle, Zap, ChevronDown,
   ChevronUp, Calendar, DollarSign, User, RepeatIcon, X, Camera,
@@ -16,6 +16,8 @@ import {
   setTaskRecurrence,
 } from '../lib/maintenanceStore'
 import { localIndex } from '../lib/localIndex'
+import { useIndexVersion } from '../lib/useIndexVersion'
+import { useModalA11y } from '../lib/focusTrap'
 import { syncAllToCalendar } from '../lib/calendarClient'
 import type { DryRunResult } from '../lib/calendarClient'
 import { DryRunModal } from '../components/DryRunModal'
@@ -120,12 +122,9 @@ function DoneModal({ task, propertyId, onConfirm, onClose }: DoneModalProps) {
   const [photos,              setPhotos]              = useState<EventPhoto[]>([])
   const [photoRole,           setPhotoRole]           = useState<EventPhoto['role']>('after')
   const photoInputRef = useRef<HTMLInputElement>(null)
-
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose() }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [onClose])
+  // Centralised modal a11y: focus trap, Escape-to-close, focus restore.
+  // Replaces the previous ad-hoc Escape handler that lived here.
+  const dialogRef = useModalA11y<HTMLDivElement>(onClose)
 
   function handlePhotoFiles(e: React.ChangeEvent<HTMLInputElement>) {
     Array.from(e.target.files ?? []).forEach(file => {
@@ -177,10 +176,16 @@ function DoneModal({ task, propertyId, onConfirm, onClose }: DoneModalProps) {
 
   return (
     <div className="modal-backdrop">
-      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-sm p-5 space-y-4 max-h-[90vh] overflow-y-auto">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="done-modal-title"
+        className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-sm p-5 space-y-4 max-h-[90vh] overflow-y-auto"
+      >
         <div className="flex items-center justify-between">
-          <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">Mark Complete</h2>
-          <button onClick={onClose} className="text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-400 p-1 rounded-lg"><X className="w-5 h-5" /></button>
+          <h2 id="done-modal-title" className="text-base font-semibold text-slate-900 dark:text-slate-100">Mark Complete</h2>
+          <button onClick={onClose} aria-label="Close" className="text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-400 p-1 rounded-lg"><X className="w-5 h-5" /></button>
         </div>
         <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed"><span className="font-medium">{task.title}</span></p>
         <div className="space-y-3">
@@ -278,6 +283,7 @@ interface DelayModalProps {
 function DelayModal({ task, onSaved, onClose }: DelayModalProps) {
   const today = new Date().toISOString().slice(0, 10)
   const [customDate, setCustomDate] = useState('')
+  const dialogRef = useModalA11y<HTMLDivElement>(onClose)
 
   function applyDelay(newDate: string) {
     onSaved(newDate)
@@ -293,10 +299,16 @@ function DelayModal({ task, onSaved, onClose }: DelayModalProps) {
 
   return (
     <div className="modal-backdrop">
-      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-sm p-5 space-y-4">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="delay-modal-title"
+        className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-sm p-5 space-y-4"
+      >
         <div className="flex items-center justify-between">
-          <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">Delay Task</h2>
-          <button onClick={onClose} className="p-1 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-400 rounded-lg"><X className="w-5 h-5" /></button>
+          <h2 id="delay-modal-title" className="text-base font-semibold text-slate-900 dark:text-slate-100">Delay Task</h2>
+          <button onClick={onClose} aria-label="Close" className="p-1 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-400 rounded-lg"><X className="w-5 h-5" /></button>
         </div>
         <p className="text-sm font-medium text-slate-700 dark:text-slate-300 leading-snug">{task.title}</p>
         <p className="text-xs text-slate-500 dark:text-slate-400">Current due date: {new Date(task.dueDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
@@ -341,6 +353,7 @@ interface ScheduleModalProps {
 function ScheduleModal({ task, onSaved, onClose }: ScheduleModalProps) {
   const [dueDate,    setDueDate]    = useState(task.dueDate)
   const [recurrence, setRecurrence] = useState(task.recurrence ?? '')
+  const dialogRef = useModalA11y<HTMLDivElement>(onClose)
 
   function save() {
     onSaved(dueDate, recurrence)
@@ -348,10 +361,16 @@ function ScheduleModal({ task, onSaved, onClose }: ScheduleModalProps) {
 
   return (
     <div className="modal-backdrop">
-      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-sm p-5 space-y-4">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="schedule-modal-title"
+        className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-sm p-5 space-y-4"
+      >
         <div className="flex items-center justify-between">
-          <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">Schedule Task</h2>
-          <button onClick={onClose} className="p-1 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-400 rounded-lg"><X className="w-5 h-5" /></button>
+          <h2 id="schedule-modal-title" className="text-base font-semibold text-slate-900 dark:text-slate-100">Schedule Task</h2>
+          <button onClick={onClose} aria-label="Close" className="p-1 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-400 rounded-lg"><X className="w-5 h-5" /></button>
         </div>
         <p className="text-sm font-medium text-slate-700 dark:text-slate-300 leading-snug">{task.title}</p>
         <div className="space-y-3">
@@ -391,12 +410,9 @@ function AddTaskModal({ propertyId, onSaved, onClose }: AddTaskModalProps) {
   const [estCost,    setEstCost]    = useState('')
   const [recurrence, setRecurrence] = useState('')
   const [notes,      setNotes]      = useState('')
-
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose() }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [onClose])
+  // useModalA11y handles Escape, focus trap, and focus restore — replaces the
+  // ad-hoc Escape handler that used to live in this component.
+  const dialogRef = useModalA11y<HTMLDivElement>(onClose)
 
   function save() {
     if (!title.trim()) return
@@ -420,10 +436,16 @@ function AddTaskModal({ propertyId, onSaved, onClose }: AddTaskModalProps) {
 
   return (
     <div className="modal-backdrop">
-      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-sm p-5 space-y-4 max-h-[90vh] overflow-y-auto">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="add-task-title"
+        className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-sm p-5 space-y-4 max-h-[90vh] overflow-y-auto"
+      >
         <div className="flex items-center justify-between">
-          <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">Add Maintenance Task</h2>
-          <button onClick={onClose} className="p-1 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-400 rounded-lg"><X className="w-5 h-5" /></button>
+          <h2 id="add-task-title" className="text-base font-semibold text-slate-900 dark:text-slate-100">Add Maintenance Task</h2>
+          <button onClick={onClose} aria-label="Close" className="p-1 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-400 rounded-lg"><X className="w-5 h-5" /></button>
         </div>
         <div className="space-y-3">
           <div>
@@ -582,10 +604,12 @@ function TaskCalendarChipWrapper({ task, propertyId }: { task: MaintenanceTask; 
 interface TaskCardProps {
   task: MaintenanceTask
   propertyId: string
-  onMutate: () => void
 }
 
-function TaskCard({ task: initialTask, propertyId, onMutate }: TaskCardProps) {
+// Mutations write through the localIndex/syncBus pipeline, so the parent
+// MaintenanceScreen re-renders via `useIndexVersion` without needing an
+// explicit onMutate callback.
+function TaskCard({ task: initialTask, propertyId }: TaskCardProps) {
   const [task,           setTask]           = useState(initialTask)
   const [expanded,       setExpanded]       = useState(false)
   const [done,           setDone]           = useState(false)
@@ -600,7 +624,6 @@ function TaskCard({ task: initialTask, propertyId, onMutate }: TaskCardProps) {
     setTaskDelay(task, newDueDate)
     setTask(t => ({ ...t, dueDate: newDueDate }))
     setShowDelayModal(false)
-    onMutate()
   }
 
   function handleScheduled(newDueDate: string, recurrence: string) {
@@ -608,7 +631,6 @@ function TaskCard({ task: initialTask, propertyId, onMutate }: TaskCardProps) {
     setTaskRecurrence({ ...task, dueDate: newDueDate }, recurrence)
     setTask(t => ({ ...t, dueDate: newDueDate, recurrence: recurrence || undefined }))
     setShowSchedModal(false)
-    onMutate()
   }
 
   if (done) {
@@ -693,7 +715,7 @@ function TaskCard({ task: initialTask, propertyId, onMutate }: TaskCardProps) {
         <DoneModal
           task={task}
           propertyId={propertyId}
-          onConfirm={() => { setDone(true); setShowDoneModal(false); onMutate() }}
+          onConfirm={() => { setDone(true); setShowDoneModal(false) }}
           onClose={() => setShowDoneModal(false)}
         />
       )}
@@ -720,12 +742,13 @@ function TaskCard({ task: initialTask, propertyId, onMutate }: TaskCardProps) {
 export function MaintenanceScreen() {
   const { activePropertyId, properties } = useAppStore()
   const [tab,           setTab]           = useState<Tab>('due')
-  const [tick,          setTick]          = useState(0)
+  // Subscribes to localIndex mutations — replaces the old `tick` counter
+  // that forced a full subtree remount via `key={tick}`. The value itself
+  // isn't used; calling the hook is what triggers re-render.
+  useIndexVersion()
   const [showAddTask,   setShowAddTask]   = useState(false)
   const [calSyncing,    setCalSyncing]    = useState(false)
   const [dryRunResult,  setDryRunResult]  = useState<DryRunResult | null>(null)
-
-  function onMutate() { setTick(t => t + 1) }
 
   async function handleCalendarSync() {
     const propertyName = properties.find(p => p.id === activePropertyId)?.name ?? activePropertyId
@@ -780,7 +803,7 @@ export function MaintenanceScreen() {
   ]
 
   return (
-    <div className="space-y-5" key={tick}>
+    <div className="space-y-5">
 
       {/* Header */}
       <div className="flex items-start justify-between gap-3">
@@ -848,9 +871,9 @@ export function MaintenanceScreen() {
       {tab === 'due' && (
         <div className="space-y-3">
           {overdue.length > 0 && <p className="text-xs font-semibold uppercase text-red-500 tracking-wide">Overdue</p>}
-          {overdue.map(task => <TaskCard key={task.id} task={task} propertyId={activePropertyId} onMutate={onMutate} />)}
+          {overdue.map(task => <TaskCard key={task.id} task={task} propertyId={activePropertyId} />)}
           {due.length > 0 && <p className="text-xs font-semibold uppercase text-orange-500 tracking-wide mt-4">Due Soon</p>}
-          {due.map(task => <TaskCard key={task.id} task={task} propertyId={activePropertyId} onMutate={onMutate} />)}
+          {due.map(task => <TaskCard key={task.id} task={task} propertyId={activePropertyId} />)}
           {dueTasks.length === 0 && (
             <div className="text-center py-12 text-slate-400 dark:text-slate-500">
               <CheckCircle2 className="w-10 h-10 mx-auto mb-2 text-emerald-300" />
@@ -868,7 +891,7 @@ export function MaintenanceScreen() {
               <p className="text-sm font-medium">No upcoming tasks scheduled.</p>
             </div>
           )}
-          {upcomingTasks.map(task => <TaskCard key={task.id} task={task} propertyId={activePropertyId} onMutate={onMutate} />)}
+          {upcomingTasks.map(task => <TaskCard key={task.id} task={task} propertyId={activePropertyId} />)}
         </div>
       )}
 
@@ -900,7 +923,7 @@ export function MaintenanceScreen() {
       {showAddTask && (
         <AddTaskModal
           propertyId={activePropertyId}
-          onSaved={onMutate}
+          onSaved={() => { /* re-render driven by useIndexVersion */ }}
           onClose={() => setShowAddTask(false)}
         />
       )}

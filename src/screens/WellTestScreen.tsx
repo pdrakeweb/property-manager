@@ -3,6 +3,7 @@ import { Plus, AlertTriangle, X, Trash2, ChevronDown, ChevronUp, FlaskConical } 
 import { cn } from '../utils/cn'
 import { wellTestStore, getTestsForProperty } from '../lib/wellTestStore'
 import { useAppStore } from '../store/AppStoreContext'
+import { useModalA11y } from '../lib/focusTrap'
 import type { WellTest, WellTestParameter } from '../schemas'
 
 type Tab = 'list' | 'trends'
@@ -123,12 +124,7 @@ function AddModal({ propertyId, onSave, onClose }: AddModalProps) {
   const [params, setParams] = useState<WellTestParameter[]>(
     PRESET_PARAMS.map(p => ({ ...p, value: '' }))
   )
-
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose() }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [onClose])
+  const dialogRef = useModalA11y<HTMLDivElement>(onClose)
 
   function setParam(i: number, field: keyof WellTestParameter, val: string) {
     setParams(ps => ps.map((p, j) => j === i ? { ...p, [field]: val } : p))
@@ -173,10 +169,16 @@ function AddModal({ propertyId, onSave, onClose }: AddModalProps) {
 
   return (
     <div className="modal-backdrop">
-      <div className="modal-surface rounded-2xl w-full max-w-lg p-5 space-y-4 max-h-[90vh] overflow-y-auto">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="well-test-modal-title"
+        className="modal-surface rounded-2xl w-full max-w-lg p-5 space-y-4 max-h-[90vh] overflow-y-auto"
+      >
         <div className="flex items-center justify-between">
-          <h2 className="text-base font-semibold text-slate-900">Add Well Test</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+          <h2 id="well-test-modal-title" className="text-base font-semibold text-slate-900">Add Well Test</h2>
+          <button onClick={onClose} aria-label="Close" className="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
             <X className="w-5 h-5" />
           </button>
         </div>

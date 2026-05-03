@@ -3,6 +3,7 @@ import { Plus, X, MapPin, Pencil, Trash2 } from 'lucide-react'
 import { cn } from '../utils/cn'
 import { roadStore, getRoadEventsForProperty, getRoadSpendByYear, getGravelTonsByYear } from '../lib/roadStore'
 import { useAppStore } from '../store/AppStoreContext'
+import { useModalA11y } from '../lib/focusTrap'
 import { ROAD_MAINTENANCE_TYPES } from '../types/road'
 import type { RoadEvent, RoadMaintenanceTypeId } from '../types/road'
 
@@ -56,6 +57,7 @@ function EventForm({ initial, propertyId, onSave, onClose, title }: EventFormPro
   const [areaDescription, setAreaDescription] = useState(initial.areaDescription ?? '')
   const [cost,            setCost]            = useState(initial.cost != null ? String(initial.cost) : '')
   const [notes,           setNotes]           = useState(initial.notes ?? '')
+  const dialogRef = useModalA11y<HTMLDivElement>(onClose)
 
   const selectedType = ROAD_MAINTENANCE_TYPES.find(t => t.id === maintenanceTypeId)!
 
@@ -87,10 +89,16 @@ function EventForm({ initial, propertyId, onSave, onClose, title }: EventFormPro
 
   return (
     <div className="modal-backdrop">
-      <div className="rounded-t-2xl sm:rounded-2xl bg-white dark:bg-slate-800 p-5 w-full sm:max-w-lg max-h-[90vh] overflow-y-auto shadow-xl">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="road-event-form-title"
+        className="rounded-t-2xl sm:rounded-2xl bg-white dark:bg-slate-800 p-5 w-full sm:max-w-lg max-h-[90vh] overflow-y-auto shadow-xl"
+      >
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">{title}</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 p-1 rounded-lg">
+          <h2 id="road-event-form-title" className="text-base font-semibold text-slate-900 dark:text-slate-100">{title}</h2>
+          <button onClick={onClose} aria-label="Close" className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 p-1 rounded-lg">
             <X className="w-5 h-5" />
           </button>
         </div>
