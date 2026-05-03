@@ -22,6 +22,7 @@ import {
 import { chatCompletion } from '../services/openRouterClient'
 import { exportAllMarkdownToDrive, getKnowledgebaseFolderId } from '../lib/markdownExport'
 import { DriveRootInput } from '../components/DriveRootInput'
+import { HABulkImport } from '../components/HABulkImport'
 
 const MODELS_BY_TASK = [
   { key: 'nameplate',    task: 'Nameplate Extraction',        default: 'anthropic/claude-sonnet-4-6'  },
@@ -159,6 +160,8 @@ export function SettingsScreen() {
   const [showHaToken, setShowHaToken] = useState(false)
   const [haConnected, setHaConnected] = useState(false)
   const [haTesting,   setHaTesting]   = useState(false)
+  const [showBulkImport, setShowBulkImport] = useState(false)
+  const [bulkImportToast, setBulkImportToast] = useState<string | null>(null)
 
   function saveHaSettings() {
     setSetting(SETTINGS.haUrl, haUrl.trim())
@@ -681,7 +684,16 @@ export function SettingsScreen() {
               </button>
             </div>
           </Row>
-          <Row label="Entity Mapping" sub="Link HA entities per equipment item via Inventory">
+          <Row label="Bulk import entities" sub="Pick HA entities to create as equipment records">
+            <button
+              onClick={() => setShowBulkImport(true)}
+              disabled={!haUrl.trim() || !haToken.trim()}
+              className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400 font-medium hover:text-green-700 dark:hover:text-green-300 disabled:opacity-50 disabled:hover:text-green-600"
+            >
+              Open Importer <ChevronRight className="w-3 h-3" />
+            </button>
+          </Row>
+          <Row label="Per-entity mapping" sub="Link or unlink entities one-by-one in Inventory">
             <button
               onClick={() => navigate('/inventory')}
               className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400 font-medium hover:text-green-700 dark:hover:text-green-300"
@@ -690,6 +702,26 @@ export function SettingsScreen() {
             </button>
           </Row>
         </Section>
+
+        {bulkImportToast && (
+          <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-xl px-4 py-3 text-sm text-emerald-700 dark:text-emerald-300">
+            {bulkImportToast}
+          </div>
+        )}
+
+        {showBulkImport && (
+          <HABulkImport
+            onClose={() => setShowBulkImport(false)}
+            onImported={count => {
+              setBulkImportToast(
+                count === 0
+                  ? 'No entities were imported.'
+                  : `Imported ${count} entit${count === 1 ? 'y' : 'ies'} as equipment records.`,
+              )
+              setTimeout(() => setBulkImportToast(null), 5000)
+            }}
+          />
+        )}
       </div>
     )
   }
