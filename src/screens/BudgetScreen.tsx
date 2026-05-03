@@ -7,6 +7,7 @@ import { cn } from '../utils/cn'
 import { CATEGORIES } from '../data/mockData'
 import { costStore } from '../lib/costStore'
 import { useAppStore } from '../store/AppStoreContext'
+import { useModalA11y } from '../lib/focusTrap'
 import type { Priority, CapitalItem, CapitalTransaction } from '../types'
 import {
   capitalTransactionStore,
@@ -402,6 +403,7 @@ function CapitalItemForm({
   const [installYear,   setInstallYear]   = useState(initial?.installYear !== undefined ? String(initial.installYear) : '')
   const [notes,         setNotes]         = useState(initial?.notes ?? '')
   const [status,        setStatus]        = useState<NonNullable<CapitalItem['status']>>(initial?.status ?? 'planned')
+  const dialogRef = useModalA11y<HTMLDivElement>(onClose)
 
   function handleSave() {
     const yr     = Number(estimatedYear)
@@ -440,12 +442,18 @@ function CapitalItemForm({
 
   return (
     <div className="modal-backdrop">
-      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-md p-5 space-y-4 max-h-[90vh] overflow-y-auto">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="capital-item-form-title"
+        className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-md p-5 space-y-4 max-h-[90vh] overflow-y-auto"
+      >
         <div className="flex items-center justify-between">
-          <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
+          <h2 id="capital-item-form-title" className="text-base font-semibold text-slate-900 dark:text-slate-100">
             {initial ? 'Edit Capital Project' : 'Add Capital Project'}
           </h2>
-          <button onClick={onClose} className="p-1 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 rounded-lg">
+          <button onClick={onClose} aria-label="Close" className="p-1 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 rounded-lg">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -918,33 +926,52 @@ export function BudgetScreen() {
       )}
 
       {confirmDelete && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
-          onClick={() => setConfirmDelete(null)}
-        >
-          <div
-            className="modal-surface w-full max-w-sm rounded-2xl shadow-xl"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-700">
-              <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">Delete capital project?</h2>
-            </div>
-            <div className="px-5 py-4 space-y-2">
-              <p className="text-sm text-slate-700 dark:text-slate-300">
-                Remove <strong>{confirmDelete.title}</strong> from the forecast?
-              </p>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Logged transactions for this project will remain in the ledger but will no longer roll up under any item. This action cannot be undone from the UI.
-              </p>
-            </div>
-            <div className="px-5 py-3 border-t border-slate-200 dark:border-slate-700 flex justify-end gap-2">
-              <button onClick={() => setConfirmDelete(null)} className="btn btn-secondary btn-sm">Cancel</button>
-              <button onClick={confirmDeleteNow} className="btn btn-danger btn-sm">Delete</button>
-            </div>
-          </div>
-        </div>
+        <ConfirmDeleteModal
+          item={confirmDelete}
+          onCancel={() => setConfirmDelete(null)}
+          onConfirm={confirmDeleteNow}
+        />
       )}
 
+    </div>
+  )
+}
+
+// ── Delete confirmation modal ────────────────────────────────────────────────
+
+function ConfirmDeleteModal({
+  item, onCancel, onConfirm,
+}: { item: CapitalItem; onCancel: () => void; onConfirm: () => void }) {
+  const dialogRef = useModalA11y<HTMLDivElement>(onCancel)
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
+      onClick={onCancel}
+    >
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="budget-delete-modal-title"
+        className="modal-surface w-full max-w-sm rounded-2xl shadow-xl"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-700">
+          <h2 id="budget-delete-modal-title" className="text-base font-semibold text-slate-900 dark:text-slate-100">Delete capital project?</h2>
+        </div>
+        <div className="px-5 py-4 space-y-2">
+          <p className="text-sm text-slate-700 dark:text-slate-300">
+            Remove <strong>{item.title}</strong> from the forecast?
+          </p>
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Logged transactions for this project will remain in the ledger but will no longer roll up under any item. This action cannot be undone from the UI.
+          </p>
+        </div>
+        <div className="px-5 py-3 border-t border-slate-200 dark:border-slate-700 flex justify-end gap-2">
+          <button onClick={onCancel} className="btn btn-secondary btn-sm">Cancel</button>
+          <button onClick={onConfirm} className="btn btn-danger btn-sm">Delete</button>
+        </div>
+      </div>
     </div>
   )
 }

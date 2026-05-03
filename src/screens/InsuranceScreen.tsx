@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import {
   Shield, Plus, Phone, Mail, AlertTriangle, CheckCircle2,
   Circle, ChevronDown, ChevronUp, X, ExternalLink,
 } from 'lucide-react'
 import { cn } from '../utils/cn'
 import { useAppStore } from '../store/AppStoreContext'
+import { useModalA11y } from '../lib/focusTrap'
 
 import {
   insuranceStore, getPoliciesForProperty,
@@ -93,12 +94,7 @@ function PolicyForm({
   const [agentEmail,setAgentEmail]= useState(initial?.agent?.email ?? '')
   const [agentAgency,setAgentAgency] = useState(initial?.agent?.agency ?? '')
   const [notes,     setNotes]     = useState(initial?.notes ?? '')
-
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose() }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [onClose])
+  const dialogRef = useModalA11y<HTMLDivElement>(onClose)
 
   function applyExtracted(fields: ExtractionResult) {
     setExtracted(fields)
@@ -164,14 +160,20 @@ function PolicyForm({
 
   return (
     <div className="modal-backdrop">
-      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-md p-5 space-y-4 max-h-[90vh] overflow-y-auto">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="insurance-form-modal-title"
+        className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-md p-5 space-y-4 max-h-[90vh] overflow-y-auto"
+      >
 
         {/* Header */}
         <div className="flex items-center justify-between">
-          <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
+          <h2 id="insurance-form-modal-title" className="text-base font-semibold text-slate-900 dark:text-slate-100">
             {initial ? 'Edit Policy' : 'Add Insurance Policy'}
           </h2>
-          <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-lg">
+          <button onClick={onClose} aria-label="Close" className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-lg">
             <X className="w-5 h-5" />
           </button>
         </div>

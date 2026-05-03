@@ -7,6 +7,7 @@ import { costStore } from '../lib/costStore'
 import { customTaskStore, getActiveTasks } from '../lib/maintenanceStore'
 import { VendorSelector } from '../components/VendorSelector'
 import { useAppStore } from '../store/AppStoreContext'
+import { useModalA11y } from '../lib/focusTrap'
 import type { MaintenanceTask, Priority } from '../types'
 import type { CompletedEvent } from '../schemas'
 
@@ -70,6 +71,7 @@ function DoneModal({ task, onConfirm, onClose }: DoneModalProps) {
   const [payment,    setPayment]    = useState('')
   const [invoiceRef, setInvoiceRef] = useState('')
   const [notes,      setNotes]      = useState('')
+  const dialogRef = useModalA11y<HTMLDivElement>(onClose)
 
   const inp = 'w-full text-sm input-surface rounded-xl px-3 py-2.5'
 
@@ -93,10 +95,16 @@ function DoneModal({ task, onConfirm, onClose }: DoneModalProps) {
 
   return (
     <div className="modal-backdrop modal-backdrop-elevated bg-black/50">
-      <div className="modal-surface rounded-2xl w-full max-w-sm p-5 space-y-4 max-h-[85vh] overflow-y-auto">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="done-modal-title"
+        className="modal-surface rounded-2xl w-full max-w-sm p-5 space-y-4 max-h-[85vh] overflow-y-auto"
+      >
         <div className="flex items-center justify-between">
-          <h3 className="text-base font-semibold text-slate-900">Mark Complete</h3>
-          <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-600 rounded-lg">
+          <h3 id="done-modal-title" className="text-base font-semibold text-slate-900">Mark Complete</h3>
+          <button onClick={onClose} aria-label="Close" className="p-1 text-slate-400 hover:text-slate-600 rounded-lg">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -157,6 +165,7 @@ function AddTaskModal({ propertyId, prefilledDate, onClose, onSaved }: AddTaskMo
   const [system,   setSystem]   = useState('')
   const [dueDate,  setDueDate]  = useState(prefilledDate)
   const [priority, setPriority] = useState<Priority>('medium')
+  const dialogRef = useModalA11y<HTMLDivElement>(onClose)
 
   const inp = 'w-full text-sm input-surface rounded-xl px-3 py-2.5'
 
@@ -179,10 +188,16 @@ function AddTaskModal({ propertyId, prefilledDate, onClose, onSaved }: AddTaskMo
 
   return (
     <div className="modal-backdrop modal-backdrop-elevated bg-black/50">
-      <div className="modal-surface rounded-2xl w-full max-w-sm p-5 space-y-4">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="add-task-modal-title"
+        className="modal-surface rounded-2xl w-full max-w-sm p-5 space-y-4"
+      >
         <div className="flex items-center justify-between">
-          <h3 className="text-base font-semibold text-slate-900">Add Task</h3>
-          <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-600 rounded-lg">
+          <h3 id="add-task-modal-title" className="text-base font-semibold text-slate-900">Add Task</h3>
+          <button onClick={onClose} aria-label="Close" className="p-1 text-slate-400 hover:text-slate-600 rounded-lg">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -239,6 +254,7 @@ interface DelayModalProps {
 function DelayModal({ task, onClose, onDelayed }: DelayModalProps) {
   const [newDate, setNewDate] = useState('')
   const today = new Date().toISOString().slice(0, 10)
+  const dialogRef = useModalA11y<HTMLDivElement>(onClose)
 
   function confirm() {
     if (!newDate) return
@@ -253,10 +269,16 @@ function DelayModal({ task, onClose, onDelayed }: DelayModalProps) {
 
   return (
     <div className="modal-backdrop modal-backdrop-elevated bg-black/50">
-      <div className="modal-surface rounded-2xl w-full max-w-sm p-5 space-y-4">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="delay-modal-title"
+        className="modal-surface rounded-2xl w-full max-w-sm p-5 space-y-4"
+      >
         <div className="flex items-center justify-between">
-          <h3 className="text-base font-semibold text-slate-900">Delay Task</h3>
-          <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-600 rounded-lg">
+          <h3 id="delay-modal-title" className="text-base font-semibold text-slate-900">Delay Task</h3>
+          <button onClick={onClose} aria-label="Close" className="p-1 text-slate-400 hover:text-slate-600 rounded-lg">
             <X className="w-5 h-5" />
           </button>
         </div>

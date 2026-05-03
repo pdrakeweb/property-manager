@@ -10,6 +10,7 @@ import {
   getMilestoneProgress,
 } from '../lib/generatorStore'
 import { useAppStore } from '../store/AppStoreContext'
+import { useModalA11y } from '../lib/focusTrap'
 import { GENERATOR_MILESTONES } from '../types/generator'
 import type { GeneratorRecord, GeneratorRuntimeEntry } from '../types/generator'
 
@@ -33,6 +34,7 @@ function RuntimeModal({ generatorId, onSave, onClose }: RuntimeModalProps) {
   const [date, setDate] = useState(new Date().toISOString().split('T')[0])
   const [hours, setHours] = useState('')
   const [reason, setReason] = useState('')
+  const dialogRef = useModalA11y<HTMLDivElement>(onClose)
 
   const inputCls = 'w-full text-sm input-surface rounded-xl px-3 py-2.5'
 
@@ -50,10 +52,16 @@ function RuntimeModal({ generatorId, onSave, onClose }: RuntimeModalProps) {
 
   return (
     <div className="modal-backdrop px-0 pb-0">
-      <div className="rounded-t-2xl sm:rounded-2xl bg-white dark:bg-slate-800 p-5 w-full sm:max-w-lg space-y-4 max-h-[90vh] overflow-y-auto">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="runtime-modal-title"
+        className="rounded-t-2xl sm:rounded-2xl bg-white dark:bg-slate-800 p-5 w-full sm:max-w-lg space-y-4 max-h-[90vh] overflow-y-auto"
+      >
         <div className="flex items-center justify-between">
-          <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">Log Runtime</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 p-1 rounded-lg">
+          <h2 id="runtime-modal-title" className="text-base font-semibold text-slate-900 dark:text-slate-100">Log Runtime</h2>
+          <button onClick={onClose} aria-label="Close" className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 p-1 rounded-lg">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -128,6 +136,7 @@ function AddGeneratorModal({ propertyId, onSave, onClose }: AddGeneratorModalPro
   const [model, setModel] = useState('')
   const [installedYear, setInstalledYear] = useState('')
   const [notes, setNotes] = useState('')
+  const dialogRef = useModalA11y<HTMLDivElement>(onClose)
 
   const inputCls = 'w-full text-sm input-surface rounded-xl px-3 py-2.5'
 
@@ -150,10 +159,16 @@ function AddGeneratorModal({ propertyId, onSave, onClose }: AddGeneratorModalPro
 
   return (
     <div className="modal-backdrop px-0 pb-0">
-      <div className="rounded-t-2xl sm:rounded-2xl bg-white dark:bg-slate-800 p-5 w-full sm:max-w-lg space-y-4 max-h-[90vh] overflow-y-auto">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="add-generator-modal-title"
+        className="rounded-t-2xl sm:rounded-2xl bg-white dark:bg-slate-800 p-5 w-full sm:max-w-lg space-y-4 max-h-[90vh] overflow-y-auto"
+      >
         <div className="flex items-center justify-between">
-          <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">Add Generator</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 p-1 rounded-lg">
+          <h2 id="add-generator-modal-title" className="text-base font-semibold text-slate-900 dark:text-slate-100">Add Generator</h2>
+          <button onClick={onClose} aria-label="Close" className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 p-1 rounded-lg">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -367,30 +382,51 @@ function GeneratorCard({ record, onUpdate }: GeneratorCardProps) {
 
       {/* Confirm service dialog */}
       {confirmMilestone && (
-        <div className="modal-backdrop items-center pb-0">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-sm p-5 space-y-4">
-            <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">Mark as Serviced?</h2>
-            <p className="text-sm text-slate-600 dark:text-slate-400">
-              This will record a service event for <strong>{confirmMilestone}</strong> and reset the hours-since-service counter.
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setConfirmMilestone(null)}
-                className="btn btn-secondary flex-1"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => handleMarkServiced(confirmMilestone)}
-                className="btn btn-primary flex-1"
-              >
-                Confirm
-              </button>
-            </div>
-          </div>
-        </div>
+        <ConfirmServiceModal
+          milestone={confirmMilestone}
+          onCancel={() => setConfirmMilestone(null)}
+          onConfirm={() => handleMarkServiced(confirmMilestone)}
+        />
       )}
     </>
+  )
+}
+
+// ── Confirm service dialog ────────────────────────────────────────────────────
+
+function ConfirmServiceModal({
+  milestone, onCancel, onConfirm,
+}: { milestone: string; onCancel: () => void; onConfirm: () => void }) {
+  const dialogRef = useModalA11y<HTMLDivElement>(onCancel)
+  return (
+    <div className="modal-backdrop items-center pb-0">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="confirm-service-modal-title"
+        className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-sm p-5 space-y-4"
+      >
+        <h2 id="confirm-service-modal-title" className="text-base font-semibold text-slate-900 dark:text-slate-100">Mark as Serviced?</h2>
+        <p className="text-sm text-slate-600 dark:text-slate-400">
+          This will record a service event for <strong>{milestone}</strong> and reset the hours-since-service counter.
+        </p>
+        <div className="flex gap-3">
+          <button
+            onClick={onCancel}
+            className="btn btn-secondary flex-1"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            className="btn btn-primary flex-1"
+          >
+            Confirm
+          </button>
+        </div>
+      </div>
+    </div>
   )
 }
 

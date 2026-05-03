@@ -3,6 +3,7 @@ import { Folder, FolderOpen, ChevronRight, Loader2, X } from 'lucide-react'
 import { DriveClient } from '../lib/driveClient'
 import { localDriveAdapter } from '../lib/localDriveAdapter'
 import { getValidToken } from '../auth/oauth'
+import { useModalA11y } from '../lib/focusTrap'
 import type { DriveFile } from '../lib/driveClient'
 import { cn } from '../utils/cn'
 
@@ -115,6 +116,7 @@ function DriveFolderModal({
   const [loading, setLoading] = useState(false)
   const [error,   setError]   = useState('')
   const tokenRef = useRef<string | null>(null)
+  const dialogRef = useModalA11y<HTMLDivElement>(onCancel)
 
   const current = stack[stack.length - 1]
 
@@ -151,12 +153,18 @@ function DriveFolderModal({
 
   return (
     <div className="modal-backdrop items-center bg-black/50 backdrop-blur-sm pb-0">
-      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden flex flex-col">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="drive-folder-modal-title"
+        className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden flex flex-col"
+      >
 
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-700">
-          <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">Choose a Drive folder</p>
-          <button onClick={onCancel} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
+          <p id="drive-folder-modal-title" className="text-sm font-semibold text-slate-800 dark:text-slate-200">Choose a Drive folder</p>
+          <button onClick={onCancel} aria-label="Close" className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
             <X className="w-4 h-4" />
           </button>
         </div>
