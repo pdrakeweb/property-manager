@@ -34,6 +34,11 @@ import { FuelModule } from './fuel'
 import { UtilityModule } from './utility'
 import { MapModule } from './map'
 import { VendorModule } from './vendor'
+import { PermitsModule } from './permits'
+import { RoadModule } from './road'
+import { WellModule } from './well'
+import { SepticModule } from './septic'
+import { GeneratorModule } from './generator'
 
 // Phase 1 — always-on baseline.
 moduleRegistry.register(CoreModule)
@@ -54,6 +59,11 @@ moduleRegistry.register(FuelModule)
 moduleRegistry.register(UtilityModule)
 moduleRegistry.register(MapModule)
 moduleRegistry.register(VendorModule)
+moduleRegistry.register(PermitsModule)
+moduleRegistry.register(RoadModule)
+moduleRegistry.register(WellModule)
+moduleRegistry.register(SepticModule)
+moduleRegistry.register(GeneratorModule)
 
 // ─── Phase 2 placeholders (22 modules) ──────────────────────────────────────
 //
@@ -74,10 +84,8 @@ moduleRegistry.register(VendorModule)
 //   moduleRegistry.register(InventoryModule)      // equipment inventory
 //   moduleRegistry.register(ContentsModule)       // contents inventory (insurance)
 //
-// Property systems:
+// Property systems (remaining placeholders):
 //   moduleRegistry.register(VendorsModule)        // contractor directory
-//   moduleRegistry.register(PermitsModule)        // building / electrical / etc.
 //   moduleRegistry.register(FuelModule)           // propane / heating-oil
-//   moduleRegistry.register(GeneratorModule)      // standby generator log
 
 export { moduleRegistry }
