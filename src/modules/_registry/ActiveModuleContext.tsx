@@ -198,7 +198,7 @@ function writePropertyModules(record: PropertyModulesRecord): void {
  *     no-op rather than throwing, so a misclick on the module browser
  *     doesn't hard-error.
  */
-function computeToggle(
+export function computeToggle(
   prev:     Record<string, boolean>,
   moduleId: ModuleId,
 ): Record<string, boolean> {

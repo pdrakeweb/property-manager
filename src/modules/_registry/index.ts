@@ -31,6 +31,7 @@ export {
   ActiveModuleProvider,
   ACTIVE_PROPERTY_CHANGED_EVENT,
   defaultPropertyModules,
+  computeToggle,
   useActiveModuleIds,
   useModuleEnabled,
   useToggleModule,
