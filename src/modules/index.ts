@@ -19,19 +19,24 @@
 
 import { moduleRegistry } from './_registry'
 import { CoreModule } from './core'
+import { MaintenanceModule } from './maintenance'
+import { CalendarModule } from './calendar'
+import { SearchModule } from './search'
 
 // Phase 1 — always-on baseline.
 moduleRegistry.register(CoreModule)
+
+// Phase 2 — feature modules, declared but not yet rendered.
+moduleRegistry.register(MaintenanceModule)
+moduleRegistry.register(CalendarModule)
+moduleRegistry.register(SearchModule)
 
 // ─── Phase 2 placeholders (22 modules) ──────────────────────────────────────
 //
 // Capture / lifecycle / AI:
 //   moduleRegistry.register(CaptureModule)        // photo capture + AI extraction
-//   moduleRegistry.register(MaintenanceModule)    // recurring tasks, due/overdue
-//   moduleRegistry.register(CalendarModule)       // Google Calendar integration
 //   moduleRegistry.register(ChecklistsModule)     // seasonal & guided checklists
 //   moduleRegistry.register(AdvisorModule)        // AI advisor (OpenRouter)
-//   moduleRegistry.register(SearchModule)         // cross-record search
 //   moduleRegistry.register(ImportModule)         // Drive inbox / external import
 //
 // Finance:
