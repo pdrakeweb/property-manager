@@ -1,12 +1,14 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ChevronLeft, Link2, Link2Off, Loader2, Wifi, WifiOff, RefreshCw, CloudDownload } from 'lucide-react'
+import { ChevronLeft, Link2, Link2Off, Loader2, Wifi, WifiOff, RefreshCw, CloudDownload, Search } from 'lucide-react'
 import { cn } from '../utils/cn'
 import { CATEGORIES } from '../data/mockData'
 import { localIndex } from '../lib/localIndex'
 import { fetchEntityState } from '../lib/haClient'
 import { HAEntityBrowser } from '../components/HAEntityBrowser'
 import { useRecordSync } from '../hooks/useRecordSync'
+import { getInspectionsForEquipment, sortByDateDesc } from '../lib/inspectionStore'
+import { ConditionBadge } from '../components/inspection/ConditionBadge'
 import type { HAEntityState } from '../types'
 
 export function EquipmentDetailScreen() {
@@ -35,6 +37,8 @@ export function EquipmentDetailScreen() {
   const [entityState, setEntityState] = useState<HAEntityState | null>(null)
   const [stateLoading, setStateLoading] = useState(false)
   const [showBrowser,  setShowBrowser]  = useState(false)
+
+  const pastInspections = useMemo(() => sortByDateDesc(getInspectionsForEquipment(id)), [id])
 
   // Fetch entity state whenever haEntityId changes
   useEffect(() => {
@@ -121,21 +125,59 @@ export function EquipmentDetailScreen() {
         </button>
 
         {/* Header */}
-        <div>
-          <div className="flex items-center gap-2">
-            {category && <span className="text-2xl">{category.icon}</span>}
-            <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">{record.title}</h1>
-            {isSyncing && (
-              <span
-                title="Checking Drive for updates…"
-                className="inline-flex items-center gap-1 text-xs text-slate-400 dark:text-slate-500"
-              >
-                <CloudDownload className="w-3.5 h-3.5 animate-pulse" />
-              </span>
-            )}
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              {category && <span className="text-2xl">{category.icon}</span>}
+              <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">{record.title}</h1>
+              {isSyncing && (
+                <span
+                  title="Checking Drive for updates…"
+                  className="inline-flex items-center gap-1 text-xs text-slate-400 dark:text-slate-500"
+                >
+                  <CloudDownload className="w-3.5 h-3.5 animate-pulse" />
+                </span>
+              )}
+            </div>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">{category?.label ?? categoryId}</p>
           </div>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">{category?.label ?? categoryId}</p>
+          <button
+            onClick={() => navigate(`/equipment/${record.id}/inspect`)}
+            className="btn btn-info shrink-0"
+          >
+            <Search className="w-3.5 h-3.5" />
+            Inspect
+          </button>
         </div>
+
+        {/* Past inspections */}
+        {pastInspections.length > 0 && (
+          <div className="space-y-3">
+            <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Inspections ({pastInspections.length})</h2>
+            <div className="space-y-2">
+              {pastInspections.slice(0, 3).map(insp => (
+                <div key={insp.id} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3 shadow-sm">
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-xs text-slate-400 dark:text-slate-500 tabular-nums">
+                      {new Date(insp.inspectedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </p>
+                    {insp.aiAssessment && (
+                      <ConditionBadge
+                        severity={insp.userOverrideSeverity ?? insp.aiAssessment.severity}
+                        label={insp.aiAssessment.severityLabel}
+                        overridden={insp.userOverrideSeverity != null}
+                        size="sm"
+                      />
+                    )}
+                  </div>
+                  {insp.aiAssessment?.summary && (
+                    <p className="text-xs text-slate-600 dark:text-slate-300 leading-snug">{insp.aiAssessment.summary}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* HA Entity section */}
         <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 shadow-sm">
