@@ -14,6 +14,7 @@ import { PropertyRecordsAPI } from '../services/PropertyRecordsAPI'
 import { buildPropertyContext } from '../services/propertyContextBuilder'
 import { AI_TOOLS, createToolExecutor } from '../services/aiTools'
 import { AISessionLogger } from '../services/aiLogger'
+import { useToast } from '../components/Toast'
 import type { AIMessage } from '../types'
 import type { ChatMessage } from '../services/openRouterClient'
 
@@ -113,12 +114,11 @@ function ModelPicker({
 
 function MessageBubble({ msg }: { msg: AIMessage }) {
   const isUser = msg.role === 'user'
-  const [copied, setCopied] = useState(false)
+  const toast = useToast()
 
   function handleCopy() {
     navigator.clipboard.writeText(msg.content)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 1500)
+    toast.success('Copied to clipboard', { duration: 1500 })
   }
 
   function renderContent(text: string) {
@@ -164,7 +164,7 @@ function MessageBubble({ msg }: { msg: AIMessage }) {
               className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 px-1.5 py-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
             >
               <Copy className="w-3 h-3" />
-              {copied ? 'Copied!' : 'Copy'}
+              Copy
             </button>
           </div>
         )}

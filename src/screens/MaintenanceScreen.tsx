@@ -18,6 +18,7 @@ import {
 import { localIndex } from '../lib/localIndex'
 import { useIndexVersion } from '../lib/useIndexVersion'
 import { useModalA11y } from '../lib/focusTrap'
+import { useToast } from '../components/Toast'
 import { syncAllToCalendar } from '../lib/calendarClient'
 import type { DryRunResult } from '../lib/calendarClient'
 import { DryRunModal } from '../components/DryRunModal'
@@ -125,6 +126,7 @@ function DoneModal({ task, propertyId, onConfirm, onClose }: DoneModalProps) {
   // Centralised modal a11y: focus trap, Escape-to-close, focus restore.
   // Replaces the previous ad-hoc Escape handler that lived here.
   const dialogRef = useModalA11y<HTMLDivElement>(onClose)
+  const toast = useToast()
 
   function handlePhotoFiles(e: React.ChangeEvent<HTMLInputElement>) {
     Array.from(e.target.files ?? []).forEach(file => {
@@ -171,6 +173,7 @@ function DoneModal({ task, propertyId, onConfirm, onClose }: DoneModalProps) {
         })
       }
     }
+    toast.success(`Marked complete: ${task.title}`)
     onConfirm()
   }
 
