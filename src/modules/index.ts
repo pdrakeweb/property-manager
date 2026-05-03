@@ -42,6 +42,8 @@ import { GeneratorModule } from './generator'
 import { ContentsModule } from './contents'
 import { HomeBookModule } from './homebook'
 import { InventoryModule } from './inventory'
+import { NarrativeModule } from './narrative'
+import { ExpiryModule } from './expiry'
 
 // Phase 1 — always-on baseline.
 moduleRegistry.register(CoreModule)
@@ -70,8 +72,10 @@ moduleRegistry.register(GeneratorModule)
 moduleRegistry.register(ContentsModule)
 moduleRegistry.register(HomeBookModule)
 moduleRegistry.register(InventoryModule)
+moduleRegistry.register(NarrativeModule)
+moduleRegistry.register(ExpiryModule)
 
-// ─── Phase 2 placeholders (22 modules) ──────────────────────────────────────
+// ─── Phase 2 placeholders (remaining modules) ───────────────────────────────
 //
 // Capture / lifecycle / AI:
 //   moduleRegistry.register(CaptureModule)        // photo capture + AI extraction

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   Eye, EyeOff, CheckCircle2, XCircle, Wifi, WifiOff,
   ExternalLink, ChevronRight, ChevronLeft, Loader2, RefreshCw, Sparkles, Calendar,
-  Sun, Moon, Monitor, Trash2, Plus, User, Building2, ScrollText, Info,
+  Sun, Moon, Monitor, Trash2, Plus, User, Building2, ScrollText, Info, Boxes,
 } from 'lucide-react'
 import { cn } from '../utils/cn'
 import { useTheme } from '../contexts/ThemeContext'
@@ -387,6 +387,13 @@ export function SettingsScreen() {
             title="Properties"
             sub={`${properties.length} propert${properties.length === 1 ? 'y' : 'ies'}`}
             onClick={() => setView('properties')}
+          />
+          <HubCard
+            icon={<Boxes className="w-5 h-5" />}
+            title="Modules"
+            sub="Customize features per property"
+            onClick={() => navigate('/settings/modules')}
+            external
           />
           <HubCard
             icon={<RefreshCw className="w-5 h-5" />}

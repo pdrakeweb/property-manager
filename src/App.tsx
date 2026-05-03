@@ -61,6 +61,7 @@ const RiskBriefScreen          = lazy(() => import('./screens/RiskBriefScreen').
 const ImportScreen             = lazy(() => import('./screens/ImportScreen').then(m => ({ default: m.ImportScreen })))
 const ContentsScreen           = lazy(() => import('./screens/ContentsScreen').then(m => ({ default: m.ContentsScreen })))
 const HomeBookScreen           = lazy(() => import('./screens/HomeBookScreen').then(m => ({ default: m.HomeBookScreen })))
+const ModuleSettingsScreen     = lazy(() => import('./screens/ModuleSettingsScreen').then(m => ({ default: m.ModuleSettingsScreen })))
 
 // ── Sign-in screen ───────────────────────────────────────────────────────────
 
@@ -505,6 +506,7 @@ function MainApp() {
           <Route path="/inventory"           element={<InventoryScreen />}     />
           <Route path="/contents"            element={<ContentsScreen />}      />
           <Route path="/settings"            element={<SettingsScreen />}      />
+          <Route path="/settings/modules"    element={<ModuleSettingsScreen />} />
           <Route path="/vendors"             element={<VendorScreen />}        />
           <Route path="/expiry"              element={<ExpiryManageScreen />}  />
           <Route path="/emergency/:propertyId" element={<EmergencyScreen />}  />
