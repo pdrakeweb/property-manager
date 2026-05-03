@@ -19,9 +19,18 @@
 
 import { moduleRegistry } from './_registry'
 import { CoreModule } from './core'
+import { AIModule } from './ai'
+import { RiskModule } from './risk'
+import { ImportModule } from './import'
 
 // Phase 1 — always-on baseline.
 moduleRegistry.register(CoreModule)
+
+// Phase 2 — AI / risk / import (optional, default-off until the user
+// enables them per property).
+moduleRegistry.register(AIModule)
+moduleRegistry.register(RiskModule)
+moduleRegistry.register(ImportModule)
 
 // ─── Phase 2 placeholders (22 modules) ──────────────────────────────────────
 //
