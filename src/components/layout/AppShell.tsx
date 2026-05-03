@@ -6,7 +6,7 @@ import {
   Building2, TreePine, Users, Droplets, Receipt, Home, Zap, CalendarDays,
   RefreshCw, Shield, FileCheck, CheckSquare, Activity, MapPin, Map,
   Search, ShieldAlert, FileText,
-  Sun, Moon, Monitor, DollarSign, HardHat, BookOpen, AlertTriangle, X,
+  Sun, Moon, Monitor, DollarSign, HardHat, BookOpen, AlertTriangle, X, Package,
 } from 'lucide-react'
 import { cn } from '../../utils/cn'
 import { useAppStore } from '../../store/AppStoreContext'
@@ -56,6 +56,7 @@ const NAV_SECTIONS: NavSection[] = [
       { to: '/map',        icon: Map,           label: 'Map',         mobileShow: false },
       { to: '/risk-brief', icon: ShieldAlert,   label: 'Risk Brief',  mobileShow: false },
       { to: '/inventory',  icon: ClipboardList, label: 'Inventory',   mobileShow: false },
+      { to: '/contents',   icon: Package,       label: 'Contents',    mobileShow: false },
       { to: '/vendors',    icon: Users,         label: 'Vendors',     mobileShow: false },
       { to: '/permits',    icon: FileCheck,     label: 'Permits',     mobileShow: false },
       { to: '/fuel',       icon: Droplets,      label: 'Fuel',        mobileShow: false },
