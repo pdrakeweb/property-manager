@@ -2,7 +2,7 @@
 
 *Auto-generated from `src/records/registry.ts` by `scripts/generate-record-docs.mjs`. Do not edit by hand.*
 
-19 record types currently managed by the DSL registry. Equipment is a polymorphic record — its per-subsystem field sets plug in via `src/records/equipmentProfiles.ts` (see the variants table under *Equipment* below).
+21 record types currently managed by the DSL registry. Equipment is a polymorphic record — its per-subsystem field sets plug in via `src/records/equipmentProfiles.ts` (see the variants table under *Equipment* below).
 
 ## Equipment (`equipment`)
 
@@ -110,6 +110,27 @@
 | invoiceRef | text |  |  |
 | contractor | text |  |  |
 | laborWarrantyExpiry | date |  |  |
+| notes | textarea |  |  |
+
+## Capital Item (`capital_item`)
+
+**Folder:** `Capital/`   **Version:** 1   **Allow multiple:** yes
+
+**AI tool:** Capital replacement projects — equipment slated for replacement with estimated costs and timing.
+
+| Field | Kind | Required | Notes |
+|---|---|---|---|
+| title | text | ✓ |  |
+| categoryId | text | ✓ |  |
+| priority | select | ✓ | options: critical, high, medium, low |
+| estimatedYear | number | ✓ |  |
+| costLow | currency | ✓ |  |
+| costHigh | currency | ✓ |  |
+| installYear | number |  |  |
+| ageYears | number |  |  |
+| status | select |  | options: planned, in-progress, complete |
+| percentComplete | number |  | unit: % |
+| source | select | ✓ | options: manual, ai-suggested, age-based |
 | notes | textarea |  |  |
 
 ## Capital Transaction (`capital_transaction`)
@@ -333,3 +354,20 @@
 | lastServiceHours | number |  | unit: hrs |
 | notes | textarea |  |  |
 | entries | array |  | of: [date, hours, reason, source] |
+
+## Property (`property`)
+
+**Folder:** `Property/`   **Version:** 1   **Allow multiple:** no
+
+**AI tool:** —
+
+| Field | Kind | Required | Notes |
+|---|---|---|---|
+| name | text | ✓ |  |
+| shortName | text |  |  |
+| type | select | ✓ | options: residence, camp, land |
+| address | text |  |  |
+| latitude | number |  |  |
+| longitude | number |  |  |
+| acreage | number |  | unit: ac |
+| yearBuilt | number |  |  |
