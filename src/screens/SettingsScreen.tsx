@@ -22,6 +22,8 @@ import {
 import { chatCompletion } from '../services/openRouterClient'
 import { exportAllMarkdownToDrive, getKnowledgebaseFolderId } from '../lib/markdownExport'
 import { DriveRootInput } from '../components/DriveRootInput'
+import { HABulkImport } from '../components/HABulkImport'
+import { listAutomations, type HAAutomationInfo } from '../lib/haClient'
 
 const MODELS_BY_TASK = [
   { key: 'nameplate',    task: 'Nameplate Extraction',        default: 'anthropic/claude-sonnet-4-6'  },
@@ -159,6 +161,20 @@ export function SettingsScreen() {
   const [showHaToken, setShowHaToken] = useState(false)
   const [haConnected, setHaConnected] = useState(false)
   const [haTesting,   setHaTesting]   = useState(false)
+  const [showBulkImport, setShowBulkImport] = useState(false)
+  const [bulkImportToast, setBulkImportToast] = useState<string | null>(null)
+  const [automations, setAutomations] = useState<HAAutomationInfo[] | null>(null)
+  const [automationsLoading, setAutomationsLoading] = useState(false)
+
+  async function loadAutomations() {
+    setAutomationsLoading(true)
+    try {
+      const list = await listAutomations()
+      setAutomations(list)
+    } finally {
+      setAutomationsLoading(false)
+    }
+  }
 
   function saveHaSettings() {
     setSetting(SETTINGS.haUrl, haUrl.trim())
@@ -681,7 +697,16 @@ export function SettingsScreen() {
               </button>
             </div>
           </Row>
-          <Row label="Entity Mapping" sub="Link HA entities per equipment item via Inventory">
+          <Row label="Bulk import entities" sub="Pick HA entities to create as equipment records">
+            <button
+              onClick={() => setShowBulkImport(true)}
+              disabled={!haUrl.trim() || !haToken.trim()}
+              className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400 font-medium hover:text-green-700 dark:hover:text-green-300 disabled:opacity-50 disabled:hover:text-green-600"
+            >
+              Open Importer <ChevronRight className="w-3 h-3" />
+            </button>
+          </Row>
+          <Row label="Per-entity mapping" sub="Link or unlink entities one-by-one in Inventory">
             <button
               onClick={() => navigate('/inventory')}
               className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400 font-medium hover:text-green-700 dark:hover:text-green-300"
@@ -690,6 +715,68 @@ export function SettingsScreen() {
             </button>
           </Row>
         </Section>
+
+        <Section title="Automations">
+          <Row label="Loaded automations" sub={automations ? `${automations.length} automation${automations.length === 1 ? '' : 's'}` : 'Not loaded yet'}>
+            <button
+              onClick={loadAutomations}
+              disabled={automationsLoading || !haUrl.trim() || !haToken.trim()}
+              className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400 font-medium hover:text-green-700 dark:hover:text-green-300 disabled:opacity-50 disabled:hover:text-green-600"
+            >
+              {automationsLoading
+                ? <><Loader2 className="w-3 h-3 animate-spin" /> Loading…</>
+                : automations ? <>Refresh <RefreshCw className="w-3 h-3" /></>
+                              : <>Load <ChevronRight className="w-3 h-3" /></>}
+            </button>
+          </Row>
+          {automations && automations.length === 0 && (
+            <div className="px-4 py-3 text-xs text-slate-500 dark:text-slate-400">
+              No automations found.
+            </div>
+          )}
+          {automations && automations.map(a => (
+            <div key={a.entity_id} className="flex items-center gap-3 px-4 py-3">
+              <div className={cn(
+                'w-2 h-2 rounded-full shrink-0',
+                a.state === 'on' ? 'bg-emerald-400' : 'bg-slate-400 dark:bg-slate-500',
+              )} />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">{a.friendly_name}</p>
+                <p className="text-xs text-slate-400 dark:text-slate-500 font-mono truncate">
+                  {a.entity_id}{a.mode ? ` · mode: ${a.mode}` : ''}
+                </p>
+              </div>
+              <div className="text-xs text-slate-500 dark:text-slate-400 text-right shrink-0">
+                <p className={cn('font-semibold uppercase', a.state === 'on' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500')}>{a.state}</p>
+                <p className="text-[11px] tabular-nums">
+                  {a.last_triggered
+                    ? `Fired ${new Date(a.last_triggered).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`
+                    : 'Never fired'}
+                </p>
+              </div>
+            </div>
+          ))}
+        </Section>
+
+        {bulkImportToast && (
+          <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-xl px-4 py-3 text-sm text-emerald-700 dark:text-emerald-300">
+            {bulkImportToast}
+          </div>
+        )}
+
+        {showBulkImport && (
+          <HABulkImport
+            onClose={() => setShowBulkImport(false)}
+            onImported={count => {
+              setBulkImportToast(
+                count === 0
+                  ? 'No entities were imported.'
+                  : `Imported ${count} entit${count === 1 ? 'y' : 'ies'} as equipment records.`,
+              )
+              setTimeout(() => setBulkImportToast(null), 5000)
+            }}
+          />
+        )}
       </div>
     )
   }

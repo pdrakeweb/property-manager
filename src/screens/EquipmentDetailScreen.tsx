@@ -1,14 +1,17 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ChevronLeft, Link2, Link2Off, Loader2, Wifi, WifiOff, RefreshCw, CloudDownload, Search } from 'lucide-react'
+import { ChevronLeft, Link2, Link2Off, Loader2, Wifi, WifiOff, RefreshCw, CloudDownload, Search, Bell, BellOff } from 'lucide-react'
 import { cn } from '../utils/cn'
 import { CATEGORIES } from '../data/mockData'
 import { localIndex } from '../lib/localIndex'
-import { fetchEntityState } from '../lib/haClient'
+import { fetchEntityState, getEntityHistory, type HAHistoryPoint } from '../lib/haClient'
 import { HAEntityBrowser } from '../components/HAEntityBrowser'
 import { useRecordSync } from '../hooks/useRecordSync'
 import { getInspectionsForEquipment, sortByDateDesc } from '../lib/inspectionStore'
 import { ConditionBadge } from '../components/inspection/ConditionBadge'
+import { Sparkline } from '../components/Sparkline'
+import { getThreshold, setThreshold, clearThreshold, checkThreshold } from '../lib/haThresholds'
+import { refreshAlerts } from '../lib/haAlerts'
 import type { HAEntityState } from '../types'
 
 export function EquipmentDetailScreen() {
@@ -38,7 +41,62 @@ export function EquipmentDetailScreen() {
   const [stateLoading, setStateLoading] = useState(false)
   const [showBrowser,  setShowBrowser]  = useState(false)
 
+  // Threshold inputs are kept as strings so the user can type freely (empty
+  // string = no bound). We commit on Save which calls setThreshold and
+  // re-runs the alert evaluator so any new violations surface immediately.
+  const [thresholdMin,    setThresholdMin]    = useState<string>('')
+  const [thresholdMax,    setThresholdMax]    = useState<string>('')
+  const [thresholdEditing, setThresholdEditing] = useState(false)
+
+  // Load existing threshold whenever the linked entity changes.
+  useEffect(() => {
+    if (!haEntityId) {
+      setThresholdMin('')
+      setThresholdMax('')
+      return
+    }
+    const t = getThreshold(haEntityId)
+    setThresholdMin(t?.min != null ? String(t.min) : '')
+    setThresholdMax(t?.max != null ? String(t.max) : '')
+  }, [haEntityId])
+
   const pastInspections = useMemo(() => sortByDateDesc(getInspectionsForEquipment(id)), [id])
+
+  // 24h history for the sparkline. Re-fetched whenever the linked entity
+  // changes; null while loading, [] when empty / HA unreachable.
+  const [history, setHistory] = useState<HAHistoryPoint[] | null>(null)
+  useEffect(() => {
+    if (!haEntityId) { setHistory(null); return }
+    setHistory(null)
+    getEntityHistory(haEntityId, 24).then(pts => setHistory(pts))
+  }, [haEntityId])
+
+  const numericValue   = entityState && Number.isFinite(Number(entityState.state))
+  const stateUnitForUi = entityState?.attributes.unit_of_measurement as string | undefined
+  const currentThreshold = haEntityId ? getThreshold(haEntityId) : null
+  const violation = (entityState && currentThreshold)
+    ? checkThreshold(entityState.state, currentThreshold)
+    : null
+
+  function handleSaveThreshold() {
+    const min = thresholdMin.trim() === '' ? undefined : Number(thresholdMin)
+    const max = thresholdMax.trim() === '' ? undefined : Number(thresholdMax)
+    setThreshold(haEntityId, {
+      min: Number.isFinite(min as number) ? (min as number) : undefined,
+      max: Number.isFinite(max as number) ? (max as number) : undefined,
+      label: entityState ? String(entityState.attributes.friendly_name ?? haEntityId) : haEntityId,
+    })
+    setThresholdEditing(false)
+    void refreshAlerts()
+  }
+
+  function handleClearThreshold() {
+    clearThreshold(haEntityId)
+    setThresholdMin('')
+    setThresholdMax('')
+    setThresholdEditing(false)
+    void refreshAlerts()
+  }
 
   // Fetch entity state whenever haEntityId changes
   useEffect(() => {
@@ -242,6 +300,16 @@ export function EquipmentDetailScreen() {
                 </button>
               </div>
 
+              {/* 24h sparkline — only shown for numeric entities with data */}
+              {history && history.length > 1 && Number.isFinite(Number(history[0]?.state)) && (
+                <div className="flex items-center justify-between gap-3 bg-slate-50 dark:bg-slate-700/30 rounded-xl px-3 py-2">
+                  <span className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">
+                    Last 24h
+                  </span>
+                  <Sparkline points={history} />
+                </div>
+              )}
+
               {entityState && (
                 <div className="text-xs text-slate-400 dark:text-slate-500">
                   Updated {new Date(entityState.last_updated).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })}
@@ -252,6 +320,109 @@ export function EquipmentDetailScreen() {
                 <div className="flex items-center gap-1.5 text-xs text-amber-500 dark:text-amber-400">
                   <Wifi className="w-3 h-3" />
                   State unavailable — check HA connection in Settings
+                </div>
+              )}
+
+              {/* Threshold configuration — only for numeric entities. We
+                  fall back to "show the form anyway" if state hasn't loaded
+                  yet, so users can pre-configure before HA reaches us. */}
+              {(numericValue || !entityState) && (
+                <div className="border-t border-slate-100 dark:border-slate-700/60 pt-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                      <Bell className="w-3 h-3" />
+                      Alert Thresholds
+                    </h3>
+                    {!thresholdEditing && (
+                      <button
+                        onClick={() => setThresholdEditing(true)}
+                        className="text-xs text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 font-medium"
+                      >
+                        {currentThreshold ? 'Edit' : 'Set'}
+                      </button>
+                    )}
+                  </div>
+
+                  {currentThreshold && !thresholdEditing && (
+                    <div className="space-y-1">
+                      <p className="text-xs text-slate-600 dark:text-slate-300">
+                        Alert when value
+                        {currentThreshold.min != null && <> &lt; <span className="font-semibold tabular-nums">{currentThreshold.min}{stateUnitForUi ? ` ${stateUnitForUi}` : ''}</span></>}
+                        {currentThreshold.min != null && currentThreshold.max != null && ' or'}
+                        {currentThreshold.max != null && <> &gt; <span className="font-semibold tabular-nums">{currentThreshold.max}{stateUnitForUi ? ` ${stateUnitForUi}` : ''}</span></>}
+                      </p>
+                      {violation && (
+                        <p className="text-xs font-semibold text-red-600 dark:text-red-400 flex items-center gap-1">
+                          <Bell className="w-3 h-3" />
+                          {violation === 'below' ? 'Currently below threshold' : 'Currently above threshold'}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {!currentThreshold && !thresholdEditing && (
+                    <p className="text-xs text-slate-400 dark:text-slate-500 flex items-center gap-1">
+                      <BellOff className="w-3 h-3" />
+                      No alert configured
+                    </p>
+                  )}
+
+                  {thresholdEditing && (
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-[11px] text-slate-500 dark:text-slate-400 mb-1">Min{stateUnitForUi ? ` (${stateUnitForUi})` : ''}</label>
+                          <input
+                            type="number"
+                            inputMode="decimal"
+                            value={thresholdMin}
+                            onChange={e => setThresholdMin(e.target.value)}
+                            placeholder="—"
+                            className="w-full text-sm input-surface rounded-lg px-2 py-1.5"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] text-slate-500 dark:text-slate-400 mb-1">Max{stateUnitForUi ? ` (${stateUnitForUi})` : ''}</label>
+                          <input
+                            type="number"
+                            inputMode="decimal"
+                            value={thresholdMax}
+                            onChange={e => setThresholdMax(e.target.value)}
+                            placeholder="—"
+                            className="w-full text-sm input-surface rounded-lg px-2 py-1.5"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={handleSaveThreshold}
+                          disabled={thresholdMin.trim() === '' && thresholdMax.trim() === ''}
+                          className="text-xs font-semibold px-3 py-1 rounded-lg bg-green-600 text-white hover:bg-green-700 disabled:opacity-50"
+                        >
+                          Save
+                        </button>
+                        <button
+                          onClick={() => {
+                            setThresholdEditing(false)
+                            const t = currentThreshold
+                            setThresholdMin(t?.min != null ? String(t.min) : '')
+                            setThresholdMax(t?.max != null ? String(t.max) : '')
+                          }}
+                          className="text-xs px-3 py-1 rounded-lg text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700"
+                        >
+                          Cancel
+                        </button>
+                        {currentThreshold && (
+                          <button
+                            onClick={handleClearThreshold}
+                            className="text-xs px-3 py-1 rounded-lg text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 ml-auto"
+                          >
+                            Clear
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
