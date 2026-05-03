@@ -20,7 +20,7 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   ChevronLeft, ChevronRight, X, Volume2, VolumeX, Camera, Upload,
-  Check, SkipForward, CheckCircle2, Clock,
+  Check, SkipForward, CheckCircle2, Clock, Printer, Download, Mail,
 } from 'lucide-react'
 import { cn } from '../utils/cn'
 import {
@@ -418,6 +418,55 @@ export function ChecklistGuidedScreen() {
 
 // ── Completion summary ──────────────────────────────────────────────────────
 
+function buildMarkdownReport(args: {
+  run: ChecklistRun
+  property: ReturnType<typeof propertyStore.getById>
+  templateName: string
+  items: ChecklistItem[]
+  elapsedSec: number
+}): string {
+  const { run, property, templateName, items, elapsedSec } = args
+  const lines: string[] = []
+  lines.push(`# ${templateName}`)
+  lines.push('')
+  lines.push(`**Property:** ${property?.name ?? property?.shortName ?? run.propertyId}`)
+  if (property?.address) lines.push(`**Address:** ${property.address}`)
+  lines.push(`**Date:** ${run.completedAt ? new Date(run.completedAt).toLocaleString() : new Date().toLocaleString()}`)
+  lines.push(`**Duration:** ${formatDuration(elapsedSec)}`)
+  const done    = run.items.filter(i => i.done).length
+  const skipped = run.items.filter(i => i.skipped).length
+  lines.push(`**Items:** ${done} done · ${skipped} skipped · ${run.items.length} total`)
+  lines.push('')
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i]
+    const ri = run.items.find(x => x.itemId === it.id)
+    if (!ri) continue
+    const status =
+      ri.done    ? '✅ Done' :
+      ri.skipped ? '➖ Skipped' :
+                   '⚠️ Untouched'
+    const dur = ri.durationSeconds != null ? ` (${formatDuration(ri.durationSeconds)})` : ''
+    lines.push(`## Step ${i + 1} — ${it.label}`)
+    lines.push(`*${it.category} · ${status}${dur}*`)
+    if (it.detail) { lines.push(''); lines.push(`> ${it.detail.split('\n').join('\n> ')}`) }
+    if (ri.note)   { lines.push(''); lines.push(`**Notes:** ${ri.note}`) }
+    if ((ri.photos?.length ?? 0) > 0) {
+      lines.push('')
+      lines.push(`**Photos:** ${ri.photos!.length} attached`)
+    }
+    lines.push('')
+  }
+  return lines.join('\n')
+}
+
+function downloadBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url; a.download = filename
+  document.body.appendChild(a); a.click(); a.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
 function CompletionSummary({ run, onClose }: { run: ChecklistRun; onClose: () => void }) {
   const total = run.items.length
   const done    = run.items.filter(i => i.done).length
@@ -430,18 +479,44 @@ function CompletionSummary({ run, onClose }: { run: ChecklistRun; onClose: () =>
   const items = property && template
     ? getResolvedItems(run.propertyId, run.templateId, property.type)
     : []
+  const templateName = template?.name ?? run.name ?? 'Checklist'
+
+  function handlePrint() {
+    window.print()
+  }
+
+  function handleDownloadMd() {
+    const md = buildMarkdownReport({ run, property, templateName, items, elapsedSec: elapsed })
+    const date = (run.completedAt ?? new Date().toISOString()).slice(0, 10)
+    const slug = templateName.replace(/[^a-zA-Z0-9]+/g, '_').slice(0, 40)
+    downloadBlob(new Blob([md], { type: 'text/markdown' }), `${slug}_${date}.md`)
+  }
+
+  function handleEmail() {
+    const subject = `${templateName} — ${property?.shortName ?? property?.name ?? 'Property'} ${(run.completedAt ?? '').slice(0, 10)}`
+    const md = buildMarkdownReport({ run, property, templateName, items, elapsedSec: elapsed })
+    // mailto: bodies have a soft limit (~2 KB on most clients); truncate generously.
+    const body = md.length > 1800 ? md.slice(0, 1800) + '\n\n…(truncated — see attached or in-app for full report)' : md
+    window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+  }
 
   return (
-    <div className="space-y-5 pb-8 max-w-2xl mx-auto">
+    <div data-print-root className="space-y-5 pb-8 max-w-2xl mx-auto">
       <div className="text-center py-6">
-        <CheckCircle2 className="w-14 h-14 text-emerald-500 mx-auto" />
+        <CheckCircle2 className="w-14 h-14 text-emerald-500 mx-auto no-print" />
         <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mt-3">Checklist complete</h1>
         <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-          {template?.name ?? run.name ?? 'Checklist'} · {property?.shortName ?? property?.name ?? ''}
+          {templateName} · {property?.shortName ?? property?.name ?? ''}
         </p>
         <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 tabular-nums">
           {done} of {total} done · {skipped} skipped · {formatDuration(elapsed)} total
         </p>
+      </div>
+
+      <div className="no-print flex flex-wrap gap-2 justify-center">
+        <button onClick={handlePrint}      className="btn"><Printer  className="w-3.5 h-3.5" />Save as PDF (print)</button>
+        <button onClick={handleDownloadMd} className="btn"><Download className="w-3.5 h-3.5" />Download .md</button>
+        <button onClick={handleEmail}      className="btn"><Mail     className="w-3.5 h-3.5" />Share by email</button>
       </div>
 
       <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-sm divide-y divide-slate-100 dark:divide-slate-700/50 overflow-hidden">
@@ -483,7 +558,7 @@ function CompletionSummary({ run, onClose }: { run: ChecklistRun; onClose: () =>
         })}
       </div>
 
-      <button onClick={onClose} className="btn btn-primary w-full">Back to checklists</button>
+      <button onClick={onClose} className="btn btn-primary w-full no-print">Back to checklists</button>
     </div>
   )
 }
